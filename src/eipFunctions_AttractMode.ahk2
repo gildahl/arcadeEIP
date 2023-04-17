@@ -1,0 +1,573 @@
+; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
+; © 2023 David G. Dahlstrom
+; File: eipFunctions_AttractMode.ahk2
+
+;This file contains functions needed for implementation of arcadeEIP's game
+;switching capabilities. Note that a "vector" is simply a string consisting of
+;a <sys_key> and <game_name> separated by a space such as "mame galaga". 
+
+;Call with a vector to exit the currently running emulator and set a new vector
+;The new vector will execute once the emulator fully exits. The "caller" parameter
+;(for example, ":x:@!@mame_asteroid" )is supplied when called by a bound function  
+;such as prepared in AddDirectSwitchHotKeys()
+DirectSwitch(vector, caller:="")
+{
+    global g_directswitch_args
+
+    ;return if the currently playing game is chosen
+    current_vector := gCfg.sys_key . " " . gCfg.rom_file
+    if (vector == current_vector)
+        return
+ 
+    if (gCfg.map_exit)
+    {
+        ;Setting the g_directswitch_args global to a value will cause VectorNow()
+        ;to be called after the emulator exits.
+        g_directswitch_args := vector
+
+        ;virutally press the esc key to exit emulator
+        ;map esc must be defined in arcadeEIP.ini for this to work
+        ExitKey("0")
+        ExitKeyUp()
+    }
+    else
+    {
+        SoundBeep
+        LogEntry("WARNING: Direct switching requires map_exit to be defined in " . cConfigFileName . ".`n")
+    } 
+
+    return
+}
+
+;Called by the Schedule_Class object
+;Called on each attract_delay seconds prior to schedule timer event.
+ScheduleAction()
+{
+    ;not currently used
+}
+
+;Call to refresh the attract mode list using the most up-to-date
+;.history file - only used in auto mode
+UpdateAutoAttractList()
+{
+    global
+
+    local idx, filename, test_filename, vector, n, item, attract_list, sk, rv, rl
+
+    if (gCfg.attract_auto > 0)  ;gCfg.attract_auto is a global
+    {
+        idx := 1
+
+        ;note that this list will already be sorted in count-priority order
+        attract_list := oHistory.GetAttractList()
+
+        if (attract_list && attract_list.Length > 0)
+        {
+            ;clear the existing list
+            FileDelete(attract_pattern)
+
+            ;create vector files from the count-sorted attract_list
+            for n, item in attract_list
+            {
+                ;stop at max number allowed in list
+                if (idx > gCfg.attract_auto) 
+                    break
+
+                vector := item["vector"]
+                filename := gCfg.attract_folder . "\" . vector . ".txt"
+
+                ;If an attract list vector file is no longer valid because, say,
+                ;the rom is no longer available, then skip that rom when rebuilding
+                ;the vector files.
+                sk := SplitVector(vector)["sys_key"]
+                rv := SplitVector(vector)["rom_value"]
+                GetRoms(sk, rv, &rl)
+                if (!rl[1].matchType)
+                    continue
+
+                ;Don't add suppressed vector files
+                test_filename := gCfg.attract_folder . "\suppress\" . vector . ".txt"
+                if (!FileExist(test_filename))
+                {
+                    FileAppend vector, filename
+                    idx++
+                }					
+            }
+        }
+    }
+}
+
+;Called by DetectInactivity class object to auto-switch games.
+;When called with update:=true, it will update the live autoswitch mode without
+;actually switching games.
+AttractSwitch(update:=false, add_vector:="")
+{
+    global
+
+    static attractList := Array(), idx := 0  ;the current full attract list and index
+    static originalList := Array()           ;the original attract list when we started
+    static originalSize
+    static last_vector
+
+    local size, sysKey, mapExit, vector_array, vector
+    size := attractList.Length
+
+    ;add_vector is called by VectorNow() and is intended to add arbitrarily played games to the
+    ;attractList so that the previous_key hotkey will be able to return to it regardless of whether
+    ;it is part of the auto-switch sequence.
+    /*
+    if (add_vector)
+    {
+        ;SoundBeep
+
+        ;if in vector_now, this works but can produce duplicates
+        if (attractList[idx] != add_vector && attractList[idx+1] != add_vector)
+        {
+            ;SoundBeep
+            attractList.InsertAt(++idx, add_vector)
+        }
+
+        OutputDebug inserted: %add_vector% at %idx%`n
+
+
+        return
+    }
+    */
+
+    ;This forces a re-read/rebuild of originalList so that any games added/removed
+    ;while live are reflected in the future state of the attract mode.
+    ;(originalList is the list that continually gets added to the end of attractList
+    ; whenever the end of the list is reached.)
+    if (update == true)
+    {
+        if (attractList.Length == 0)
+            return
+
+        ;this can happen if add_vector was done (see above), and then the game was played such that
+        ;it got added to the the attractList. So let's delete the extra one.
+        /*
+        if (attractList[idx] == attractList[idx-1] && attractList[idx] != "")
+        {
+            SoundBeep
+            i1 := attractList[idx]
+            i2 := attractList[idx-1]
+            OutputDebug  Assert Q: Not debugged: al[idx]: %i1%  al[idx-1]: %i2%`n
+
+            attractList.RemoveAt(idx)
+            ;if (tempIdx == size) ;not sure this is needed
+                idx--
+            size--
+        }
+        */
+        
+        originalList := Array()
+        Loop Files attract_pattern
+        {
+            ;FileReadLine, vector, %A_LoopFileFullPath%, 1
+            Loop Read A_LoopFileFullPath
+            {
+                vector := A_LoopReadLine 
+                break ;only read the first line
+            }
+
+            originalList.Push(vector)
+        }
+
+        if (gCfg.attract_random)
+            ShuffleArray(&originalList)
+
+        originalSize := originalList.Length
+
+        ;if 1 or no vectors defined, nothing to switch
+        if (originalSize <= 1)
+        {
+            LogEntry("NOTICE: Autoswitch mode refreshed with nothing to switch. " . originalSize . " vector files found.`n")
+            return 
+        }
+
+        ;Remove any items in the remainder of attractList that
+        ;are no longer in originalList (if any). Note this algorithm
+        ;presumes only up to one item removed per call of this function.
+        ;OutputDebug idx=%idx%`n
+        tempIdx := idx
+        if (tempIdx <= attractList.Length)  
+        {
+            Loop
+            {
+                found := false
+                vec := attractList[tempIdx]
+                for n, item in originalList
+                {
+                    if (vec == item)
+                    {
+                        found := true
+                        break
+                    }
+                }
+                if (!found)
+                {
+                    ;A little tricky here since removal of an item can lead to duplicates in the sequence.
+
+                    ;with triplets or greater, duplication could happen if deleting the first of the group
+                    ;CBABAC
+                    ;123456
+                    ;   ^
+
+                    ;removal after the first of the group with triplets (or greater) can never result in duplicates
+                    ;CBACBA    CBACBA
+                    ;123456    123456
+                    ;    ^          ^
+
+                    ;can only occur with pairs
+                    ;ABABAB
+                    ;123456
+                    ;    ^
+
+                    attractList.RemoveAt(tempIdx)
+                    ;OutputDebug removed: %vec% at idx: %tempIdx%`n
+                    ;if (tempIdx == size) ;not sure this is needed
+                    ;    idx--
+                    size--
+
+                    ;There are two things we don't want:
+                    ;1. To have the next game be the one that was just removed (g_directswitch_args == vec)
+                    ;2. To have the next game be the same as the one currently playing (g_directswitch_args == sys_key . " " . rom_file).                  
+
+                    ;same as just removed
+                    if (g_directswitch_args == vec)
+                    {
+                        attractList.RemoveAt(tempIdx)                        
+                        size--
+                        
+                        if (attractList[idx])
+                        {
+                            g_directswitch_args := attractList[idx] 
+                        }  
+                        else ;attractList[idx] is empty
+                        {
+                            ;this scenario has been tested
+                            if (originalList.Length > 0)
+                            {
+                                attractList[idx] := originalList[1]
+                                g_directswitch_args := attractList[idx]
+                            }
+                        }                                            
+                    }
+
+                    ;same as one playing
+                    ;same functionality as above, but keeping separate for now until sure handling
+                    ;really is the same.
+                    if (g_directswitch_args == gCfg.sys_key . " " . gCfg.rom_file)
+                    {
+                        ;OutputDebug Assert S: next same as playing--have not tested this scenario yet!`n
+                        attractList.RemoveAt(tempIdx)                        
+                        size--
+                        
+                        if (attractList[idx])
+                            g_directswitch_args := attractList[idx]   
+                        else
+                        {
+                            if (originalList.Length > 0)
+                            {
+                                ;swap first and last item in original list to prevent a
+                                ;duplicate in the sequence
+                                if (originalList[1] == g_directswitch_args)
+                                {
+                                    tmp_vec := originalList[1]
+                                    originalList[1] := originalList[originalList.Count]
+                                    originalList[originalList.Count] := tmp_vec
+                                }
+
+                                attractList[idx] := originalList[1]
+                                g_directswitch_args := attractList[idx]
+                            }
+                        }                                            
+                     }
+                    
+                    break
+                }
+
+                tempIdx++
+                if (tempIdx > size)
+                    break
+            }
+        }
+       
+        LogEntry("INFO: Autoswitch mode refreshed. " . originalSize . " vector files found.`n")
+
+        return
+    }
+
+    ;initialization
+    if (size == 0) ;if no attractList has been created yet, build one
+    {
+        ;updates vector file list if in auto mode
+        UpdateAutoAttractList() 
+
+        Loop Files attract_pattern
+        {
+            Loop Read A_LoopFileFullPath
+            {
+                vector := A_LoopReadLine 
+                break ;only read the first line
+            }            
+
+            ;don't add games from any hidden systems
+            sysKey := SplitVector(vector)["sys_key"]
+			Loop Parse gCfg.lst_hide_systems, "CSV" 
+			{
+				if (sysKey == Trim(A_LoopField))
+					continue 2
+			}
+
+            attractList.Push(vector)
+        }
+        originalList := attractList.Clone()
+        if (gCfg.attract_random)
+            ShuffleArray(&attractList)
+
+        originalSize := attractList.Length
+
+        ;if 1 or no vectors defined, nothing to switch
+        if (originalSize <= 1)
+        {
+            LogEntry("NOTICE: Autoswitch mode has nothing to switch. " . originalSize . " vector files found.`n")
+            return 
+        }
+        LogEntry("INFO: Autoswitch mode initialized. " . originalSize . " vector files found.`n")
+
+        ;insert any initially run game as the first item so that previous works
+        ;as most users would probably expect it to.
+        if (gCfg.sys_key && gCfg.rom_file)
+        {
+            attractList.InsertAt(1, gCfg.sys_key . " " . gCfg.rom_file)
+            idx := 1
+            
+            ;if next index (2) is same as 1 then remove it
+            if (attractList[2] == gCfg.sys_key . " " . gCfg.rom_file)
+            {
+                attractList.RemoveAt(2)
+            }
+        }
+    } 
+    
+    ;we use sys_key and rom_name here instead of index since the last game 
+    ;might not be in the list if we had started with a game not in the list
+    ;last_vector := sys_key . " " . rom_name
+    
+    ;Note that play_previous is no longer currently used in favor of logic
+    ;that moves backward through the play_list.  The logic is left here for
+    ;future consideration or removal 
+    if (play_previous) ;this is a global boolean - set to true to play last game
+    {   
+        idx--
+        if (idx <= 0)
+            idx := 1
+        play_previous := false
+    }
+    else
+    {
+       idx++  ;advance attractList index to next item
+    }
+
+    if (idx > attractList.Length)  ;if we've reached the end of the list...
+    {
+        temp_list := originalList.Clone()
+        if (gCfg.attract_random)
+            ShuffleArray(&temp_list)
+        
+        ;if first game in newly shuffled list is the same as
+        ;last game in previous list, swap first item with a random one
+        ;to ensure we don't play the same game twice in a row 
+        if (attractList[idx-1] == temp_list[1])
+        {
+            j := Random(2, originalSize)
+            temp_item := temp_list[1]
+            temp_list[1] := temp_list[j]
+            temp_list[j] := temp_item
+        }
+
+        Loop originalSize
+            attractList.Push(temp_list[A_Index])
+    }
+    
+    vector := attractList[idx]
+
+    /*
+    ;output list for debug purposes
+    c:=attractList.Count()
+    Loop, %c%
+    {
+        d:=attractList[A_Index]
+        OutputDebug item %A_index%: %d%`n
+    }
+    */
+
+    ;exit if we would switch to the same game
+    cur_vec := gCfg.sys_key . " " . gCfg.rom_file
+    if (cur_vec == vector)
+    {
+        OutputDebug "Exiting because we would have switched to same game: " cur_vec . "`n"
+        return
+    }
+
+    sysKey := SplitVector(vector)["sys_key"]
+    mapExit := oEmulators.Emulators[gCfg.sys_key].map_exit
+
+    ;exit and advance to next vector
+    ;if a vector was found and map_exit is defined
+    if (mapExit && vector)
+    {
+        curr_pid_emulator := pid_emulator
+
+        ;ErrorLevel will be 0 if no process was found.
+        if (pid_emulator != 0  && ProcessExist(pid_emulator)) 
+        {
+            ;virutally press the exit_key to exit emulator
+            ;map_exit must be defined in arcadeEIP.ini for this to work
+            ExitKey("0")
+            ExitKeyUp()
+
+            ;if the exit command above is sent between the time the process starts but
+            ;before the emulator is able to process an exit command, it may not exit as
+            ;instructed. So perform this check/retry sequence if it has not exited.
+
+            exited := false
+            startExitTick := A_TickCount 
+
+            ;Confirm exit for up to 5 seconds.
+            Loop
+            {
+                Sleep 100
+               
+                if (!ProcessExist(curr_pid_emulator)) ;process was not found
+                {
+                    exited := true
+                    break
+                }
+
+                ;Quit trying after 5 seconds
+                if (A_TickCount - startExitTick > 5000)
+                    break
+            }
+            
+            ;if we still haven't exited, try one more time. It's critical not to try again unless
+            ;we are absolutely sure the first exit didn't work (since multiple exit attempts can
+            ;be hazardous, especially Alt-F4 or other commands that will kill whatever is now
+            ;currently active).  One try after 5 seconds should suffice.
+            if (!exited)
+            {
+                ExitKey("0")
+                ExitKeyUp()
+            }
+        }
+
+        ;Setting g_directswitch_args global to a value will cause VectorNow()
+        ;to be called after the emulator exits.      
+        g_directswitch_args := vector
+
+        ;if the scheduler is active, send it a signal to continue
+        if (oSchedule.Active())
+            oSchedule.Resume()
+    }
+    else
+    {
+        LogEntry("WARNING: Direct switching requires map_exit to be defined in " . cConfigFileName . ".`n")
+    } 
+
+    return
+}
+
+;This is a callback function to the MouseDelta class object (oMouseDelta).
+;See the MouseDelta class for more information about this function.
+MouseEvent(MouseID, x := 0, y := 0)
+{  
+    global
+
+    local horiz, vert
+
+    ;speed values of 5 & 5 work good for a trackball
+    static yu := 0, yd := 0, ymaxspeed := 5
+    static xr := 0, xl := 0, xmaxspeed := 20
+    ;static xLast := yLast := 0
+
+    ;OutputDebug " x: " x " y: " y "`n"
+
+    horiz := gCfg.mouse_horiz == "all" ? 1 : 0
+    vert := gCfg.mouse_vert == "all" ? 1 : 0
+    
+    x := y > 0 ? 0 : x
+    y := x > 0 ? 0 : y
+
+    if (y > 0 && yd >= 0)
+    {
+        yd := yd + y
+        yu := xr := xl := 0
+    }
+    else if (y < 0 && yu <= 0)
+    {
+        yu := yu + y
+        yd := xr := xl := 0
+    }
+   
+   else if (x > 0 && xr >= 0)
+    {
+        xr := xr + x
+        xl := yu := yd := 0
+    }
+    else if (x < 0 && xl <= 0)
+    {
+        xl := xl + x
+        xr := yu := yd := 0
+    }
+    
+/*
+    vs := y - yLast ;negative=down, positive=up
+    hs := x - xLast ;negative=left, positive=right
+    
+    if (Abs(vs) > Abs(hs)) ;vertical wins
+    {
+        if (vs < 0 && Abs(vs) > ymaxspeed && vert)
+            ScrollList("d")
+        else if (vs > 0 && Abs(vs) > ymaxspeed && vert)
+            ScrollList("u")
+    }
+    else ;horizontal wins
+    {
+        if (hs < 0 && Abs(hs) > xmaxspeed && horiz)
+            ScrollList("l")
+        else if (hs > 0 && Abs(hs) > xmaxspeed && horiz)
+            ScrollList("r")
+    }
+
+    yLast := y
+    xLast := x
+*/   
+
+    if (yd > ymaxspeed && vert)
+    {
+        ;OutputDebug "down`n"
+        ScrollList("d")
+        yd := 0
+    }
+    else if (yu <= -ymaxspeed && vert)
+    {
+        ;OutputDebug "up`n"
+        ScrollList("u")
+        yu := 0
+    }
+    else if (xr > xmaxspeed && horiz)
+    {
+        ;OutputDebug "right`n"
+        ScrollList("r")
+        xr := 0
+    }
+    else if (xl <= -xmaxspeed && horiz)
+    {
+        ;OutputDebug "left`n"
+        ScrollList("l")
+        xl := 0
+    }
+
+    ;OutputDebug id: %MouseID%
+}

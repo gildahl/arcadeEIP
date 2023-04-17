@@ -1,0 +1,94 @@
+Sound
+=====
+As of beta v.0.3.3.0, arcadeEIP now supports sound effects via the bass.dll library.
+
+To enable sound, you must download the third party bass.dll library file and place it in the
+root folder of arcadeEIP.  You may obtain this file from:
+
+https://www.un4seen.com/
+
+To install, download the Win32 version: base24.zip.  For 64-bit versions of Windows, extract
+bass.dll from the \x64 folder of the archive (note that I have not tested the 32-bit version 
+in the root folder and have no idea whether it will work).
+
+Once this file is installed, sound should be enabled automatically.
+
+NOTE REGARDING MAME PORT AUDIO
+==============================
+If you use port audio with MAME (very highly recommended since it dramatically reduces audio
+latency), sound effects in arcadeEIP *will not* ordinarily work while MAME is running since 
+port audio takes exclusive control over the soundcard, and arcadeEIP is designed to overlay
+the running emulator. To work around this and enable sound effects in arcadeEIP's overlay menus
+while port-audio MAME is running, a second sound card and audio combiner/mixer is required.  
+
+Here is one way to set this up:
+
+Prerequisties
+=============
+A. A second audio card.  In my case, my default card is a Soundblaster Audigy FX (speakers are 
+connected to this one) and the secondary "card" to be used by arcadeEIP is the Realtek audio 
+built into my motherboard.
+
+B. A hardware audio mixer. I use the inexpensive "Maker hart Just Mixer S", sold on Amazon.
+https://www.amazon.com/dp/B0824Q3WY8?psc=1&ref=ppx_yo2ov_dt_b_product_details
+
+Note that if you are more audio inclined than I, you might know of ways to make this work with 
+software mixers; however, my experimentation with that resulted in the latency benefits of port 
+audio being lost, making the effort pointless.
+
+Instructions
+============
+1. Keep the pa_device setting in MAME's port audio options set to default. In this way, MAME will
+use your main, default audio card (i.e. the one your speakers are connected to).
+
+   #
+   # PORTAUDIO OPTIONS
+   #
+   pa_api                    "Windows WASAPI"
+   pa_device                 default
+   pa_latency                0.003334
+
+2.  At a command line prompt in your arcadeEIP folder, run 
+
+    >eip.exe -sound
+
+This will list all your audio devices. Identify the number associated with your *secondary* audio card.
+For example, when I ran this, I found that my secondary (Realtek) card was device 6.
+
+    6: Speakers (2- Realtek High Definition Audio)
+
+3.  In the [General] section of arcadeEIP.ini, set sound_device to the device number of this secondary
+card.  For example, because my secondary card was device 6, I specified:
+
+    [General]
+    sound_device=6
+
+4.  Next, plug the speaker outputs of both sound cards into the inputs of the hardware mixer, and plug
+your speakers into the hardware mixer's output.
+
+At this point, you should be able to test and hear sound from both sources. 
+
+5.  Spend some time calibrating the volume. Here are some tips.  If using the mixer from Amazon referenced
+above, set the master volume to maximum and the line inputs to about the 9:00 position to start (setting the 
+master level high and the line levels relatively low results in the least noise). Also be sure to use a "clean"
+electrical source and keep away from things like fans and power supplies as this mixer is susceptible to 
+electrical noise, but does run quiet if care is taken.
+
+Next, set the volume in Windows for both devices to 50% and play the Windows test sample sounds. As you switch
+between the two devices in Windows, these sounds should (a) be the same volume and (b) be at a loudness that
+is the loudest you would ever use in practice (reference volume). If either of these is not as described, then 
+adjust the individual input dials (not the master) to fix it.  As a final check, you may want to turn the volume
+in Windows up to 100% and re-play the test samples. In this case you are listening for any distortion. If you 
+hear such distortion, turn down the individual input dials just enough to eliminate it. Finish up by going back
+to 50% volume and confirming that the volume of both devices still sounds the same. 
+
+6.  Finally, if you use digital volume adjustment on your arcade machine and don't want to have to adjust the
+volumes of both cards separately when making day-to-day volume changes, you can set sync_volume=1 in the 
+[General] section of arcadeEIP.ini.  
+
+    [General]
+    sync_volume=1
+
+When you do this, arcadeEIP will automatically try to set the secondary card's volume to the same value as
+the default device whenever its volume is changed. 
+

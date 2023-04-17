@@ -1,0 +1,267 @@
+; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
+; © 2023 David G. Dahlstrom
+; File: eipClass_BASS.ahk2
+
+;Wrapper class to implement BASS.dll support in arcadeEIP
+;Some documentation can be found here:
+;https://www.autohotkey.com/boards/viewtopic.php?t=38734
+;API:  http://www.un4seen.com/doc/
+
+class BASS_class
+{
+	_lib     := A_ScriptDir . "\bass.dll"
+	_init    := A_ScriptDir . "\bass.dll\BASS_Init"
+	_err     := A_ScriptDir . "\bass.dll\BASS_ErrorGetCode"
+	_start   := A_ScriptDir . "\bass.dll\BASS_Start"
+	_samp    := A_ScriptDir . "\bass.dll\BASS_SampleLoad"
+	_chan    := A_ScriptDir . "\bass.dll\BASS_SampleGetChannel"
+	_dev     := A_ScriptDir . "\bass.dll\BASS_GetDeviceInfo"
+	_play    := A_ScriptDir . "\bass.dll\BASS_ChannelPlay"
+	_getdev  := A_ScriptDir . "\bass.dll\BASS_GetDevice"	
+	_setdev  := A_ScriptDir . "\bass.dll\BASS_SetDevice"
+	_getvol  := A_ScriptDir . "\bass.dll\BASS_GetVolume"
+	_setvol  := A_ScriptDir . "\bass.dll\BASS_SetVolume"
+
+	__New()
+	{
+		this._active := 1 ;sound is on
+		this._device := gCfg.sound_device ;sound_device is a global set in arcadeEIP.ini [General] section.
+	}
+
+	Init()
+	{		
+		;bass.dll is not shipped with arcadeEIP, so if it doesn't exist, disable sound.
+		if (!FileExist(this._lib))
+		{
+			LogEntry("NOTICE: 3rd party library bass.dll not found. Sound support OFF. See Sound.txt.`n")
+
+			this._active := 0
+			return
+		}
+
+		LogEntry("INFO: 3rd party library bass.dll found. Sound support ON.`n")
+
+		;Initialize and start bass.dll		
+		BASS_DLLCALL         := DllCall("LoadLibrary","str",this._lib) ; load Bass.dll
+
+		;initialise default device (i.e. device 1)
+		BASS_Init			 := DllCall(this._init,"Int",1,"UInt",44100,"Int",32,"ptr",0,"UInt",0) 
+		initerr              := DllCall(this._err)
+
+		;also initialise device used by arcadeEIP if different
+		if (this._device != 1)
+		{
+			BASS_Init		 := DllCall(this._init,"Int",this._device,"UInt",44100,"Int",32,"ptr",0,"UInt",0) 		
+			initerr          := DllCall(this._err)
+		}
+
+		BASS_start	         := DllCall(this._start) ;Start Bass
+
+		;Cache each sound effect
+		fSoundFile := A_ScriptDir . "\Resources\Sound\browse.wav"
+		hMedia               := DLLCall(this._samp, "Int", 0, "AStr", fSoundFile, "Int64", 0, "Uint", 0, "Uint", 1, "Uint", 0)
+		mederr               := DllCall(this._err)
+		this._channel_browse := DLLCall(this._chan, "Int", hMedia, "Uint", 0)
+
+		fSoundFile:= A_ScriptDir . "\Resources\Sound\page.wav"
+		hMedia               := DLLCall(this._samp, "Int", 0, "AStr", fSoundFile, "Int64", 0, "Uint", 0, "Uint", 1, "Uint", 0)
+		mederr               := DllCall(this._err)
+		this._channel_page   := DLLCall(this._chan, "Int", hMedia, "Uint", 0)
+
+		fSoundFile := A_ScriptDir . "\Resources\Sound\select.wav"
+		hMedia               := DLLCall(this._samp, "Int", 0, "AStr", fSoundFile, "Int64", 0, "Uint", 0, "Uint", 1, "Uint", 0)
+		mederr               := DllCall(this._err)
+		this._channel_select := DLLCall(this._chan, "Int", hMedia, "Uint", 0)
+
+		fSoundFile := A_ScriptDir . "\Resources\Sound\pause.wav"
+		hMedia               := DLLCall(this._samp, "Int", 0, "AStr", fSoundFile, "Int64", 0, "Uint", 0, "Uint", 1, "Uint", 0)
+		mederr               := DllCall(this._err)
+		this._channel_pause  := DLLCall(this._chan, "Int", hMedia, "Uint", 0)
+
+		fSoundFile:= A_ScriptDir . "\Resources\Sound\unpause.wav"
+		hMedia               := DLLCall(this._samp, "Int", 0, "AStr", fSoundFile, "Int64", 0, "Uint", 0, "Uint", 1, "Uint", 0)
+		mederr               := DllCall(this._err)
+		this._channel_unpause := DLLCall(this._chan, "Int", hMedia, "Uint", 0)
+
+		fSoundFile := A_ScriptDir . "\Resources\Sound\fav.wav"
+		hMedia               := DLLCall(this._samp, "Int", 0, "AStr", fSoundFile, "Int64", 0, "Uint", 0, "Uint", 1, "Uint", 0)
+		mederr               := DllCall(this._err)
+		this._channel_fav    := DLLCall(this._chan, "Int", hMedia, "Uint", 0)
+
+		fSoundFile:= A_ScriptDir . "\Resources\Sound\unfav.wav"
+		hMedia               := DLLCall(this._samp, "Int", 0, "AStr", fSoundFile, "Int64", 0, "Uint", 0, "Uint", 1, "Uint", 0)
+		mederr               := DllCall(this._err)
+		this._channel_unfav  := DLLCall(this._chan, "Int", hMedia, "Uint", 0)
+
+		fSoundFile:= A_ScriptDir . "\Resources\Sound\star.wav"
+		hMedia               := DLLCall(this._samp, "Int", 0, "AStr", fSoundFile, "Int64", 0, "Uint", 0, "Uint", 1, "Uint", 0)
+		mederr               := DllCall(this._err)
+		this._channel_star   := DLLCall(this._chan, "Int", hMedia, "Uint", 0)
+
+		fSoundFile:= A_ScriptDir . "\Resources\Sound\nostar.wav"
+		hMedia               := DLLCall(this._samp, "Int", 0, "AStr", fSoundFile, "Int64", 0, "Uint", 0, "Uint", 1, "Uint", 0)
+		mederr               := DllCall(this._err)
+		this._channel_nostar := DLLCall(this._chan, "Int", hMedia, "Uint", 0)
+
+		fSoundFile:= A_ScriptDir . "\Resources\Sound\add.wav"
+		hMedia               := DLLCall(this._samp, "Int", 0, "AStr", fSoundFile, "Int64", 0, "Uint", 0, "Uint", 1, "Uint", 0)
+		mederr               := DllCall(this._err)
+		this._channel_add    := DLLCall(this._chan, "Int", hMedia, "Uint", 0)
+
+		fSoundFile:= A_ScriptDir . "\Resources\Sound\remove.wav"
+		hMedia               := DLLCall(this._samp, "Int", 0, "AStr", fSoundFile, "Int64", 0, "Uint", 0, "Uint", 1, "Uint", 0)
+		mederr               := DllCall(this._err)
+		this._channel_remove := DLLCall(this._chan, "Int", hMedia, "Uint", 0)
+
+		fSoundFile:= A_ScriptDir . "\Resources\Sound\picks.wav"
+		hMedia               := DLLCall(this._samp, "Int", 0, "AStr", fSoundFile, "Int64", 0, "Uint", 0, "Uint", 1, "Uint", 0)
+		mederr               := DllCall(this._err)
+		this._channel_picks  := DLLCall(this._chan, "Int", hMedia, "Uint", 0)
+
+		fSoundFile:= A_ScriptDir . "\Resources\Sound\master.wav"
+		hMedia               := DLLCall(this._samp, "Int", 0, "AStr", fSoundFile, "Int64", 0, "Uint", 0, "Uint", 1, "Uint", 0)
+		mederr               := DllCall(this._err)
+		this._channel_master := DLLCall(this._chan, "Int", hMedia, "Uint", 0)
+
+		fSoundFile:= A_ScriptDir . "\Resources\Sound\edit_on.wav"
+		hMedia                 := DLLCall(this._samp, "Int", 0, "AStr", fSoundFile, "Int64", 0, "Uint", 0, "Uint", 1, "Uint", 0)
+		mederr                 := DllCall(this._err)
+		this._channel_edit_on  := DLLCall(this._chan, "Int", hMedia, "Uint", 0)
+
+		fSoundFile:= A_ScriptDir . "\Resources\Sound\edit_off.wav"
+		hMedia                 := DLLCall(this._samp, "Int", 0, "AStr", fSoundFile, "Int64", 0, "Uint", 0, "Uint", 1, "Uint", 0)
+		mederr                 := DllCall(this._err)
+		this._channel_edit_off := DLLCall(this._chan, "Int", hMedia, "Uint", 0)
+		
+		;OutputDebug initerr:%initerr%, mederr:%mederr%, start:%BASS_start%, hMedia:%hMedia%, channel:%channel%, samp:%samp%`n
+	}
+
+	Play(soundToPlay)
+	{
+		if (this._active == 0 || !g_guiselect_loaded || !g_guiselect_visible)
+			return
+
+		Switch soundToPlay 
+		{
+			case "browse":
+				BASS_ChannelPlay := DllCall(this._play, "UInt", this._channel_browse, "Int", 1)
+			case "page":
+				BASS_ChannelPlay := DllCall(this._play, "UInt", this._channel_page, "Int", 1)
+			case "select":
+				BASS_ChannelPlay := DllCall(this._play, "UInt", this._channel_select, "Int", 1)
+			case "pause":
+				BASS_ChannelPlay := DllCall(this._play, "UInt", this._channel_pause, "Int", 1)
+			case "unpause":
+				BASS_ChannelPlay := DllCall(this._play, "UInt", this._channel_unpause, "Int", 1)
+			case "fav":
+				BASS_ChannelPlay := DllCall(this._play, "UInt", this._channel_fav, "Int", 1)
+			case "unfav":
+				BASS_ChannelPlay := DllCall(this._play, "UInt", this._channel_unfav, "Int", 1)
+			case "star":
+				BASS_ChannelPlay := DllCall(this._play, "UInt", this._channel_star, "Int", 1)
+			case "nostar":
+				BASS_ChannelPlay := DllCall(this._play, "UInt", this._channel_nostar, "Int", 1)
+			case "add":
+				BASS_ChannelPlay := DllCall(this._play, "UInt", this._channel_add, "Int", 1)
+			case "remove":
+				BASS_ChannelPlay := DllCall(this._play, "UInt", this._channel_remove, "Int", 1)
+			case "picks":
+				BASS_ChannelPlay := DllCall(this._play, "UInt", this._channel_picks, "Int", 1)
+			case "master":
+				BASS_ChannelPlay := DllCall(this._play, "UInt", this._channel_master, "Int", 1)
+			case "edit_on":
+				BASS_ChannelPlay := DllCall(this._play, "UInt", this._channel_edit_on, "Int", 1)
+			case "edit_off":
+				BASS_ChannelPlay := DllCall(this._play, "UInt", this._channel_edit_off, "Int", 1)
+		}		
+	}
+
+    ;Get inventory of all soundcards in system
+	GetInfo()
+	{
+		idx := 0
+		soundInfo := Array()
+		info := Buffer(500)
+
+		if (this._active == 0)
+			return
+
+		Loop 
+		{			
+			BASS_dev := DllCall(this._dev, "UInt", idx, "Ptr", info)
+			if (BASS_dev == 0)
+				break
+
+			deviceInfo := Map()
+
+			name := NumGet(info, 0, "Ptr")
+			driver := NumGet(info, A_PtrSize, "Ptr")
+			flags := NumGet(info, A_PtrSize*2, "UInt")
+			
+			deviceInfo["device"] := idx
+			deviceInfo["name"] := StrGet(name,"UTF-8")
+			deviceInfo["driver"] := driver == 0 ? "" : StrGet(driver,"UTF-8")
+
+			soundInfo.Push(deviceInfo)
+			idx++
+		}
+
+		return soundInfo
+	}
+
+	GetVolume()
+	{
+		if (this._active == 0)
+			return
+
+		BASS_vol := DllCall(this._getvol, "Float")
+		mederr   := DllCall(this._err)
+
+		return BASS_vol
+	}
+
+	SetVolume(val)
+	{
+		if (this._active == 0)
+			return
+
+		BASS_vol:= DllCall(this._setvol, "Float", val, "UInt")
+		mederr   := DllCall(this._err)
+
+		return BASS_vol  ;1 success, 0 failure
+	}
+
+	SetDevice(dev)
+	{
+		if (this._active == 0)
+			return
+
+		BASS_dev := DllCall(this._setdev, "UInt", dev, "UInt")
+		mederr   := DllCall(this._err)
+
+		return BASS_dev  ;1 success, 0 failure
+	}
+
+	GetDevice()
+	{
+		if (this._active == 0)
+			return
+
+		BASS_dev := DllCall(this._getdev, "UInt")
+		mederr   := DllCall(this._err)
+
+		return BASS_dev
+	}
+
+	;0 is inactive, 1 is active
+	Active
+	{
+		set {
+			this._active := value
+			return
+		}
+		get {
+			return this._active
+		}
+	}
+}

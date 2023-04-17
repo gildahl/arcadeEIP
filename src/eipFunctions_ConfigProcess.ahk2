@@ -1,0 +1,431 @@
+; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
+; © 2023 David G. Dahlstrom
+; File: eipFunctions_ConfigProcess.ahk2
+
+;This is a parital read of the arcadeEIP.ini file.  Mostly of global items
+;that are not system or game specific.  ProcessIni(), will read system/game 
+;specific items later (and every time a new game loads).
+ReadConfig()
+{
+    global
+
+    if (!FileExist(config_file))
+        return false
+
+    ;[General]
+    gCfg.show_license := IniRead(config_file, "General", "show_license", "1")
+    gCfg.idle_log := IniRead(config_file, "General", "idle_log", "0")
+    gCfg.seed_rom := IniRead(config_file, "General", "seed_rom", "mame galaga.zip")
+    gCfg.alpha_effect := IniRead(config_file, "General", "alpha_effect", "1")
+    gCfg.hotstring_prefix := IniRead(config_file, "General", "hotstring_prefix", "@!@")
+    gCfg.sound_device := IniRead(config_file, "General", "sound_device", "1")
+    gCfg.sync_volume := IniRead(config_file, "General", "sync_volume", "0")
+    
+    ;Fast delays using/caching meta names on startup
+    ;Best if only or primaily using from a front end that supplies rom names
+    gCfg.fast_load := IniRead(config_file, "General", "fast_load", "0")
+
+    ;debug_mode is turned on by setting debug= to a particular front end key (fe_key)
+    ;this ensures debugging is done with a particular front-end in context.
+    gCfg.debug_mode := IniRead(config_file, "General", "debug_mode", gCfg.debug_mode)
+    if (gCfg.debug_mode == "ERROR" or gCfg.debug_mode == "0" or gCfg.debug_mode == "Off" or gCfg.debug_mode == "off" or gCfg.debug_mode == "OFF")
+        gCfg.debug_mode := ""
+    
+    if (gCfg.debug_mode)
+    {
+        use_log := gCfg.status_beeps := true
+    }
+    else
+    {
+        gCfg.status_beeps := IniRead(config_file, "General", "status_beeps", "0")
+        use_log := IniRead(config_file, "General", "use_log", "1")
+    }
+
+    ;[Marquee]
+    gCfg.marquee_active := IniRead(config_file, "Marquee", "active", "0")
+    gCfg.marquee_autostart := IniRead(config_file, "Marquee", "autostart", "0")
+    gCfg.marquee_autoexit := IniRead(config_file, "Marquee", "autoexit", "0")
+
+    ;[Key_Map]
+    ;All [Key_Map] values now get read in bulk immediately after each Vector: since
+    ;values can change depending on the system that is running.
+   
+    ;[Picker_Preferences]
+    gCfg.magic_delay := IniRead(config_file, "Picker_Preferences", "magic_delay", "2000") ;can be overridden in [Front_End] section
+    gCfg.kiosk_mode := IniRead(config_file, "Picker_Preferences", "kiosk_mode", "0") ;can be overridden in [Front_End] section
+
+    gCfg.mark_picks := IniRead(config_file, "Picker_Preferences", "mark_picks", "1")
+    gCfg.joy_vert := IniRead(config_file, "Picker_Preferences", "joy_vert", "all")
+    gCfg.joy_horiz := IniRead(config_file, "Picker_Preferences", "joy_horiz", "all")
+    gCfg.mouse_vert := IniRead(config_file, "Picker_Preferences", "mouse_vert", "off")
+    gCfg.mouse_horiz := IniRead(config_file, "Picker_Preferences", "mouse_horiz", "off")
+    gCfg.picker_asset := IniRead(config_file, "Picker_Preferences", "asset_name", "EIP_Picker")
+    gCfg.picker_apps := IniRead(config_file, "Picker_Preferences", "run_apps", A_Space)
+
+    gCfg.top_picks_label := IniRead(config_file, "Picker_Preferences", "top_picks_label", gCfg.top_picks_label)
+    gCfg.all_picks_label := IniRead(config_file, "Picker_Preferences", "all_picks_label", gCfg.all_picks_label)
+
+    gCfg.lst_max_rows := 100   ;IniRead, lst_max_rows, %config_file%, Picker_Preferences, top_rows, 12 ;minimum value 5
+    gCfg.lst_max_rowsb := 100  ;IniRead, lst_max_rowsb, %config_file%, Picker_Preferences, bottom_rows, 20 ;minimum value 5
+    gCfg.lst_font_type := IniRead(config_file, "Picker_Preferences", "font_type", "Tahoma")
+    gCfg.lst_font_size := IniRead(config_file, "Picker_Preferences", "list_font_size", "14")
+    gCfg.lst_list_margin := IniRead(config_file, "Picker_Preferences", "list_margin", "0")
+    gCfg.lst_game_font_size := IniRead(config_file, "Picker_Preferences", "game_font_size", "40")
+    gCfg.lst_sys_font_size := IniRead(config_file, "Picker_Preferences", "system_font_size", "30")
+    gCfg.lst_game_name_ratio := IniRead(config_file, "Picker_Preferences", "game_name_ratio", "0.4")
+    gCfg.lst_default_list := IniRead(config_file, "Picker_Preferences", "default_list", "picks")
+    gCfg.lst_hide_systems := IniRead(config_file, "Picker_Preferences", "hide_systems", A_Space)
+    gCfg.clean_lists := IniRead(config_file, "Picker_Preferences", "clean_lists", "0")
+
+    ;[Auto_Switch]
+    gCfg.attract_folder := IniRead(config_file, "Auto_Switch", "folder", "Lists\autoswitch")  ;name of folder
+    gCfg.attract_delay := IniRead(config_file, "Auto_Switch", "delay", "180")        ;seconds of inactivity
+    gCfg.attract_random := IniRead(config_file, "Auto_Switch", "random", "0")        ;1 or 0 (random/sequential)
+    gCfg.attract_mute := IniRead(config_file, "Auto_Switch", "mute", "0") ;0 off, 1 on, >1 unmute delay after game start
+    gCfg.attract_auto := IniRead(config_file, "Auto_Switch", "auto", "1")
+    gCfg.attract_timer := IniRead(config_file, "Auto_Switch", "timer", "5")
+
+    ;[Global_Assets]
+    gCfg.logo_folder := IniRead(config_file, "GlobalAssets", "logo_folder", ".\Assets\[global_asset_name]\Logo\Rom")
+    gCfg.system_logo := IniRead(config_file, "GlobalAssets", "system_logo", ".\Assets\[global_asset_name]\Logo\System\[global_asset_name].png")
+    gCfg.marquee_folder := IniRead(config_file, "GlobalAssets", "marquee_folder", ".\Assets\[global_asset_name]\Marquee\Rom")
+    gCfg.system_marquee := IniRead(config_file, "GlobalAssets", "system_marquee", ".\Assets\[global_asset_name]\Marquee\System\[global_asset_name].png")
+    gCfg.controls_folder := IniRead(config_file, "GlobalAssets", "controls_folder", ".\Assets\[global_asset_name]\Controls\Rom")
+    gCfg.system_controls := IniRead(config_file, "GlobalAssets", "system_controls", ".\Assets\[global_asset_name]\Controls\System\[global_asset_name].png")
+    gCfg.meta_names := IniRead(config_file, "GlobalAssets", "meta_names", ".\Assets\[global_asset_name]\Meta\Names\.meta")
+
+    ;[Lists]
+    ProcessIniLists()
+
+    if (!InStr(gCfg.attract_folder, ":\"))
+        gCfg.attract_folder := A_ScriptDir . "\" . gCfg.attract_folder
+
+    attract_pattern := gCfg.attract_folder . "\*.txt"
+
+    return true
+}
+
+ProcessIniLists()
+{
+    global
+
+    local list_list_key, list_proper_name, list_sort_prefix
+    local list_sections
+    
+    oLists := Array()
+ 
+    list_sections := oConfigFile.GetGroupSections("List")
+    for i, config_section in list_sections
+    {
+        list_list_key := IniRead(config_file, config_section, "list_key", A_Space)
+        list_proper_name := IniRead(config_file, config_section, "proper_name", A_Space)
+        list_sort_prefix := IniRead(config_file, config_section, "sort_prefix", A_Space)
+        
+        oLists.Push({})
+        oLists[A_Index].list_key := list_list_key
+        oLists[A_Index].proper_name := list_proper_name
+        oLists[A_Index].sort_prefix := list_sort_prefix
+    }
+}
+
+;Start processing the configuration file (arcadeEIP.ini) into the
+;global configuration object, gCfg. This function is re-run each time
+;a new game is selected.
+ProcessIni() 
+{
+    global ;gCfg, fe_pid, bSearchGlobal
+
+    local emu_sys_key, romValue, debugValid
+    local default_logo_folder, default_system_logo
+    local asset, aLine, key
+    local fe_exe_name, fe_sections, config_section
+    local romFile, romFolder, romExt, romName
+    
+    ;-------------------------------------
+    ;Process command-line and set sys_key
+    ;-------------------------------------
+    
+    ;Note that this processing is independent and more thorough than earlier processing that determined
+    ;a sys_key for the passthrough parameters function.
+    
+    gCfg.sys_key := ""
+    gCfg.rom_full_path := "" ;C:\emulators\assets\roms\game.rom
+    gCfg.rom_file := ""      ;game.rom
+    gCfg.rom_folder := ""    ;C:\emulators\assets\roms
+    gCfg.rom_ext := ""       ;rom
+    gCfg.rom_name := ""      ;game
+
+    romValue := ""      ;rom value passed on command line	
+    
+    ;if no parameters, return the default emulator's sys_key
+    if (A_Args.Length == 0)
+        gCfg.sys_key := oEmulators.GetDefaultSysKey()
+    
+    ;if one parameter it may be a sys_key or a rom
+    else if (A_Args.Length == 1)
+    {
+        if (oEmulators.IsValidKey(A_Args[1])) 
+            gCfg.sys_key := A_Args[1]
+        else
+        {
+            gCfg.sys_key := oEmulators.GetDefaultSysKey()
+            bSearchGlobal := true
+            
+            romValue := A_Args[1]
+        }
+    }			
+    
+    ;if two parameters, the first must be a sys_key and second a rom
+    else if (A_Args.Length == 2)
+    {
+        if (oEmulators.IsValidKey(A_Args[1])) 
+        {
+            gCfg.sys_key := A_Args[1]
+            romValue := A_Args[2]
+        }		
+    }
+    
+    if (gCfg.sys_key && romValue)
+    {
+        SplitPath romValue, &romFile, &romFolder, &romExt, &romName
+
+        gCfg.rom_file := romFile
+        gCfg.rom_folder := romFolder
+        gCfg.rom_ext := romExt
+        gCfg.rom_name := romName
+
+        if (gCfg.rom_folder) ;if a full path was provided
+            gCfg.rom_full_path :=  gCfg.rom_folder . "\" .  gCfg.rom_file
+    }    
+    
+    ;If sys_key still not set, then we have a case we can't handle,
+    ;perhaps a sys_key typo on the command line; so write the error and exit the app.
+    if (!gCfg.sys_key)
+    {
+        LogEntry("ERROR: No valid sys_key could be determined. Verify command line syntax and the contents of " . cConfigFileName . "`n")
+        ExitApp
+    }
+    else
+        LogEntry("INFO: System key has been resolved: sys_key=" . gCfg.sys_key . "`n")
+    
+    config_section := "Front_End_os"
+    gCfg.fe_key := IniRead(config_file, config_section, "fe_key", "os")
+    gCfg.fe_asset_name := IniRead(config_file, config_section, "asset_name", "windows")
+    ;IniRead, fe_exe_full_path, %config_file%, %config_section%, exe_full_path, %A_Space%
+    gCfg.start_screen := IniRead(config_file, config_section, "start_screen", "0,Black")
+    gCfg.exit_screen := IniRead(config_file, config_section, "exit_screen", "0,Black")
+    gCfg.hide_cursor := IniRead(config_file, config_section, "hide_cursor", "0")
+    gCfg.fe_run_apps := IniRead(config_file, config_section, "run_apps", A_Space)
+    gCfg.show_on_pause := IniRead(config_file, config_section, "show_on_pause", A_Space)
+
+    ;Overrides
+    gCfg.magic_delay := IniRead(config_file, config_section, "magic_delay",  gCfg.magic_delay) ;overrides setting in [Picker_Preferences]
+    gCfg.kiosk_mode := IniRead(config_file, config_section, "kiosk_mode",  gCfg.kiosk_mode) ;overrides setting in [Picker_Preferences]
+
+    ;These overrides are not yet tested...
+    gCfg.pause_key := IniRead(config_file, config_section, "pause_key",  gCfg.pause_key) ;overrides setting in [Key_Map]
+    gCfg.exit_key := IniRead(config_file, config_section, "exit_key",  gCfg.exit_key) ;overrides setting in [Key_Map]
+    gCfg.magic_key := IniRead(config_file, config_section, "magic_key",  gCfg.magic_key) ;overrides setting in [Key_Map]
+    
+    ProcessFeSettings()
+
+    ;While we're here, let's also validate the debug_mode configuration setting
+    debugValid := gCfg.debug_mode == "" || gCfg.debug_mode == "os" ? true : false
+    
+    fe_sections := oConfigFile.GetGroupSections("Front_End")
+    for i, config_section in fe_sections
+    {
+        if (config_section == "Front_End_OS" || config_section == "Front_End_os") ;we already processed this one above
+            continue
+
+        temp_fe_key := IniRead(config_file, config_section, "fe_key", A_Space)
+        temp_fe_exe_full_path := IniRead(config_file, config_section, "exe_full_path", A_Space)
+
+        debugValid := gCfg.debug_mode == temp_fe_key ? true : debugValid ;part of debug_mode setting validation
+        
+        SplitPath(temp_fe_exe_full_path, &fe_exe_name) ;, &fe_root_folder)
+        
+        fe_pid := ProcessExist(fe_exe_name)
+        
+        if (fe_pid || temp_fe_key == gCfg.debug_mode)
+        {
+            ;LogEntry("INFO: fe_pid is: " . fe_pid . "  fe_exe_name is: " . fe_exe_name . "  temp_fe_key is: " . temp_fe_key . "`n")
+            ;To support inheritance of settings from the [Front_End_OS] section, change the
+            ;last parameter in these IniRead statements. Presently not supported due to the
+            ;risk of side effects.
+            gCfg.fe_key := IniRead(config_file, config_section, "fe_key", A_Space)
+            gCfg.fe_asset_name := IniRead(config_file, config_section, "asset_name", A_Space)
+            gCfg.fe_exe_full_path := IniRead(config_file, config_section, "exe_full_path", A_Space)
+            gCfg.start_screen := IniRead(config_file, config_section, "start_screen", "-1,Black")
+            gCfg.exit_screen := IniRead(config_file, config_section, "exit_screen", "-1,Black")
+            gCfg.hide_curson := IniRead(config_file, config_section, "hide_cursor", A_Space)
+            gCfg.fe_run_apps := IniRead(config_file, config_section, "run_apps", A_Space)
+            gCfg.show_on_pause := IniRead(config_file, config_section, "show_on_pause", A_Space)
+
+            ;Overrides
+            gCfg.magic_delay := IniRead(config_file, config_section, "magic_delay", gCfg.magic_delay) ;overrides setting in [Picker_Preferences]
+            gCfg.kiosk_mode := IniRead(config_file, config_section, "kiosk_mode", gCfg.kiosk_mode) ;overrides setting in [Picker_Preferences]
+            
+            ;These overrides are not yet tested...
+            gCfg.pause_key := IniRead(config_file, config_section, "pause_key", gCfg.pause_key) ;overrides setting in [Key_Map]
+            gCfg.exit_key := IniRead(config_file, config_section, "exit_key", gCfg.exit_key) ;overrides setting in [Key_Map]
+            gCfg.magic_key := IniRead(config_file, config_section, "magic_key", gCfg.magic_key) ;overrides setting in [Key_Map]
+
+            ProcessFeSettings()
+        }
+    }
+
+    if (!debugValid)
+    {
+        LogEntry("ERROR: Exiting. debug_mode must be 'off', 'os', or a valid fe_key name. Value was: " . gCfg.debug_mode . ".`n")
+        ExitApp
+    }
+
+    if (fe_pid)
+        LogEntry("INFO: Detected front-end is: " . gCfg.fe_key . "`n")
+    else
+        LogEntry("INFO: Active front-end is: " . gCfg.fe_key . "`n")
+
+    ProcessIniApplications()
+    
+    ;Read the appropriate emulator section, using [Emulator_Default] section's defaults for unspecified values
+    if (!oEmulators.IsValidKey(gCfg.sys_key))
+        LogEntry("ERROR: Assert! sys_key could not be found among emulators defined in " . config_file . ". Aborting...`n")
+
+    for n, emu_setting in oEmulators.Emulators[gCfg.sys_key]._default_settings
+        gCfg.%n% := emu_setting
+
+    ProcessEmulatorSettings(oEmulators.Emulators[gCfg.sys_key].config_section)
+
+    return
+}
+
+;Sub function called in ProcessIni() and FrontEndStartup()
+ProcessIniApplications()
+{
+    global applications
+
+    local app_app_key, app_exe_full_path, app_profile, app_param_list
+    local app_fe_skip, app_exit_cmd, app_sections
+    
+    applications := Map()
+ 
+    app_sections := oConfigFile.GetGroupSections("Application")
+    for i, config_section in app_sections
+    {
+        app_app_key := IniRead(config_file, config_section, "app_key", A_Space)
+        app_exe_full_path := IniRead(config_file, config_section, "exe_full_path", A_Space)
+        app_profile := IniRead(config_file, config_section, "profile", A_Space)
+        app_param_list := ReadIniFile(config_file, config_section, "param_list", A_Space)
+        app_fe_skip := IniRead(config_file, config_section, "fe_skip", A_Space)
+        app_exit_cmd := IniRead(config_file, config_section, "exit_cmd", A_Space)
+        
+        applications[A_Index] := {}
+        applications[A_Index].app_key := app_app_key
+        applications[A_Index].exe_full_path := app_exe_full_path
+        applications[A_Index].profile := app_profile
+        applications[A_Index].param_list := app_param_list
+        applications[A_Index].fe_skip := app_fe_skip
+        applications[A_Index].exit_cmd := app_exit_cmd
+    }
+}
+
+;Sub function called by ProcessIni()
+ProcessFeSettings()
+{
+    global
+    local ini_arg_decomp
+    
+    ;decompose start_screen
+    ;format start_screen=[start_show_time],[start_back_color]
+    ini_arg_decomp := StrSplit(gCfg.start_screen, ["=",","], " ")
+
+    (ini_arg_decomp.Length) > 0 ? start_show_time := ini_arg_decomp[1] : start_show_time := default_start_show_time
+    (ini_arg_decomp.Length) > 1 ? start_back_color := ini_arg_decomp[2] : start_back_color := default_start_back_color
+    
+    ;decompose exit_screen
+    ;format start_screen=[exit_show_time],[exit_back_color]
+    ini_arg_decomp := StrSplit(gCfg.exit_screen, ["=",","], " ")
+    (ini_arg_decomp.Length) > 0 ? exit_show_time := ini_arg_decomp[1] : exit_show_time := default_exit_show_time
+    (ini_arg_decomp.Length) > 1 ? exit_back_color := ini_arg_decomp[2] : exit_back_color := default_exit_back_color
+    
+    
+    ProcessFeOverrides()
+
+    return
+}
+
+;Sub function called by ProcessFeSettings() and ProcessRules()
+ProcessFeOverrides()
+{
+    global
+    local ini_arg_decomp
+    
+    ;apply any command-line preprocessor overrides
+    if (cl_start_screen != "")
+    {
+        ini_arg_decomp := StrSplit(cl_start_screen, ["=",","], " ")
+        (ini_arg_decomp.Length) > 0 ? start_show_time := ini_arg_decomp[1] : start_show_time := start_show_time
+        (ini_arg_decomp.Length) > 1 ? start_back_color := ini_arg_decomp[2] : start_back_color := start_back_color
+    }
+    
+    if (cl_exit_screen != "")
+    {
+        ini_arg_decomp := StrSplit(cl_exit_screen, ["=",","], " ")
+        (ini_arg_decomp.Length) > 0 ? exit_show_time := ini_arg_decomp[1] : exit_show_time := exit_show_time
+        (ini_arg_decomp.Length) > 1 ? exit_back_color := ini_arg_decomp[2] : exit_back_color := exit_back_color
+    }
+
+    return	
+}
+
+;Sub function called by ProcessEmulatorSettings() and ProcessRules()
+ProcessEmulatorOverrides()
+{
+    global
+    
+    if (cl_run_apps == "EMPTY")
+        gCfg.run_apps := ""
+    else if (cl_run_apps != "")
+        gCfg.run_apps := cl_run_apps
+}
+
+;Windows, unfortunately, strips external quotes from ini file values 
+;This custom function reads the ini file key without stripping the quotes
+ReadIniFile(iniFile, iniSection, iniKey, iniDefault)
+{
+	local e
+	
+	thisSection := ""
+	
+	try
+	{
+		Loop Read iniFile
+		{
+			;skip blank or commented-out lines
+			if (A_LoopReadLine = "" || SubStr(A_LoopReadLine,1,1) = ";")
+				continue
+			
+			if (SubStr(A_LoopReadLine,1,1) = "[")
+			{
+				thisSection := SubStr(Trim(A_LoopReadLine), 2, StrLen(Trim(A_LoopReadLine))-2)
+			}
+			
+			if (thisSection == iniSection)
+			{
+				if (InStr(Trim(A_LoopReadLine), iniKey))
+				{
+					outValue := Trim(SubStr(Trim(A_LoopReadLine), InStr(Trim(A_LoopReadLine), "=",,1,1)+1))
+					return outValue
+				}
+			}
+		}
+		outValue := Trim(iniDefault)
+		return outValue
+	}
+	catch as e
+	{			
+		LogEntry("ERROR: Getting ini file value: " . FormatErrorMessage(e) . "`n")
+		ExitApp
+	}	
+}

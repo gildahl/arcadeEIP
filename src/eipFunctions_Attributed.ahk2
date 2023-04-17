@@ -1,0 +1,283 @@
+; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
+; File: eipFunctions_Attributed.ahk2
+
+;Various functions either obtained in full or inspired from various web sites.
+;All are presumed to be in the public domain.
+
+;https://www.autohotkey.com/docs/v2/lib/DllCall.htm
+;Function to turn the system cursor on or off
+SystemCursor(cmd)  ; cmd = "On|Off|Toggle|Reload"
+{
+    static visible := true, c := Map()
+    static sys_cursors := [32512, 32513, 32514, 32515, 32516, 32642
+                         , 32643, 32644, 32645, 32646, 32648, 32649, 32650]
+    if (cmd = "Reload" or !c.Count)  ; Reload when requested or at first call.
+    {
+        for i, id in sys_cursors
+        {
+            h_cursor  := DllCall("LoadCursor", "Ptr", 0, "Ptr", id)
+            h_default := DllCall("CopyImage", "Ptr", h_cursor, "UInt", 2
+                , "Int", 0, "Int", 0, "UInt", 0)
+            h_blank   := DllCall("CreateCursor", "Ptr", 0, "Int", 0, "Int", 0
+                , "Int", 32, "Int", 32
+                , "Ptr", Buffer(32*4, 0xFF)
+                , "Ptr", Buffer(32*4, 0))
+            c[id] := {default: h_default, blank: h_blank}
+        }
+    }
+    switch cmd
+    {
+    case "On": visible := true
+    case "Off": visible := false
+    case "Toggle": visible := !visible
+    default: return
+    }
+    for id, handles in c
+    {
+        h_cursor := DllCall("CopyImage"
+            , "Ptr", visible ? handles.default : handles.blank
+            , "UInt", 2, "Int", 0, "Int", 0, "UInt", 0)
+        DllCall("SetSystemCursor", "Ptr", h_cursor, "UInt", id)
+    }
+}
+
+; ==================================================================================================================================
+; Modified version of a function by SKAN, 01-Apr-2014, autohotkey.com/boards/viewtopic.php?t=3203
+; Creates an uni-colored bitmap of 1 * 1 pixels. (converted to AHK2 by DGD)
+; ==================================================================================================================================
+CreateDIB(Color) {
+    BMBITS := Buffer(4, 0)
+    NumPut("UInt", Color, BMBITS)
+    HBM := DllCall("CreateBitmap", "Int", 1, "Int", 1, "UInt", 1, "UInt", 24, "Ptr", 0, "UPtr")
+    HBM := DllCall("CopyImage", "Ptr", HBM, "UInt", 0, "Int", 0, "Int", 0, "UInt", 0x2008, "UPtr")
+    DllCall("SetBitmapBits", "Ptr", HBM, "UInt", 4, "Ptr", BMBITS)
+    Return HBM
+ }
+ 
+ ;Parametes:
+ ;PixelData : Series of RRGGBB values delimited with Pipe "|".
+ ;W,H : The dimension of the image in PixelData.
+ ;ResizeW, ResizeH : The resized dimensions if image needs to be upscaled.
+ ;Gradient : Default value false. If true, image will be upscaled as a gradient otherwise as pixelated blocks.
+ ;DIB : By default, the function returns a DIB. Pass false if you need DDB (recommended).
+ ;https://www.autohotkey.com/boards/viewtopic.php?t=3203
+ CreateDIB2(PixelData, W, H, ResizeW:=0, ResizeH:=0, Gradient:=0, DIB:=1) 
+ {      
+     Static OSV    ; CreateDIB v0.90, by SKAN on CT41/D345 @ tiny.cc/createdib (converted to AHK2 by DGD)
+      
+     if !IsSet(OSV)
+     {
+         OSV := FileGetVersion("user32.dll")
+         OSV := Format("{1:}.{2:}", StrSplit(OSV,".")*)
+     }
+     LR_1   :=  0x2000|0x8|0x4              ; LR_CREATEDIBSECTION | LR_COPYDELETEORG | LR_COPYRETURNORG
+     LR_2   :=         0x8|0x4                                    ; LR_COPYDELETEORG | LR_COPYRETURNORG   
+     Flags  :=  ( OSV>6.3 ? (Gradient ? LR_2 : LR_1) : (Gradient ? LR_1 : LR_2) )
+     WB     :=  Ceil((W*3)/2)*2
+     BMBITS := BUFFER(WB*H, 0)
+     P := BMBITS.Ptr
+     PE := P+(WB*H) 
+ 
+ ;NumPut(action, &APPBARDATA, A_PtrSize=8?40:32, "UInt")
+ ;NumPut("UInt", action, APPBARDATA, A_PtrSize=8?40:32)
+ 
+ ;Numput("0x" . A_LoopField, P+0, "UInt")-(W & 1 && Mod(A_Index*3, W*3)=0 ? 0 : 1)
+ ;NumPut("Uint", "0x" . A_LoopField, P+0)
+ 
+     Loop Parse PixelData, "|"
+         P := P<PE ? NumPut("Uint", "0x" . A_LoopField, P+0)-(W & 1 && Mod(A_Index*3, W*3)=0 ? 0 : 1) : P
+         ;P := P<PE ? Numput("0x" . A_LoopField, P+0, "UInt")-(W & 1 && Mod(A_Index*3, W*3)=0 ? 0 : 1) : P
+ 
+     hBM := DllCall("CreateBitmap", "Int",W, "Int",H, "UInt",1, "UInt",24, "Ptr",0, "Ptr")
+     hBM := DllCall("CopyImage", "Ptr",hBM, "UInt",0, "Int",0, "Int",0, "UInt",LR_1, "Ptr")
+            DllCall("SetBitmapBits", "Ptr",hBM, "UInt",WB*H, "Ptr", BMBITS)
+     hBM := DllCall("CopyImage", "Ptr",hBM, "Int",0, "Int",0, "Int",0, "Int",Flags, "Ptr")
+     hBM := DllCall("CopyImage", "Ptr",hBM, "Int",0, "Int",ResizeW, "Int",ResizeH, "UInt",Flags, "Ptr")
+     hBM := DllCall("CopyImage", "Ptr",hBM, "Int",0, "Int",0, "Int",0, "UInt",LR_2, "Ptr")
+     Return DllCall("CopyImage", "Ptr",hBM, "Int",0, "Int",0, "Int",0, "UInt",DIB ? LR_1 : LR_2, "Ptr")
+ }    
+ /*
+ ( LTrim Join|
+   999999|999999|999999|999999|999999|999999|999999|999999|999999
+   888888|888888|888888|888888|888888|888888|888888|888888|888888
+   777777|777777|777777|777777|777777|777777|777777|777777|777777
+   666666|666666|666666|666666|666666|666666|666666|666666|666666
+   555555|555555|555555|555555|555555|555555|555555|555555|555555
+   444444|444444|444444|444444|444444|444444|444444|444444|444444
+   333333|333333|333333|333333|333333|333333|333333|333333|333333
+   222222|222222|222222|222222|222222|222222|222222|222222|222222
+   111111|111111|111111|111111|111111|111111|111111|111111|111111
+ )"
+ 
+   111111|111111|111111|111111|111111|111111|111111|111111|111111
+   222222|222222|222222|222222|222222|222222|222222|222222|222222
+   333333|333333|333333|333333|333333|333333|333333|333333|333333
+   444444|444444|444444|444444|444444|444444|444444|444444|444444
+   555555|555555|555555|555555|555555|555555|555555|555555|555555
+   444444|444444|444444|444444|444444|444444|444444|444444|444444
+   333333|333333|333333|333333|333333|333333|333333|333333|333333
+   222222|222222|222222|222222|222222|222222|222222|222222|222222
+   111111|111111|111111|111111|111111|111111|111111|111111|111111
+ */
+ /*
+ #NoEnv
+ Gui, Margin, 20, 20
+ Gui, Color, Black
+ Gui, Add, Pic, xm  ym w100 h100, % "HBITMAP:" . CreateDIB(0xFF0000) ; red
+ Gui, Add, Pic,     ym w100 h100, % "HBITMAP:" . CreateDIB(0x00FF00) ; green
+ Gui, Add, Pic, xm     w100 h100, % "HBITMAP:" . CreateDIB(0x0000FF) ; blue
+ Gui, Add, Pic, x+m yp w100 h100, % "HBITMAP:" . CreateDIB(0xFFFFFF) ; white
+ Gui, SHow, , Colors
+ Return
+ */
+ 
+ ;https://autohotkey.com/board/topic/27393-resize-text-control-to-fit-new-contents/  (converted to AHK2 by DGD)
+ ;Permits reszing of text based on height/width considerations.
+ GetTextExtentPoint(sString, sFaceName, nHeight := 9, bBold := False, bItalic := False, bUnderline := False, bStrikeOut := False, nCharSet := 0)
+ {
+    nSize := 0 ;initialize to avoid the warning
+ 
+    hDC := DllCall("GetDC", "Ptr", 0, "Ptr") 
+    nCaps := DllCall("GetDeviceCaps", "Uint", hDC, "Int", 90)
+    nHeight := -DllCall("MulDiv", "Int", nHeight, "Int", nCaps, "Int", 72)
+ 
+    hFont := DllCall("CreateFont", "Int", nHeight, "Int", 0, "Int", 0, "Int", 0, "Int", 400 + 300 * bBold, "Uint", bItalic, "Uint", bUnderline, "Uint", bStrikeOut, "Uint", nCharSet, "Uint", 0, "Uint", 0, "Uint", 0, "Uint", 0, "Str", sFaceName)
+    hFold := DllCall("SelectObject", "Uint", hDC, "Uint", hFont)
+ 
+    DllCall("GetTextExtentPoint32", "Uint", hDC, "Str", sString, "Int", StrLen(sString), "Int64P", &nSize)
+ 
+    DllCall("SelectObject", "Uint", hDC, "Uint", hFold)
+    DllCall("DeleteObject", "Uint", hFont)
+    DllCall("ReleaseDC", "Uint", 0, "Uint", hDC)
+ 
+    nWidth  := nSize & 0xFFFFFFFF
+    nHeight := nSize >> 32 & 0xFFFFFFFF
+ 
+    nWidth := nWidth * 96/A_ScreenDPI
+ 
+    Return nWidth
+ }
+ 
+;Adapted from https://www.autohotkey.com/boards/viewtopic.php?t=42706 (converted to AHK2 by DGD)
+;Permits an icon to be created within a ListView column
+LV_SetColumnIcon(hList, iItem, iSubItem, iImage)
+{
+    LVITEM := BUFFER(A_PtrSize == 8 ? 88 : 60, 0)
+
+    LVM_SETITEM := 0x1006 , mask := 2   ; LVIF_IMAGE := 0x2
+    iItem-- , iSubItem-- , iImage--		; Note first column (iSubItem) is #ZERO, hence adjustment
+
+    NumPut("UInt", mask, LVITEM)
+    NumPut("Int", iItem, LVITEM, 4)
+    NumPut("Int", iSubItem, LVITEM, 8)
+    NumPut("Int",iImage, LVITEM, A_PtrSize == 8 ? 36 : 28)
+    result := DllCall("SendMessageA", "UInt", hList, "UInt", LVM_SETITEM, "UInt", 0, "UInt", LVITEM.Ptr)
+    return result
+}
+ 
+;https://www.autohotkey.com/boards/viewtopic.php?t=71295
+;Puts commas in large numbers
+ThouSep(X)
+{
+    N := (StrLen(Floor(Abs(X))) - 1) // 3
+    Pat := "^(-?\d{1,3})" . SubStr("(\d{3})(\d{3})(\d{3})(\d{3})(\d{3})(\d{3})", 1, 7*N) . "(\.\d*)?$"
+    Rep := "$1" . SubStr(",$2,$3,$4,$5,$6,$7", 1, 3*N) . "$" . N+2
+    Return RegExReplace(X, Pat, Rep)
+}
+ 
+;Hide or show the Windows taskbar
+;true hides taskbar, 
+;false shows taskbar
+HideShowTaskbar(action) 
+{
+     ;https://www.autohotkey.com/boards/viewtopic.php?t=39123 (converted to AHK2 by DGD)
+     APPBARDATA := Buffer(A_PtrSize=8?48:36)
+     NumPut("UInt", action, APPBARDATA, A_PtrSize=8?40:32)
+     DllCall("shell32\SHAppBarMessage", "UInt", 0xA, "Ptr", APPBARDATA, "UPtr")
+}
+ 
+;Gets the Windows taskbar state
+;https://www.autohotkey.com/boards/viewtopic.php?t=39123 (converted to AHK2 by DGD)
+;ABM_GETSTATE message (Windows)
+;https://msdn.microsoft.com/en-us/library/windows/desktop/bb787947(v=vs.85).aspx 
+;Note  As of Windows 7, ABS_ALWAYSONTOP is no longer returned because the taskbar is always in that state. 
+;Older code should be updated to ignore the absence of this value in not assume that return value to mean 
+;that the taskbar is not in the always-on-top state.
+
+;A return value of true means taskbar is hidden
+;A return value of false means taskbar is visible (i.e. not hidden)
+GetTaskbarState()
+{
+    local state, vState, APPBARDATA
+
+    APPBARDATA := Buffer(A_PtrSize=8?48:36)
+    vState := DllCall("shell32\SHAppBarMessage", "UInt",0x4, "Ptr", APPBARDATA, "UPtr")
+    state := vState & 0x1 ? true : false
+
+    return state
+}
+
+;MD5 crypto functions for license processing
+;http://www.autohotkey.com/board/topic/117347-dynamic-md5-hash-generation-for-a-string/
+Hash(string, encoding := "UTF-8")
+{
+    return CalcStringHash(string, 0x8003, encoding)
+}
+
+CalcAddrHash(addr, length, algid, &hash := 0, &hashlength := 0)
+{
+	local o
+
+    static h := [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, "a", "b", "c", "d", "e", "f"]
+    static b := 1 ;h.minIndex()
+    hProv := hHash := o := 0
+
+
+	if (DllCall("advapi32\CryptAcquireContext", "Ptr*", &hProv, "Ptr", 0, "Ptr", 0, "UInt", 24, "UInt", 0xf0000000))
+    {
+        if (DllCall("advapi32\CryptCreateHash", "Ptr", hProv, "UInt", algid, "UInt", 0, "UInt", 0, "Ptr*", &hHash))
+        {
+            if (DllCall("advapi32\CryptHashData", "Ptr", hHash, "Ptr", addr, "UInt", length, "UInt", 0))
+            {
+                if (DllCall("advapi32\CryptGetHashParam", "Ptr", hHash, "UInt", 2, "Ptr", 0, "UInt*", &hashlength, "UInt", 0))
+                {
+					hash := Buffer(hashlength, 0)
+                    if (DllCall("advapi32\CryptGetHashParam", "Ptr", hHash, "UInt", 2, "Ptr", hash, "UInt*", &hashlength, "UInt", 0))
+                    {
+                        loop hashlength
+                        {
+                            v := NumGet(hash, A_Index - 1, "UChar")
+                            o .= h[(v >> 4) + b] h[(v & 0xf) + b]
+                        }
+                    }
+                }
+            }
+            DllCall("advapi32\CryptDestroyHash", "Ptr", hHash)
+        }
+        DllCall("advapi32\CryptReleaseContext", "Ptr", hProv, "UInt", 0)
+    }
+    return o
+}
+
+CalcStringHash(string, algid, encoding := "UTF-8", &hash := 0, &hashlength := 0)
+{
+
+	chrlength := (encoding = "CP1200" || encoding = "UTF-16") ? 2 : 1
+    length := (StrPut(string, encoding) - 1) * chrlength
+	data := Buffer(length, 0)
+    StrPut(string, data, floor(length / chrlength), encoding)
+    return CalcAddrHash(data, length, algid, &hash, &hashlength)
+}
+
+ /*
+ ;Based on a suggestion by SKAN here 
+ ;https://autohotkey.com/board/topic/58933-how-to-check-if-a-window-is-hidden/ (converted to AHK2 by DGD)
+ IsWindowVisible(hwnd)
+ {
+     Style := WinGetStyle("ahk_id " . hwnd)
+     If (Style & 0x10000000)  ; 0x10000000 is WS_VISIBLE
+         return true
+     else
+         return false
+ }
+ */

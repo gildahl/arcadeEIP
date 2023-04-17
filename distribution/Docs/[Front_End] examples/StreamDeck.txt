@@ -1,0 +1,63 @@
+Elgato Stream Deck Integration Tips
+===================================
+
+The Elgato Stream Deck is a programmable button appliance that can take advantage of 
+arcadeEIP's direct launch and hotkey functions to craft a button-based interface that can
+control most of arcadeEIP's features.  You will not need to setup a [Front_End] section in
+arcadeEIP.ini for the Stream Deck, and it will work seamlessly with arcadeEIP in both its
+standalone mode or when integrated with another front-end like BigBox or GameEx.
+
+This guide assumes you know how to program an Elgato Stream Deck profile and just provides 
+guidance on a few things that are specific to arcadeEIP when using it with the Stream Deck. 
+
+Prerequisties
+==========================================================================================
+* Successfully complete the MAME Quick Start guide (or otherwise already up-and-running).
+* Back-up arcadeEIP.ini before starting.
+* Read the readme.txt file in the \Direct folder (to understand hotstring files).
+* Download and install the free "SuperMacro By BarRaider" Plug-In from Stream Deck store.
+==========================================================================================
+
+1. To configure a button on the Stream Deck to launch a game:
+
+  A. First, make sure that there is a hotstring type direct-switch file for the game present 
+     in arcadeEIP's \Direct folder. For this quick start guide, we will use the example
+     file: "@!@mame_zaxxon.txt", which should already be in that folder by default.
+
+  B. Configure a button in the Stream Deck by drag/dropping a "Super Macro" action on it.
+     Specify the following macro text in the "Short Press" window.
+
+     {{MOUSEX200:200,Y}}{{LBUTTON}}{{pause:300}}@!@mame_zaxxon{{enter}}
+
+     **Important** if you are configuring a Multi-Action button on your Stream Deck that will
+     fire this macro and also change the profile (for example, to switch to a custom profile 
+     with buttons specific to the game), make sure the Macro function is listed as the first
+     mulit-action function.
+
+  C. Run eip.exe, and test the button.
+
+2. To configure a button to toggle arcadeEIP's game picker menu on/off, drag/drop a "Hotkey" 
+   control onto your button and specify the hotkey as "'" (or whatever value menu_toggle_key
+   is set to in the [Key_Map] section of arcadeEIP.ini).
+
+3. Note that you can't assign a magic_key exit button to a Stream Deck button (default ".").
+   So if you want to be able to use a hotkey button in your Stream Deck to exit arcadeEIP 
+   while retaining magic_key functionality for your control panel, use the quit_key (default "~")
+   in the Stream Deck instead.
+   
+
+So in general, you will use the hotstring method above in step 1 to launch games, and you will
+use Stream Deck Hotkeys to program buttons to send keystrokes to arcadeEIP or to games. Beyond
+this, the Stream Deck offers quite a bit of flexibility to customize your profiles in many other
+ways that are beyond the scope of this short tutorial.
+
+=================================================================================================
+As a final note, be aware that at present, Stream Deck hotkey actions do not trip arcadeEIP's 
+internal hardware input monitor which is designed to prevent games from automatically switching 
+while playing a game.  This won't be a problem as long as your game also uses ordinary control
+panel input; however, if your game uses mostly (or exclusively) input through the Stream Deck
+you may experience game-switching while a game is in progress.  I'll be looking at this at
+some point, but it should be rather rare. If you do experience this, it is recommended to try
+making your autoswitch delay longer and/or assigning one or more regularly used button presses
+to a control panel button instead.
+==================================================================================================

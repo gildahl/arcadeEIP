@@ -1,0 +1,595 @@
+; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
+; © 2023 David G. Dahlstrom
+; File: eipFunction_ProcessRules.ahk2
+
+;Implements the arcadeEIP rules engine
+ProcessRules()
+{
+    ;the following are some of the globals
+    ;param_list, rules, Emu_Args, proxy_type, 
+    global
+    
+    local arg_1, arg_2
+    local n, e, fnc, idx, cl, len
+    local this_rule, param, param_list_copy
+    local varFile, filename, file_to_run
+    local new_folder, proxy_file, proxy_folder, proxy_full_path
+    local sys_key_test, aSearchPaths, searchPath
+    local foundRom, param_is_quoted, search_pattern, rom_subfolder, current_folder
+    local tempArgs, partial_config_file, partial_config_section    
+
+    for n, this_rule in rules
+    {
+        ;*** custom function ***
+        ;A custom function is implemented in a separate executable
+        ;with the filename fx_*.exe. More instructions are provided
+        ;in the fx_add_param.ahk sample custom function file.
+        if (SubStr(this_rule.function, 1, 3) = "fx_") 
+        {
+            fnc := this_rule.function
+            if (sLicenseType == "registered" || sLicenseType == "subscription")
+            {
+                LogEntry("INFO: Processing custom rule: <" . fnc . ">`n")
+                filename := A_ScriptDir . "\vars.txt"
+                FileDelete(filename)		
+                
+                try
+                {	
+                    varFile := FileOpen(filename, "w `n")
+                    
+                    ;rule items
+                    varFile.WriteLine(this_rule.function)
+                    varFile.WriteLine(this_rule.arg_1)
+                    varFile.WriteLine(this_rule.policy)
+                    varFile.WriteLine(this_rule.arg_2)
+                    
+                    ;returnable items
+                    varFile.WriteLine(gCfg.exe_name)
+                    varFile.WriteLine(gCfg.root_folder)		
+                    param_list_copy := ""
+                    for n, param in Emu_Args
+                    {
+                        param_list_copy := param_list_copy . " " .param
+                    }
+                    varFile.WriteLine(param_list_copy)
+                    
+                    ;general items
+                    varFile.WriteLine(log_file)
+                    varFile.WriteLine(config_file)
+                    
+                    ;front end and emulator items
+                    varFile.WriteLine(gCfg.fe_asset_name)		
+                    varFile.WriteLine(gCfg.sys_key)
+                    varFile.WriteLine(gCfg.asset_name)
+                    varFile.WriteLine(gCfg.proper_name)
+                    varFile.WriteLine(gCfg.global_asset_name)
+                    varFile.WriteLine(gCfg.rom_name)
+                    varFile.WriteLine(gCfg.rom_folder)
+                    varFile.WriteLine(gCfg.rom_file)
+                    varFile.WriteLine(gCfg.rom_full_path)
+                    varFile.WriteLine(gCfg.map_pause)
+                    varFile.WriteLine(gCfg.map_exit)
+                    
+                    varFile.Close
+                    
+                    file_to_run := this_rule.function . ".exe"
+                    RunWait file_to_run
+                    
+                    varFile := FileOpen(filename, "r")
+                    gCfg.exe_name := Trim(varFile.ReadLine(), OmitChars := " `n`r") 		
+                    gCfg.root_folder := Trim(varFile.ReadLine(), OmitChars := " `n`r")
+                    gCfg.param_list := Trim(varFile.ReadLine(), OmitChars := " `n`r")
+                    varFile.Close
+                    
+                    BuildEmuArgs()	;rebuild Emu_Args from param_list	
+                    
+                    FileDelete filename
+                }
+                catch as e
+                {		
+                    LogEntry("ERROR: Processing custom rule: " . FormatErrorMessage(e) . "`n")
+                    ExitApp
+                }
+            }
+            else
+            {
+                LogEntry("WARNING: Skipped processing rule: <" . fnc . ">. Custom functions are a registered feature.`n")
+            }
+        }
+        
+        ;*** [change_exe] ***
+        ;use a different exe based on rom extension
+        ;<vector_to> and <use_proxy> are probably better alternatives
+
+        if (this_rule.function = "change_exe" && gCfg.rom_name) 
+        {
+            fnc := this_rule.function
+            LogEntry("INFO: Processing rule: <" . fnc . ">. ")
+            arg_1 := this_rule.arg_1
+            arg_2 := this_rule.arg_2
+            policy := this_rule.policy
+            case_1 := this_rule.case_1
+            arg_3 := this_rule.arg_3
+            bDoChangeExe := false
+            
+            SplitPath arg_1, &new_exe, &new_folder
+            
+            if (InStr(policy, "if_rom_in_folder"))
+            {
+                change_exe_search_folder := InsertTemplateField(this_rule.arg_2, "[root_folder]", gCfg.root_folder, "rule_" . n)
+                if (SubStr(change_exe_search_folder,1,1) = "\")
+                    change_exe_search_folder := gCfg.root_folder . change_exe_search_folder
+                change_exe_rom_full_path := change_exe_search_folder . "\" . gCfg.rom_file
+                if (FileExist(change_exe_rom_full_path))
+                    bDoChangeExe := true
+            }
+            else if (InStr(policy, "if_extension_in_list"))
+            {
+                if (gCfg.rom_ext = arg_2)
+                    bDoChangeExe := true
+            }
+            else
+            {
+                LogEntry("ERROR: Policy specified in <change_exe> rule invalid: [<" . policy . ">]. Valid entries are <if_rom_in_folder> or <if_extension_in_list>`n")
+                ExitApp
+            }
+            
+            if (arg_3)
+            {
+                arg_3_decomp := StrSplit(arg_3, ",", " ")
+                if (arg_3_decomp.Length() = 2)
+                {
+                    arg_3:= arg_3_decomp[1]
+                    else_part := arg_3_decomp[2]
+                }
+            }
+            
+            if (bDoChangeExe)
+            {
+                gCfg.exe_name := gCfg.new_exe
+                if (new_folder)
+                    gCfg.root_folder := new_folder
+                
+                if (gCfg.root_folder)
+                    gCfg.exe_full_path := gCfg.root_folder . "\" . gCfg.exe_name
+                else
+                    gCfg.exe_full_path := gCfg.exe_name
+                
+                LogEntry("Changed executable to: " . gCfg.exe_full_path . "`n",true)
+                
+                if (InStr(case_1, "app_asset_name"))
+                {
+                    LogEntry("INFO: Changed asset_name used for emulator run_apps from [" . gCfg.asset_name . "] to [" . arg_3 . "]`n")
+                    gCfg.asset_name := arg_3
+                }
+            }
+            else
+            {
+                LogEntry("No change.`n",true)
+                
+                if (else_part)
+                {
+                    LogEntry("INFO: Changed asset_name used for emulator run_apps from [" . gCfg.asset_name . "] to [" . else_part . "]`n")
+                    gCfg.asset_name := else_part	
+                }				
+            }
+        }
+        
+        ;*** [remove_param] ***
+        if (this_rule.function = "remove_param" && gCfg.rom_name) ;remove an item from the command line
+        {
+            fnc := this_rule.function
+            LogEntry("INFO: Processing rule: <" . fnc . ">`n")
+            arg_1 := this_rule.arg_1
+            
+            Loop Parse arg_1, "," . A_Space, A_Space 
+            {		
+                if (this_rule.policy = "")
+                {
+                    for n, cl in Emu_Args
+                    {
+                        if (cl = A_LoopField)
+                            Emu_Args.Delete(n)
+                    }
+                }
+                if (this_rule.policy = "if_rom_in_list")
+                {
+                    if InStr(this_rule.arg_2, gCfg.rom_name)
+                    {
+                        for n, cl in Emu_Args
+                        {
+                            if (cl = A_LoopField)
+                                Emu_Args.Delete(n)
+                        }
+                    }
+                }
+                if (this_rule.policy = "if_rom_not_in_list")
+                {
+                    if !InStr(this_rule.arg_2, gCfg.rom_name)
+                    {
+                        for n, cl in Emu_Args
+                        {
+                            if (cl = A_LoopField)
+                                Emu_Args.Delete(n)
+                        }
+                    }
+                }
+            }
+            
+            ;rebuild param_list
+            gCfg.param_list := ""
+            for n, param in Emu_Args
+                gCfg.param_list := gCfg.param_list . " " . param
+        }
+        
+        ;*** [append_params] ***
+        ;add item(s) to the beginning or end of command line
+        else if (this_rule.function = "append_param" && gCfg.rom_name) 
+        {
+            fnc := this_rule.function
+            LogEntry("INFO: Processing rule: <" . fnc . ">`n")
+            
+            if (this_rule.policy = "")
+            {
+                gCfg.param_list := InsertTemplateField(this_rule.arg_1, "[param_list]", gCfg.param_list, "rule_" . n)
+            }
+            if (this_rule.policy = "if_rom_in_list")
+            {
+                if InStr(this_rule.arg_2, gCfg.rom_name)
+                {
+                    gCfg.param_list := InsertTemplateField(this_rule.arg_1, "[param_list]", gCfg.param_list, "rule_" . n)
+                }
+            }
+            if (this_rule.policy = "if_rom_not_in_list")
+            {
+                if !InStr(this_rule.arg_2, gCfg.rom_name)
+                {
+                    gCfg.param_list := InsertTemplateField(this_rule.arg_1, "[param_list]", gCfg.param_list, "rule_" . n)
+                }
+            }
+            BuildEmuArgs()
+        }
+        
+        ;*** [vector_to] ***
+		;Run a rom in a different emulator
+		;Full rom path + file name must be passed in on command-line
+		;rom file names must be compatible.
+		else if (this_rule.function = "vector_to" && gCfg.rom_name) ;add an item to the command line
+		{
+			fnc := this_rule.function
+			LogEntry("INFO: Processing rule: <" . fnc . ">`n")
+			
+			arg_1 := this_rule.arg_1
+			policy := this_rule.policy
+			arg_2 := this_rule.arg_2
+			
+			bValidVector := false
+			
+			;if arg_1 in %sys_key_list%
+			if (oEmulators.IsValidKey(arg_1))
+			{
+				;Use the rom in the new folder if found, passed to new emulator
+				if (policy = "if_rom_in_folder")
+				{
+					if (!FileExist(arg_2))
+					{
+						LogEntry("NOTICE: In rule <vector_to>, rom folder `"" . arg_2 . "`" does not exist.`n")
+						return
+					}
+					
+					this_rom_full_path := arg_2 . "\" . gCfg.rom_file
+					
+					if (FileExist(this_rom_full_path))
+					{	
+						vector_args := arg_1 . " " . Trim(this_rom_full_path, omitchars := "`"")
+						bValidVector := true
+					}
+				}
+				;Uses same rom in same folder as the original passed in on the cl, but in
+				;a different emulator. Use instead of change_exe rule.
+				else if (policy = "if_extension_in_list")
+				{
+					extensions := StrSplit(arg_2, ",", " ")
+					for n, ext in extensions
+					{
+						if (gCfg.rom_ext = ext)
+						{
+							if (gCfg.rom_full_path)
+								vector_args := arg_1 . " " . Trim(gCfg.rom_full_path, omitchars := "`"")
+							else if (gCfg.rom_file)
+								vector_args := arg_1 . " " . Trim(gCfg.rom_file, omitchars := "`"")
+							else
+								vector_args := arg_1 . " " . Trim(gCfg.rom_name, omitchars := "`"")
+							
+							bValidVector := true
+							
+							break
+						}
+					}
+				}
+				else
+				{
+					LogEntry("ERROR: Policy specified in <vector_to> rule invalid: [<" . policy . ">]. Valid entries are <if_rom_in_folder> or <if_extension_in_list>`n")
+					ExitApp
+				}
+			}
+			else
+			{
+				LogEntry("ERROR: In rule <vector_to>. Emulator with sys_key `"" . arg_1 . "`" not found.`n")
+				ExitApp
+			}
+			
+			if (bValidVector)
+			{
+				LogEntry("INFO: " . fnc . ": Vectoring as: " . vector_args . "`n")
+				VectorNow(vector_args)
+			}
+			
+			return
+		}
+        
+        ;*** [use_proxy] ***
+        ;Use any proxy files found in the specified folder.
+        
+        ;Three types of file contents supported
+        ; 1. Vector: to another emulator and/or game:  mame C:\Emulators\MAME\roms\berzerk.zip (runs start/exit apps as specified for that emulator)
+        ; 2. Params: overwrite param_list with the one from the file - no further rule processing will be applied.
+        ; 3. Batch: runs one or more lines in the proxy file literally like a batch file (only runs contents of the file) - "wait" supported at end of line
+        
+        ;Vector - has no ".exe", has a valid sys_key as first word.
+        ;Batch - has a ".exe", has ":\" in chars 2-3; may have multiple lines
+        ;Params - if not in the above; may start with a "-" or "/" or "\"
+        else if (this_rule.function = "use_proxy" && gCfg.rom_name) ;add an item to the command line
+        {
+            static proxy_rule_count := 0 ;used to test for out-of-control recursion in use_proxy rule
+            fnc := this_rule.function
+            LogEntry("INFO: Processing rule: <" . fnc . ">`n")
+            
+            proxy_file := InsertTemplateField(this_rule.arg_1, "[rom_name]", gCfg.rom_name, "rule_" . n)
+            
+            ;supports full path, or sub folder (either form e.g. \roms or [root_folder]\roms ok)
+            proxy_folder := InsertTemplateField(this_rule.arg_2, "[root_folder]", gCfg.root_folder, "rule_" . n)
+            if (SubStr(proxy_folder,1,1) = "\")
+                proxy_folder := gCfg.root_folder . proxy_folder
+            proxy_full_path := proxy_folder . "\" . proxy_file
+            
+            if FileExist(proxy_full_path)
+            {
+                proxy_type := ""
+                proxy_contents := Array()
+                idx := 1
+                
+                try
+                {
+                    Loop Read proxy_full_path
+                    {
+                        proxy_contents[idx] := A_LoopReadLine
+                        idx := idx+1
+                    }
+                }
+                catch as e
+                {	
+                    LogEntry("ERROR: READ PROXY FILE: " . FormatErrorMessage(e) . "`n")
+                    ExitApp
+                }
+                
+                ;Parse the contents of the proxy file in order to determine what type of content it has
+                ;i.e. Vector, Batch, or Params
+                
+                ;just a reminder how to format multiple delimiters
+                ;sys_key_test := StrSplit(proxy_contents[1], [A_Space,","]) 
+                bFirstValueIsSysKey := false
+                sys_key_test := StrSplit(proxy_contents[1], A_Space)
+                this_sys_key := sys_key_test[1]
+                
+                if (oEmulators.IsValidKey(this_sys_key))
+                    bFirstValueIsSysKey := true					
+                
+                ;it is advisable to always start a param_list proxy with the key "param_list=" to ensure it can be distingushed
+                ;from a vector type proxy.
+                if (SubStr(proxy_contents[1],1,11) == "param_list=")
+                {
+                    proxy_type := "Params"
+                    proxy_contents[1] := SubStr(proxy_contents[1], 12)
+                }				
+                else if (SubStr(proxy_contents[1],1,1) = "-" || SubStr(proxy_contents[1],1,1) = "/" || SubStr(proxy_contents[1],1,1) = "\" || SubStr(proxy_contents[1],1,1 = "["))
+                proxy_type := "Params"
+                else if (idx > 2 && InStr(proxy_contents[1], ".exe") && SubStr(proxy_contents[1],2,2) = ":\")
+                    proxy_type := "Batch"
+                else if (InStr(proxy_contents[1], ".exe") && SubStr(proxy_contents[1],2,2) = ":\")
+                    proxy_type := "Batch"
+                else if (!InStr(proxy_contents[1], ".exe") && bFirstValueIsSysKey)				
+                    proxy_type := "Vector"
+                else
+                    proxy_type := "Params"	
+                
+                LogEntry("INFO: " . fnc . ": Found proxy file: " . proxy_full_path . ", Type: " . proxy_type . "`n")
+                
+                if (proxy_type = "Batch")
+                {
+                    ;if Batch type, we just return.
+                    ;We'll will wait until the emulator launch section in the code to execute the statement(s) in the file.
+                    ;Note that by returning, we effectively short-circuit any further rules processing.
+                    
+                    return
+                }
+                else if (proxy_type = "Params")
+                {
+                    origParamList := gCfg.param_list
+                    gCfg.param_list := proxy_contents[1]
+                    BuildEmuArgs() ;parses param_list and puts into Emu_Args array
+                    
+                    ;Support the use of pre-processor override instructions in the proxy file's param_list
+                    ;only cl_use_args won't be supported here (which wouldn't make sense in a parameter list anyway)
+                    ;[Note this is a novel use of ProcessOverrideArgs not currently in the documentation -- should
+                    ; test at some point and add to docs. Provides the ability to add command line arguments into
+                    ; a proxy's param_list. Not really sure how useful this really is in retrospect though. Consider removal
+                    ; since it perhaps unnecessarily complicates the logic of this rule and the ProcessOverrideArgs method]
+                    if (ProcessOverrideArgs(&Emu_Args, "Emu_Args"))
+                    {					
+                        BuildParamList()				;Build param_list from the new Emu_Args 				
+                        ProcessFeOverrides() ;Apply Front-End overrides (start_screen, exit_screen, etc.)
+                        ProcessEmulatorOverrides() ;Apply Emulator overrides (run_apps, etc.)
+                    }
+                    
+                    ;Important documentation statement:
+                    ;Passthrough arguments are supported in proxy param files, but only if they were also defined in the
+                    ;emulator's param_list. This is because at this point the original commandline has already been
+                    ;processed and so we can't remove additional items from it. Thus, the extra items on the commandline
+                    ;will have already halted commandline processing (due to too many arguments) before we ever got here.
+                    tempArgs := oOriginalArgs.Clone()
+                    gCfg.param_list := ProcessPassthroughArgs(&tempArgs, gCfg.param_list)                    
+                    gCfg.param_list := InsertTemplateField(gCfg.param_list, "[param_list]", origParamList, "rule_" . n)
+                    oEmulators.Emulators[gCfg.sys_key].param_list := gCfg.param_list
+                    oEmulators.Emulators[gCfg.sys_key]._default_settings["param_list"] := gCfg.param_list
+                    ProcessParamListTemplates()   ;Process standard template items like [rom], [rom_name], etc.
+                    BuildEmuArgs()				  ;Build Emu_Args from the revised parameter list. 
+                    
+                    ;don't return...
+                    
+                    ;if one does not wish for other rules to affect the proxy file's param list,
+                    ;place this rule last in the rule list.  Applications for the originally specified
+                    ;emulator still apply.
+                }
+                else if (proxy_type = "Vector")
+                {
+                    ;Vector aborts processing of the current emulator/game combination and effectively restarts
+                    ;processing under the newly specified emulator/game.  Whatever applications/rule specified
+                    ;for that combo will now apply.
+                    proxy_rule_count := proxy_rule_count + 1
+                    if (proxy_rule_count > 10)
+                    {
+                        LogEntry("ERROR: " . fnc . ": Rule experienced more than 10 recursions. Possible circular call. Aborting...`n")
+                        ExitApp
+                    }
+                    
+                    VectorNow(proxy_contents[1]) 
+                }
+            }
+        }
+        
+        ;*** [change_root] ***
+        else if (this_rule.function = "change_root" && gCfg.rom_name) ;add an item to the command line
+        {
+            fnc := this_rule.function
+            LogEntry("INFO: Processing rule: <" . fnc . ">. ")
+            foundRom := false
+            searchTag := ""
+            
+            ;get current Emu_Args array index of the rom_full_path
+            ;use n and not the loop's A_Index since Emu_Args may not be sequential
+            ;if items were added or removed by other rules.
+            for n, param in Emu_Args 
+            {
+                ;param will carry any quotes specified in the classic.ini file but
+                ;the rom_* vars will have them stripped.  So remove quotes
+                ;from param prior to comparison.
+                param_is_quoted := false
+                if (InStr(param,"`"",,1,1) && InStr(param,"`"",,StrLen(param),1))
+                {
+                    param := Trim(StrReplace(param, "`"", A_Space))
+                    param_is_quoted := true
+                }			
+                
+                if (param == gCfg.rom_full_path)
+                {
+                    pathIdx := n
+                    foundRom := true
+                    break
+                }
+            }	
+            
+            search_pattern := this_rule.arg_1
+            rom_subfolder := this_rule.arg_2
+            
+            ;-----------------------------------------------
+            ; Search for rom in all sequential root folders 
+            ; Launch the rom in the newest version it is 
+            ; found in.
+            ;----------------------------------------------
+            bChangedRoot := false
+            try
+            {
+                aSearchPaths := Array()
+                Loop Files search_pattern, "D"
+                    aSearchPaths.Push(A_LoopFileFullPath)	
+                
+                ReverseArray(&aSearchPaths)
+                
+                for n, searchPath in aSearchPaths
+                {
+                    current_folder := searchPath 
+                    Loop Files current_folder . rom_subfolder . "\*.*"
+                    {
+                        SplitPath A_LoopFileFullPath,,,,&filename
+                        if (filename == gCfg.rom_name)
+                        {
+                            gCfg.root_folder := current_folder
+                            LogEntry("Changed root to: " . gCfg.root_folder . "`n", true)
+                            search_tag := SubStr(gCfg.root_folder, InStr(search_pattern, "*"), StrLen(gCfg.root_folder) - StrLen(search_pattern) + 1)
+                            bChangedRoot := true
+                            break 2
+                        }
+                    }
+                }	
+                if (!bChangedRoot)
+                    LogEntry("`n", true)
+            }
+            catch as e
+            {			
+                LogEntry("ERROR: Searching change_root folders: " . FormatErrorMessage(e) . "`n", true)
+                ExitApp
+            }
+            
+            gCfg.exe_full_path := gCfg.root_folder . "\" . gCfg.exe_name
+            
+            ;We only have to update the path if rom_full_path was found
+            ;in the parameter list.
+            if (foundRom)
+            {
+                gCfg.rom_full_path := gCfg.root_folder . rom_subfolder . "\" . gCfg.rom_file
+                if (param_is_quoted)
+                    gCfg.rom_full_path := "`"" . gCfg.rom_full_path . "`""
+                len := Emu_Args.Length
+                Emu_Args.RemoveAt(pathIdx)
+                Emu_Args.InsertAt(pathIdx, gCfg.rom_full_path)
+            }
+
+            ;Read partial arcadeEIP.ini if present
+            ;This permits some setting overrides that are specific to the emulator running in the changed root.
+            ;In particular, param_list, map_exit, and map_pause are thought to be the most useful.
+            ;Among other things, rules are not permitted.  Place this rule first in the list if other rules
+            ;should be processed on the adjusted settings (like the modified param_list).
+            partial_config_file := gCfg.root_folder . "\" . cConfigFileName
+
+            if FileExist(partial_config_file)
+            {
+                LogEntry("INFO: Found partial " . cConfigFileName . " file: " . partial_config_file . ". Procesing.`n")
+
+                ;[General]
+                gCfg.pause_key := IniRead(partial_config_file, "General", "pause_key", gCfg.pause_key)
+                gCfg.panic_key := IniRead(partial_config_file, "General", "panic_key", gCfg.panic_key)
+                gCfg.exit_key := IniRead(partial_config_file, "General", "exit_key", gCfg.exit_key)
+
+                ;[Front_End...]
+                partial_config_section := "Front_End_" . gCfg.fe_key
+                gCfg.start_screen := IniRead(partial_config_file, partial_config_section, "start_screen", gCfg.start_screen)
+                gCfg.exit_screen := IniRead(partial_config_file, partial_config_section, "exit_screen", gCfg.exit_screen)
+
+                ;[Emulator...]
+                partial_config_section := oEmulators.Emulators[gCfg.sys_key].config_section 
+                gCfg.param_list := ReadIniFile(partial_config_file, partial_config_section, "param_list", gCfg.param_list)
+                gCfg.logo_folder := IniRead(partial_config_file, partial_config_section, "logo_folder", gCfg.logo_folder)
+                gCfg.system_logo := IniRead(partial_config_file, partial_config_section, "system_logo", gCfg.system_logo)
+                gCfg.run_apps := IniRead(partial_config_file, partial_config_section, "run_apps", gCfg.run_apps)
+                gCfg.map_exit := IniRead(partial_config_file, partial_config_section, "map_exit", gCfg.map_exit)
+                gCfg.map_pause := IniRead(partial_config_file, partial_config_section, "map_pause", gCfg.map_pause)
+
+                tempArgs := oOriginalArgs.Clone()
+                gCfg.param_list := ProcessPassthroughArgs(&tempArgs, gCfg.param_list)
+                ProcessParamListTemplates()     ;Process standard template items like [rom], [rom_name], etc.
+                BuildEmuArgs()					;Build Emu_Args from the revised parameter list. 
+            }
+        }
+    }
+}

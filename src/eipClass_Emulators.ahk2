@@ -1,0 +1,778 @@
+; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
+; © 2023 David G. Dahlstrom
+; File: eipClass_Emulators.ahk2
+
+;This class stores information about each emulated system
+class emulators_class
+{
+	Emulators := Map()
+	_default_sys_key := ""
+	
+	__New(configObj)
+	{		
+		global
+
+		local configFile, globalAssets, metaArray, n, asset
+		local aLine, emu_sections, i, thisSysKey, system, aSystem
+		local systemArray, systemSetting, exeName, rootFolder
+		local r, q, global_q, metaItem, found, systemItem
+
+		configFile := configObj.ConfigFile		
+		
+		;Read the [Global_Assets] section
+		globalAssets := Array()
+		try globalAssets := StrSplit(IniRead(configFile, "Global_Assets"), "`n", " ")
+
+		metaArray := Map()
+		for n, asset in globalAssets
+		{
+			aLine := StrSplit(asset, "=", " ")
+
+			;support folders with a dot path
+			if (SubStr(aLine[2], 1, 1) == ".")
+				aLine[2] := A_ScriptDir . SubStr(aLine[2], 2)
+
+			metaArray[aLine[1]] := aLine[2]
+		}	
+
+		;Read the [System_*] sections
+		emu_sections := configObj.GetGroupSections("System")
+		for i, configSection in emu_sections
+		{
+			;get sys_key
+			thisSysKey := IniRead(configFile, configSection, "sys_key", A_Space)	
+			if (A_index == 1)
+				this._default_sys_key := thisSysKey			
+			this.Emulators[thisSysKey] := emulators_class._emulator_class(thisSysKey, configFile, configSection)
+
+			;read all other settings
+			system := IniRead(configFile, configSection)
+			aSystem := StrSplit(system, "`n", " ")
+			systemArray := Map()
+			for n, systemSetting in aSystem
+			{
+				aLine := StrSplit(systemSetting, "=", " ", 2)
+				systemKey := aLine[1] 
+				systemValue := aLine[2] 						
+				systemArray[systemKey] := systemValue
+
+				;special case 1 - create root_folder out of exe_full_path
+				if (systemKey == "exe_full_path")
+				{
+					SplitPath systemValue, &exeName, &rootFolder
+					systemArray["root_folder"] := rootFolder 
+					systemArray["exe_name"] := exeName
+				}
+
+				;special case 2 - create global_asset_name out of asset_name
+				if (systemKey == "asset_name")
+				{
+					asset_names := StrSplit(systemValue, ",", " ")
+					if (asset_names.Length == 2)
+					{
+						systemArray["asset_name"] := asset_names[1]
+						systemArray["global_asset_name"] := asset_names[2]
+					}
+					else
+					{
+						systemArray["global_asset_name"] := systemValue
+					}
+				}
+			}
+
+			;Now add any meta items that are in [Global_Assets],
+			;but not in the emulator section
+			for q, metaItem in metaArray
+			{
+				found := false
+				for r, systemItem in systemArray 
+					if (r == q)
+						found := true
+				if (!found)
+				{
+					systemArray[q] := metaItem
+				}
+				else
+				{
+					global_q := "global_" . q
+					systemArray[global_q] := metaArray[q]
+				}
+			}
+
+			this.Emulators[thisSysKey].AddSystem(systemArray)
+			this.Emulators[thisSysKey].UpdateSystem() ;fills in templated fields
+		}	
+	}
+	
+	__Destroy()
+	{
+		this.Emulators := Map()
+	}
+
+	IsValidKey(sysKey)
+	{		
+		if (!this.Emulators.Has(sysKey))
+			return false
+
+		if (this.Emulators[sysKey].sys_key)
+			return true
+		else
+			return false
+	}	
+
+	GetDefaultSysKey()
+	{
+		return this._default_sys_key
+	}
+
+	;This class is a member of the emulators_class
+	class _emulator_class
+	{
+		__New(sysKey, configFile, configSection)
+		{
+			this._sys_key := sysKey
+			this._config_file := configFile
+			this._config_section := configSection
+			this._settings := Map()  ;holds "live" settings for current game
+			this._default_settings := Map()  ;holds raw templated configuration fields
+			this._meta_array := Map()
+		}		
+
+		__Destroy()
+		{
+			this._settings := ""
+		}
+
+		UpdateSystem()
+		{
+			;fill in template fields
+			;note that fields from the command line (like [rom]) are not filled in here
+			;systemArrayInner := systemArray.Clone() ;important that this is a shallow copy
+			for n, outer in this._default_settings
+			{
+				for o, inner in this._settings
+				{
+					field := "[" . n . "]"
+					this._settings[o] := InsertTemplateField(this._settings[o], field, this._settings[n], this._settings[o])
+				}
+			}
+
+			;initialize the meta array
+			;Only do this once since these store caches (that we never want to have to rebuild)
+			if (this._meta_array.Count == 0)
+			{
+				for n, setting in this._settings
+				{
+					if (SubStr(n, 1, 5) == "meta_")
+					{
+						globalIdx := "global_" . n
+						globalSetting := this._settings.Get(globalIdx, "")
+						this._meta_array[n] := emulators_class._emulator_class._meta_asset_class(setting, globalSetting, this)
+					}
+				}
+			}
+		}
+
+		AddSystem(systemArray)
+		{
+			;Deep copy the systemArray.
+			;This copy will always hold the original still-templated fields.
+			;This will be used to update settings.
+			for n, value in systemArray
+				this._default_settings[n] := value
+
+			;The systemArray initially contains raw, templated fields
+			;These can now be filled in by the client calling UpdateSystem()
+			this._settings := systemArray 
+		}
+
+		config_file
+		{
+			get => this._config_file
+		}
+		
+		config_section
+		{
+			get => this._config_section
+		}	
+		
+		sys_key
+		{
+			get => this._sys_key
+		}
+
+		asset_name
+		{
+			get => this._settings.Get("asset_name", "")
+			set => this._settings["asset_name"] := value
+		}
+
+		proper_name
+		{
+			get => this._settings.Get("proper_name", "")
+			set => this._settings["proper_name"] := value
+		}
+
+		sort_prefix
+		{
+			get => this._settings.Get("sort_prefix", "")
+			set => this._settings["sort_prefix"] := value
+		}
+
+		root_folder
+		{
+			get => this._settings.Get("root_folder", "")
+			set => this._settings["root_folder"] := value
+		}
+
+		search_path
+		{
+			get => this._settings.Get("search_path", "")
+			set => this._settings["search_path"] := value
+		}
+
+		param_list
+		{
+			get => this._settings.Get("param_list", "")
+			set => this._settings["param_list"] := value
+		}
+		
+		map_exit
+		{
+			get => this._settings.Get("map_exit", "")
+			set => this._settings["map_exit"] := value
+		}
+
+		window_name
+		{
+			get => this._settings.Get("window_name", "")
+			set => this._settings["window_name"] := value
+		}
+
+		autoswitch
+		{
+			get => this._settings.Get("autoswitch", "")
+			set => this._settings["autoswitch"] := value
+		}
+
+		clean_lists
+		{
+			get => this._settings.Get("clean_lists", gCfg.clean_lists)
+			set => this._settings["clean_lists"] := value
+		}
+
+		system_logo
+		{
+			get => this._settings.Get("system_logo", "")
+			set => this._settings["system_logo"] := value
+		}
+
+		logo_folder
+		{
+			get => this._settings.Get("logo_folder", "")
+			set => this._settings["logo_folder"] := value
+		}
+
+		marquee_folder
+		{
+			get => this._settings.Get("marquee_folder", "")
+			set => this._settings["marquee_folder"] := value
+		}
+
+		mameinfo_folder
+		{
+			get => this._settings.Get("mameinfo_folder", "")
+			set => this._settings["mameinfo_folder"] := value
+		}
+
+		use_catver
+		{
+			get => this._settings.Get("use_catver", "")
+			set => this._settings["use_catver"] := value
+		}
+
+		meta_names
+		{
+			get => this._meta_array.Get("meta_names", "")
+			set => this._meta_array["meta_names"] := value
+		}
+
+		;initialize with the folder in which there is a 
+		;list of metadata text files.
+		class _meta_asset_class
+		{
+			__New(location, global_location, emu)
+			{
+				this._location := location
+				this._global_location := global_location
+				this._cache_exists := false
+				this._cache_is_virtual := false ;cache does not exist as a .meta file
+				this._metafile_exists := false
+				this._emulator := emu ;the emulator parent of this instance
+				this._oDOM := ""				
+				this._cache := Map()
+			}
+
+			__Destroy()
+			{
+				this._cache := ""
+			}
+
+			location
+			{
+				get => this._location
+				set => this._location := value
+			}
+
+			cache_exists
+			{
+				get => this._cache_exists
+			}
+
+			cache_is_virtual
+			{
+				get => this._cache_is_virtual
+			}
+
+			;cache the meta data
+			_cache_meta_file()
+			{
+				global ;oEmulators, oLaunchBox
+				local lf, mf, elementVal, xml_data, platform_xml
+				local objNodeList, game_count, idx, game_rom, element
+				local fullFileName, shortFileName
+
+				;obtain these from the parent class
+				lf := this._emulator.logo_folder
+				mf := this._emulator.marquee_folder
+
+				;This initializes the oLaunchBox seed path
+				oLaunchBox.SetAssetPath(lf, mf)
+
+				;Create a "virtual" meta file using the LaunchBox platform xml file
+				;*************************************************************************
+				platform_xml := oLaunchBox.GetCurrentPlatformXMLFile()
+
+				;DOM documentation found here
+			  	;https://docs.microsoft.com/en-us/previous-versions/windows/desktop/ms757828(v=vs.85)?redirectedfrom=MSDN
+				if (FileExist(platform_xml) && !this._oDOM)
+				{
+					try
+					{
+						this._oDOM := ComObject("MSXML2.DOMDocument.6.0")
+						;LogEntry("INFO: Using MSXML2.DOMDocument.6.0 to read LaunchBox assets.`n")
+					}
+					catch as e
+					{
+						try
+						{
+							this._oDOM := ComObject("MSXML2.DOMDocument.3.0")
+							;LogEntry("INFO: Using MSXML2.DOMDocument.3.0 to read LaunchBox assets.`n")
+						}
+						catch as e
+						{
+							LogEntry("ERROR: XML Processing Error (MSXML2.DOMDocument.3.0): " . FormatErrorMessage(e) . "`n")
+						}				
+					}
+					this._oDOM.async := false
+					xml_data := FileRead(platform_xml)
+					this._oDOM.loadXML(xml_data)			
+					
+					objNodeList := this._oDOM.getElementsByTagName("Game")
+			        game_count := objNodeList.length
+					
+					Loop game_count
+					{
+						idx := A_index - 1
+						game_rom := ""
+						element := ""
+
+						try {
+							element := objNodeList.item(idx).getElementsByTagName("ApplicationPath")
+							game_rom := element.item(0).text
+						}
+						catch as e {
+							LogEntry("WARNING: Unexpected XML read error: " . FormatErrorMessage(e) . "`n")
+							break
+						}
+						
+						SplitPath game_rom, &fullFileName,,, &shortFileName
+
+						this._cache[shortfilename] := Map()
+
+						elementVal := ""
+						element := objNodeList.item(idx).getElementsByTagName("Title")
+						try elementVal := element.item(0).text
+						this._cache[shortFileName].title := elementVal
+
+						elementVal := ""
+						element := objNodeList.item(idx).getElementsByTagName("ID")
+						try elementVal := element.item(0).text
+						this._cache[shortFileName].id := elementVal
+
+						elementVal := ""
+						element := objNodeList.item(idx).getElementsByTagName("Genre")
+						try elementVal := element.item(0).text
+						this._cache[shortFileName].genre := elementVal
+
+						elementVal := ""
+						element := objNodeList.item(idx).getElementsByTagName("Developer")
+						try elementVal := element.item(0).text
+						this._cache[shortFileName].developer := elementVal
+
+						elementVal := ""
+						element := objNodeList.item(idx).getElementsByTagName("Publisher")
+						try elementVal := element.item(0).text
+						this._cache[shortFileName].publisher := elementVal
+
+						elementVal := ""
+						element := objNodeList.item(idx).getElementsByTagName("ReleaseDate")
+						try elementVal := element.item(0).text
+						this._cache[shortFileName].release_date := elementVal
+
+						elementVal := ""
+						element := objNodeList.item(idx).getElementsByTagName("PlayMode")
+						try elementVal := element.item(0).text
+						this._cache[shortFileName].play_mode := elementVal
+
+						elementVal := ""
+						element := objNodeList.item(idx).getElementsByTagName("Favorite")
+						try elementVal := element.item(0).text
+						this._cache[shortFileName].favorite := elementVal
+/*
+						;use favorites.ini to overwrite any of the above favorites settings.
+						assetspec := oEmulators.Emulators[this._sys_key]._settings["asset_name"]
+
+						favoritesPath := A_ScriptDir . "\Assets\" . assetspec . "\Meta\Info"
+						favoritesFile := favoritesPath . "\favorites.ini"
+				
+						if (FileExist(favoritesFile))
+						{
+							IniRead, bFavorite, %favoritesFile%, Favorites, %fullFileName%, 0
+
+							if (bFavorite == 1)
+								this._cache[shortFileName]["favorite"] := "true"
+							;else
+							;	this._cache[shortFileName]["favorite"] := "true"
+						}
+*/
+					}											
+					
+					;FileCreateDir, %favoritesPath%
+					
+					this._cache_exists := true
+					this._cache_is_virtual := true
+					this._oDom := ""
+
+					return
+				}
+
+				;*************************************************************************
+
+				metaFile := this._location
+				SplitPath metaFile,, &metaDir
+				
+				metaPattern := metaDir . "\*.txt"
+				metaPatternGlobal := ""
+
+				if (this._global_location)
+				{
+					metaFileGlobal := this._global_location
+					SplitPath metaFileGlobal,, &metaGlobalDir
+					
+					metaPatternGlobal := metaGlobalDir . "\*.txt"
+				}
+
+				if FileExist(metaFile)
+					this._metafile_exists := true
+
+				;cache .meta text file if it exists
+				try
+				{
+					;Read through each game in the meta file
+					Loop Read metaFile
+					{
+						quote1Pos := InStr(A_LoopReadLine, "`"")
+						quote2Pos := InStr(A_LoopReadLine, "`"",,,2)
+						thisRom := Trim(SubStr(A_LoopReadLine, 1, quote1Pos - 1))
+
+						this._cache[thisRom] := Map()
+						this._cache[thisRom].title := SubStr(A_LoopReadLine, quote1Pos + 1, quote2Pos - quote1Pos - 1)	
+
+/*
+						;use favorites.ini to overwrite any of the above favorites settings.
+						assetspec := oEmulators.Emulators[this._sys_key]._settings["asset_name"]
+
+						favoritesPath := A_ScriptDir . "\Assets\" . assetspec . "\Meta\Info"
+						favoritesFile := favoritesPath . "\favorites.ini"
+				
+						if (FileExist(favoritesFile))
+						{
+							IniRead, bFavorite, %favoritesFile%, Favorites, %fullFileName%, 0
+
+							if (bFavorite == 1)
+								this._cache[shortFileName]["favorite"] := "true"
+							else
+								this._cache[shortFileName]["favorite"] := "false"
+						}
+						else
+							this._cache[shortFileName]["favorite"] := "false"	
+*/			
+					}
+
+					;cache from individual meta files
+					;overrides any data from .meta.txt
+					Loop Files metaPattern
+					{
+						thisMetaFile := metaDir . "\" . A_LoopFileName
+						Loop Read thisMetaFile
+						{
+							thisContent := A_LoopReadLine 
+							break ;only read the first line
+						}
+						thisContent := Trim(thisContent)
+						SplitPath A_LoopFileName,,,, &shortFileName
+
+						this._cache[shortFileName] := Map()
+						this._cache[shortFileName].title := thisContent
+					}
+
+					;cache from individual meta files in the global directory
+					;overrides any data from .meta.txt
+					Loop Files metaPatternGlobal
+					{
+						thisMetaFile := metaGlobalDir . "\" . A_LoopFileName
+
+						Loop Read thisMetaFile
+						{
+							thisContent := A_LoopReadLine 
+							break ;only read the first line
+						}
+						thisContent := Trim(thisContent)
+						SplitPath A_LoopFileName,,,, &shortFileName
+
+						this._cache[shortFileName] := Map()
+						this._cache[shortFileName].title := thisContent
+					}
+				}
+				catch as err 
+				{
+					;ignore any file read errors
+				}
+
+				this._cache_exists := true
+				this._cache_is_virtual := false
+
+				return
+			}
+
+			GetFavorite(romName, option:="")
+			{
+				if (!this._cache_exists)
+					this._cache_meta_file()
+
+				SplitPath romName ,,,, &romNoExt
+
+				romNoExt := "" . romNoExt . "" ;Need to quote since may have spaces
+				romName := "" . romName . ""
+
+				;try looking with both the root file name and the name with extension
+				;since the filename in different meta files may vary.  For example,
+				;mame does not include the file extension in its game list, while 
+				;GameEx does include the file extension.  So support both types.
+				data1 := data2 := ""
+				try data1 := this._cache[romNoExt].favorite
+				try data2 := this._cache[romName].favorite
+
+				data := !data1 ? data2 : data1
+
+				return data
+			}
+
+			GetReleaseDate(romName, option:="")
+			{
+				if (!this._cache_exists)
+					this._cache_meta_file()
+
+				SplitPath romName ,,,, &romNoExt
+
+				romNoExt := "" . romNoExt . "" ;Need to quote since may have spaces
+				romName := "" . romName . ""
+
+				;try looking with both the root file name and the name with extension
+				;since the filename in different meta files may vary.  For example,
+				;mame does not include the file extension in its game list, while 
+				;GameEx does include the file extension.  So support both types.
+				data1 := data2 := ""
+				try data1 := this._cache[romNoExt].release_date
+				try data2 := this._cache[romName].release_date
+
+				data := !data1 ? data2 : data1
+
+				return data
+			}
+
+			GetDeveloper(romName, option:="")
+			{
+				if (!this._cache_exists)
+					this._cache_meta_file()
+
+				SplitPath romName ,,,, &romNoExt
+
+				romNoExt := "" . romNoExt . "" ;Need to quote since may have spaces
+				romName := "" . romName . ""
+
+				;try looking with both the root file name and the name with extension
+				;since the filename in different meta files may vary.  For example,
+				;mame does not include the file extension in its game list, while 
+				;GameEx does include the file extension.  So support both types.
+				data1 := data2 := ""
+				try data1 := this._cache[romNoExt].developer
+				try data2 := this._cache[romName].developer			
+
+				data := !data1 ? data2 : data1
+
+				return data
+			}
+
+			GetPlayMode(romName, option:="")
+			{
+				if (!this._cache_exists)
+					this._cache_meta_file()
+
+				SplitPath romName ,,,, &romNoExt
+
+				romNoExt := "" . romNoExt . "" ;Need to quote since may have spaces
+				romName := "" . romName . ""
+
+				;try looking with both the root file name and the name with extension
+				;since the filename in different meta files may vary.  For example,
+				;mame does not include the file extension in its game list, while 
+				;GameEx does include the file extension.  So support both types.
+				data1 := data2 := ""
+				try data1 := this._cache[romNoExt].play_mode
+				try data2 := this._cache[romName].play_mode
+
+				data := !data1 ? data2 : data1
+
+				return data
+			}
+
+			GetPublisher(romName, option:="")
+			{
+				if (!this._cache_exists)
+					this._cache_meta_file()
+
+				SplitPath romName ,,,, &romNoExt
+
+				romNoExt := "" . romNoExt . "" ;Need to quote since may have spaces
+				romName := "" . romName . ""
+
+				;try looking with both the root file name and the name with extension
+				;since the filename in different meta files may vary.  For example,
+				;mame does not include the file extension in its game list, while 
+				;GameEx does include the file extension.  So support both types.
+				data1 := data2 := ""
+				try data1 := this._cache[romNoExt].publisher
+				try data2 := this._cache[romName].publisher
+
+				data := !data1 ? data2 : data1
+
+				return data
+			}
+
+			GetGenre(romName, option:="")
+			{
+				if (!this._cache_exists)
+					this._cache_meta_file()
+
+				SplitPath romName ,,,, &romNoExt
+
+				romNoExt := "" . romNoExt . "" ;Need to quote since may have spaces
+				romName := "" . romName . ""
+
+				;try looking with both the root file name and the name with extension
+				;since the filename in different meta files may vary.  For example,
+				;mame does not include the file extension in its game list, while 
+				;GameEx does include the file extension.  So support both types.
+				data1 := data2 := ""
+				try data1 := this._cache[romNoExt].genre
+				try data2 := this._cache[romName].genre
+
+				data := !data1 ? data2 : data1
+
+				return data
+			}
+			
+			GetTitle(romName, option:="")
+			{
+				if (!this._cache_exists)
+					this._cache_meta_file()
+
+				SplitPath romName ,,,, &romNoExt
+
+				romNoExt := "" . romNoExt . "" ;Need to quote since may have spaces
+				romName := "" . romName . ""
+
+				;try looking with both the root file name and the name with extension
+				;since the filename in different meta files may vary.  For example,
+				;mame does not include the file extension in its game list, while 
+				;GameEx does include the file extension.  So support both types.
+				name1 := name2 := ""
+				try name1 := this._cache[romNoExt].title
+				try name2 := this._cache[romName].title
+
+				name := !name1 ? name2 : name1
+
+				;return the rom ID (for LaunchBox only at the moment)
+				if (option == "id")
+				{
+					gid := ""
+					try gid := this._cache[romName].id
+					return Trim(gid)
+				}
+				
+				if (option == "clean")
+					if (InStr(name, "("))
+						name := Trim(SubStr(name, 1, InStr(name, "(") - 1))
+
+				if (!name && this._metafile_exists)
+					return "missing_from_metafile"
+				else
+					return name
+			}
+			
+			;if metaData is found, returns a list of all file roots (no extension)
+			;of exact matches and partial matches.
+			/*
+			GetRomsFromContents(metaData)
+			{
+				if (!this._cache_exists)
+					this._cache_meta_file()
+
+				i := j := 0
+				content := ""
+				metaData := Trim(metaData)
+				
+				result := Map()
+				result["Exact"] := Map()
+				result["Partial"] := Map()
+
+				for n, content in this._cache
+				{
+					if (content == metaData)
+					{
+						result["Exact"][n] := this._cache[n].title
+					}
+					else if (InStr(content, metaData))
+					{
+						result["Partial"][n] := this._cache[n].title
+					}
+				}
+				
+				return result
+			}
+			*/
+		}
+	}
+}

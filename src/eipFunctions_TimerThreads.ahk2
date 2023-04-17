@@ -1,0 +1,585 @@
+; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
+; © 2023 David G. Dahlstrom
+; File: eipFunctions_TimerThread.ahk2
+
+;Functions in this file are called via timers so as to operate in their own independent
+;pseudo threads (i.e. AHK2 style threads). These are generally critical to the way 
+;arcadeEIP operates.
+
+;Create guiSelect here (in the background while initial game loads) to provide fast startup.
+SelectControlTimer()
+{
+    global
+
+    ;Could possibly use WinExist("ahk_pid " pid_emulator) here instead
+    if (IsEmulatorActive() && g_guiselect_loaded == false) 
+    {
+        SetTimer SelectControlTimer, 0
+        ActivateHotKeys()
+        hotkeys_on := true
+
+        oDetectInactivity.Suspend()
+        ;this must only execute once
+        oSelectListControl := select_list_control_class(gCfg.lst_max_rows, gCfg.lst_max_rowsb, gCfg.lst_font_type, 
+                                                        gCfg.lst_font_size, gCfg.lst_game_font_size, gCfg.lst_sys_font_size, 
+                                                        gCfg.lst_list_margin) 
+        oSelectListControl.AddEmulatorItems()
+        oDetectInactivity.Resume()
+    }
+    return
+}
+
+;Do processing that needs to take place in the background asynchronously during runtime
+;Because this is called very frequently (every 100ms for near realtime update activities)
+;it is important to keep the content light as possible to avoid performance matters.
+;There is a diagnostic timer value that is written to the log to help monitor the load 
+;on this function.
+RunWaitTimer()
+{
+    global
+    local zCheck
+
+    if (diag_mode)
+    {
+        ut_runwait_cycle++
+        ut_runwait_timer := A_TickCount 
+    }
+
+    ;we switched emulators, so do initializations
+    if (cur_emu != pid_emulator) 
+    {
+        exit_timer := 0
+        emu_start_time := A_TickCount
+        emu_hwnd := 0
+        bEmuWindowActive := false
+    }
+    cur_emu := pid_emulator
+    
+    oPauseProc.SetPid(cur_emu)
+
+    ;mark the time of the most recent exit request from an automated process
+    ;(like direct switching or autoswitch mode)
+    if (g_exit_code == 0 && pid_emulator && !exit_timer)
+      exit_timer := A_TickCount ;time of exit request
+
+    ;restart audio a set number of seconds after game start
+    ;note, if attract_mute == 1 then we stay muted until controller activity is detected
+    if (gCfg.attract_mute > 1) 
+    {
+        if (A_TickCount - emu_start_time > gCfg.attract_mute * 1000)
+        {
+            oMasterSound.On()
+        }
+    }
+
+    ;Games with border and taskbar suppression issues need to have 
+    ;mouse pointer in a place where it won't raise the taskbar or menu.
+    if (winset_style) 
+        if (A_TickCount - emu_start_time < 10000) 
+            MouseMove nScreenWidth//2, nScreenHeight//2
+
+    ;if an emulator is running but there is no window_name in the config to use, then 
+    ;we have no reliable way to know for sure whether the main gui window is active
+    ;(since the emulator might spawn multiple windows) so we just declare that it is.
+    ;Note: emu_hwnd is left set to 0 in this case.
+    ;if (!bEmuWindow && pid_emulator && oEmulators.Emulators[sys_key].window_name != "process")
+    if (pid_emulator && !oEmulators.Emulators[gCfg.sys_key].window_name)
+    {
+        bEmuWindowActive := true
+    }
+
+    ;Check if the process is running.
+    emu_running := ProcessExist(pid_emulator)
+    
+    if (emu_running && !hotkeys_on)
+    {
+        ActivateHotKeys()
+        hotkeys_on := true
+    }
+
+    ;the g_exit_code check prevents Windows from beeping if user is exiting manually.
+    ;(this can happen if user is still holding down the exit key when the keys get deactivated)
+    if (!emu_running && hotkeys_on && g_exit_code != 1)
+    {
+        InactivateHotKeys()
+        hotkeys_on := false
+    }
+
+    ;if user clicks on screen while select screen is shown
+    ;then return focus to the emulator
+    ;Also handle the joystick in here
+    if (emu_running)
+    {
+        if (g_guiselect_visible)
+        {
+            ;Move scroll list if any of the joysticks moved
+            ScrollList(oDetectInactivity.GetJoyState())
+        }
+        ;WIP
+        if (g_pause_state && !g_guiselect_visible)
+        {
+            PauseScroll(oDetectInactivity.GetJoyState())
+        }
+    }    
+
+    if (diag_mode)
+    {
+        ut_runwait_timer_total := ut_runwait_timer_total + (A_TickCount - ut_runwait_timer)
+        ut_runwait_avg := ut_runwait_timer_total / ut_runwait_cycle
+        if (ut_runwait_avg > ut_runwait_peak)
+            ut_runwait_peak := ut_runwait_avg   
+    }
+
+    ;Do volume sync if feature is turned on and an alternate sound device
+    ;other than the default device (1) has been specified in sound_device.
+    if (oBASS.Active && gCfg.sync_volume && gCfg.sound_device != 1)
+    {
+        result := oBASS.SetDevice(1)
+        currentVolume := oBASS.GetVolume() ;get the default device volume
+
+        ;if the volume has changed...
+        if (currentVolume != current_volume)  ;current_volume is global
+        {
+            result := oBASS.SetDevice(gCfg.sound_device)
+            result := oBASS.SetVolume(currentVolume) ;set alternate device to same volume as default
+            current_volume := currentVolume
+        }
+    }
+
+    ;-----------------------------------------------------------------------------------------------------
+    ;If_guiselect_visible is true and any system zOrders changed (meaning that the guiSelect screen should
+    ;be currently visible), then re-apply the +AlwaysOnTop directive to guiSelect just in case it was 
+    ;stomped on by another window.
+    zCheck := g_guiselect_visible && zChanged
+    
+    if (zCheck && g_guiselect_visible)
+    {
+        guiAlpha.Opt("+AlwaysOnTop")
+        guiSelect.Opt("+AlwaysOnTop")
+        ShowControls("guiSelect") ;ShowControls should always follow a guiSelect +AlwaysOnTop directive
+    }
+    zChanged := false ;reset zChanged
+    ;-----------------------------------------------------------------------------------------------------
+
+    ;if ten seconds have passed and the emulator has not yet exited then inform the 
+    ;user. Most likely a wrong map_exit value was specified in classic.ini
+    ;...probably not needed.
+    /*
+    else if (g_exit_code == 0 && pid_emulator && (A_TickCount - exit_timer) > 10000)
+    {
+      oDetectInactivity.Suspend()  
+      SoundBeep
+      LogEntry("FAULT: Auto switching could not exit for more than ten seconds. Is map_exit value set correctly?  Current value: " . map_exit . "`n")
+      
+      g_exit_code := ""
+      g_directswitch_args := ""
+      SystemCursor("On")
+      MsgBox, 262164, classic Launcher - Error: could not exit emulator, A game switching process could not exit the current emulator, (%sys_key%). This may be due to incorrect configuration of the map_exit value in classic.ini which is currently set to: %map_exit%.  Choose Yes to have classicPlayer attempt to shutdown the emulator process, or No to try shutting down manually.
+      IfMsgBox Yes
+      {
+        LogEntry("FAULT: Trying to force exit using {EndProc} method.`n")
+        map_exit := "{EndProc}"
+        ExitKeyUp()
+      }        
+    }
+    */
+
+    return
+}
+
+;KeyboardStrobeA() supports kiosk_mode 1 and is called every 50ms.
+;In this mode, when the "Magic Key" is pressed for a short period it will toggle the
+;game selection screen's visibility state; however, if it is pressed for a time exceeding
+;magic_delay milliseconds, it will perform the key's normal function.. If the Magic Key
+;feature is not used (e.g. magic_delay==0), then a conventional Hotkey is created.
+KeyboardStrobeA()
+{
+    global
+    
+    if (!hotkeys_on)
+        return
+   
+    if (GetKeyState(gCfg.magic_key, "P"))
+    {
+        ;Wait till key is pressed for %magic_delay% milliseconds before activating picker
+        if (magic_timer > gCfg.magic_delay && magicKeyState == 0)
+        {
+            if (gCfg.magic_key == gCfg.exit_key)
+            {
+                ;Be aware that putting a sleep between these causes a beep in Altirra and Demul
+                ;(and, so far as I know, is not needed)
+                ExitKey(1) ;code 1 means a manual exit
+                ExitKeyUp()
+            }
+            ;show picker screen
+            magicKeyState := 1 ;key is still down, so don't re-enter
+        }
+        else
+        {
+            ;increment the magic_timer accumulator
+            magic_timer := A_TickCount - baseTickCount
+        }
+    }
+    else ;key is not down
+    {
+        ;indicates we've released the key
+        magicKeyState := 0
+
+        ;if 0 < delay < 500 means key was released before delay expired
+        ;so perform the short stroke action, then reset delay to 0
+        if (magic_timer > 0 && magic_timer < gCfg.magic_delay) ; && !g_guiselect_visible)
+        {
+            ;Pause is a special case in which the the pause command is passed through
+            ;even on a long press, but suppressed while in the gui (by a g_guiselect_visible 
+            ;check in the pause function).
+            if (gCfg.magic_key == gCfg.exit_key)
+            {
+                ;show Picker on short press of exit key
+                MagicKey("0")
+            }
+            else if (gCfg.magic_key == gCfg.pause_key)
+            {
+                PauseKey("")
+                Sleep 100
+                PauseKey("Up")
+            }
+            else
+            {   
+                ;For "normal" cases, turn off hotkey, then send the native keystroke to the app.
+                ;Note that the only purpose of the hotkey (defined in classic_Functions) is
+                ;to ensure no input from the magic key is processed outside of this routine. 
+                Hotkey gCfg.magic_key, "Off"
+                SendInput "{" . gCfg.magic_key . " down}"
+               
+                Sleep 100
+                SendInput "{" . gCfg.magic_key . " up}"
+              
+                Hotkey gCfg.magic_key, "On"
+            }
+        }
+
+        ;Keep base counter at delta zero
+        baseTickCount := A_TickCount
+        magic_timer := 0
+    }    
+
+    return
+}
+
+;KeyboardStrobeB() supports kiosk_mode 0 and is called every 50ms.
+;In this mode, when the "Magic Key" is pressed for a short period it functions normally;
+;however, if it is pressed for a time exceeding ;magic_delay milliseconds, it will 
+;toggle the the game selection screen's visibility state. If the Magic Key feature is not
+;used (e.g. magic_delay==0), then a conventional Hotkey is created.
+KeyboardStrobeB()
+{
+    global
+
+    if (!hotkeys_on)
+        return
+        
+    if (GetKeyState(gCfg.magic_key, "P"))
+    {
+        ;Wait till key is pressed for %magic_delay% milliseconds before activating picker
+        if (magic_timer > gCfg.magic_delay && magicKeyState == 0)
+        {
+            ;show picker screen
+            MagicKey("0")
+            magicKeyState := 1 ;key is still down, so don't re-enter
+        }
+        else
+        {
+            ;increment the magic_timer accumulator
+            magic_timer := A_TickCount - baseTickCount
+        }
+    }
+    else ;key is not down
+    {
+        ;indicates we've released the key
+        magicKeyState := 0
+        
+        ;if 0 < delay < 500 means key was released before delay expired
+        ;so perform the short stroke action, then reset delay to 0
+        if (magic_timer > 0 && magic_timer < gCfg.magic_delay) ; && !g_guiselect_visible)
+        {
+            ;Pause is a special case in which the the pause command is passed through
+            ;even on a long press, but suppressed while in the gui (by a g_guiselect_visible 
+            ;check in the pause function).
+            if (gCfg.magic_key == gCfg.exit_key)
+            {
+                ExitKey(1) ;code 1 means a manual exit
+                Sleep 100
+                ExitKeyUp()
+            }
+            ;Exit is another special case, but unlike pause, is not suppressed when in
+            ;the gui (allowing full exit from within the gui).
+            else if (gCfg.magic_key == gCfg.pause_key)
+            {
+                PauseKey("")
+                Sleep 100
+                PauseKey("Up")
+            }
+            else
+            {   
+                ;For "normal" cases, turn off hotkey, then send the native keystroke to the app.
+                ;Note that the only purpose of the hotkey (defined in classic_Functions) is
+                ;to ensure no input from the magic key is processed outside of this routine. 
+                Hotkey gCfg.magic_key, "Off"
+                SendInput "{" . gCfg.magic_key . " down}"
+               
+                Sleep 100
+                SendInput "{" . gCfg.magic_key . " up}"
+              
+                Hotkey gCfg.magic_key, "On"
+            }
+        }
+
+        ;Keep base counter at delta zero
+        baseTickCount := A_TickCount
+        magic_timer := 0
+    }    
+    
+    return
+}
+
+;Used for the start and exit bookend screen timers.
+ScreenDelay()
+{
+    global bScreenContinue := true
+    return
+}
+
+;Causes arcadeEIP graphical screens to yield to the emulator after
+;a designated amount of time.
+ScreenClear()
+{
+    global
+
+    if (bkend_relinquish || gCfg.debug_mode || test_mode)
+    {
+        ;relinquish always-on-top priority
+        try guiBackground.Opt("-AlwaysOnTop")
+        try guiSelect.Opt("-AlwaysOnTop")
+        try guiAlpha.Opt("-AlwaysOnTop")
+        try guiExit.Opt("-AlwaysOnTop")
+        try guiStart.Opt("-AlwaysOnTop")
+    }
+    if (start_show_time > -1)
+    {
+        oFadeStart.Start(0,0) ;turn on full transparency
+
+        guiStart.Hide()
+        guiExit.Hide()
+    }
+ 
+    return
+}
+
+;The KeepActive() function is called once a second and does two things.
+;1. It supports the window_name= config option to keep emulator focus aggressively. A window_name is a unique
+;   title bar text string for the emulator; or if "process" is used as the text, the emulator's pid will be used
+;   rather than the text string. When such a window_name is defined, this function calls WinActivate on every
+;   call by the schedule task it is attached to.
+;2. It provides initialization of special cases of emulators that use the winset_? parameter on
+;   the exe file, such as winset_A for Altirra, winset_B for Supermodel, and winset_C for Demul. Giving these
+;   generic names makes them reusable for other potential emulators for which they may work also.
+KeepActive()
+{    
+    global ;needed for (at least winset_style and zChanged)
+
+    static cycle_check := -1
+    local X, Y, W, H, newH, newW
+    local screenMiddleW, windowMiddleW, screenMiddleH, windowMiddleH, windowTop, windowLeft
+    local emu_pid, emu_id
+
+    emu_pid := "ahk_pid " . pid_emulator
+
+    if (emu_running) ; && !g_guiselect_visible)
+    {
+        windowName := oEmulators.Emulators[gCfg.sys_key].window_name
+
+        if (windowName == "process" || windowName == "Process")
+        {
+            if (!emu_hwnd)
+            {
+                ;try to get an hwnd for the current emulators process id
+                emu_id := WinGetID("ahk_pid " . pid_emulator)
+                emu_hwnd := "ahk_id " . emu_id
+            }
+        }
+        else if (InStr(windowName, "[rom_file]"))
+            emu_hwnd := StrReplace(windowName, "[rom_file]", gCfg.rom_file)
+        else if (InStr(windowName, "[rom_name]"))
+            emu_hwnd := StrReplace(windowName, "[rom_name]", gCfg.rom_name)
+        else if (windowName)
+            emu_hwnd := windowName
+
+        if (!g_guiselect_visible && emu_hwnd)
+        {
+            SetTitleMatchMode 2
+           
+           ;This command keeps the emulator window active
+            if (WinExist(emu_hwnd))
+                WinActivate emu_hwnd
+
+           ;The following loop is mainly in support of Demul (Naomi) since it takes some time
+           ;for its main screen to become active. We don't want this loop most of the time since 
+           ;the Magic_Key() function only works if bEmuWindowActive is true and this loop can
+           ;cause problems with early responsiveness of that function.           
+           if (!bEmuWindowActive && winset_style == "winset_C")
+           {
+                Loop 100
+                {
+                    if (WinExist(emu_hwnd))
+                    {
+                        if (WinActive(emu_hwnd))
+                            break
+
+                        WinActivate emu_hwnd
+                    }
+                    Sleep 100
+                }
+            }
+            
+            bEmuWindowActive := true   
+        }
+            
+        ;This will attempt to turn off the title bar and menu of the emulator's
+        ;window the first time is becomes active.
+        if (winset_style && winset_style != "winset_D" && cycle_check != g_cycle)
+        {
+            ;Wait on the emulator pid to get the active window
+            ;Note that the WinWaitActive is needed when switching to an emulator that doesn't
+            ;have a window_name (i.e emu_hwnd), since the WinActivate stuff above won't have happened.
+            WinWaitActive emu_pid 
+            act_win := WinActive( "A" )
+        
+            ;Demul, which winset_C is designed for, requires us to delay until
+            ;after it has creating a sized window.  This moment can be identified by
+            ;watching the window until its size changes. We do that for up to 30 seconds 
+            ;here.  Normally, much less time is needed, but for slower computers or Naomi 2 
+            ;games like Virtua Fighter 4, more time can be needed.
+            if (winset_style == "winset_C")
+            {
+                WinGetPos &X, &Y, &W, &H, "ahk_id " . act_win
+                Loop 300
+                {
+                    WinGetPos &X, &Y, &W2, &H2, "ahk_id " . act_win
+                    if (W != W2 || H != H2)
+                    {
+                        sleep 100
+                        break
+                    }
+                    sleep 100
+                }
+            }
+            else ;winset_A (Altirra) or winset_B (Supermodel)
+            {
+                Sleep 100
+            }
+               
+            WinSetStyle "-0xC00000", "ahk_id " . act_win ;%emu_hwnd%   ;removes title bar  
+            WinSetStyle "-0xC40000", "ahk_id " . act_win ;%emu_hwnd%   ;removes border
+           
+            DllCall("SetMenu", "Uint", act_win, "UInt", 0)   ;removes menu
+            
+
+            ;Be sure to add any new winset styles to ParseRTParams_recursive()
+            ;****DON'T PUT SPACES BETWEEN ANY OF THE WINSET VALUES IN THIS IF STATEMENT***** 
+            if winset_style == "winset_B" or winset_style == "winset_C"  ;currently for Demul (Naomi) and Supermodel
+            {
+                ;Note WinMaximize works, but will compromise the aspect ratio on some games/monitors.
+                ;WinMaximize, ahk_id %act_win%
+                
+                WinGetPos &X, &Y, &W, &H, "ahk_id " . act_win                   
+                LogEntry("INFO: Original dimensions: X:" . X . ", Y:" . Y . ", W:" . W . ", H:" . H . "`n")
+
+                ;Make sure window fits within the screen dimensions
+                newW := W
+                if (W > A_ScreenWidth)
+                    newW := A_ScreenWidth
+
+                newH := H
+                if (H > A_ScreenHeight)
+                    newH := A_ScreenHeight
+
+                WinMove(,,newW, newH, "ahk_id " .  act_win)
+                WinGetPos &X, &Y, &W, &H, "ahk_id " . act_win ;%emu_hwnd% ;ahk_pid %pid_emulator%
+                
+                ;Center the screen horizontally and vertically
+                screenMiddleW := A_ScreenWidth // 2
+                windowMiddleW := W // 2
+                windowLeft := screenMiddleW - windowMiddleW
+                
+                screenMiddleH := A_ScreenHeight // 2
+                windowMiddleH := H // 2
+                windowTop := screenMiddleH - windowMiddleH
+
+                ;Moves window to top left corner of screen
+                ;WinMove, ahk_pid %pid_emulator%, , windowLeft, windowTop
+                ;WinMove, ahk_id %act_win% , ,windowLeft, windowTop
+                WinMove(windowLeft, windowTop,,,"ahk_id " . act_win)
+
+                WinGetPos &X, &Y, &W, &H, "ahk_id " . act_win  ;ahk_pid %pid_emulator%                    
+                LogEntry("INFO: New dimensions: X:" . X . ", Y:" . Y . ", W:" . W . ", H:" . H . "`n")                
+            }
+            if winset_style == "winset_D"
+            {
+                ;Move mouse pointer to ensure it won't be over the taskbar
+                ;which causes a side effect with Visual Pinball
+                MouseMove nScreenWidth // 2, nScreenHeight // 2
+            }
+
+            
+            cycle_check := g_cycle
+            winset_style := ""
+        }        
+   }
+
+    return
+}
+
+;CreatePausePage() is launched by a Timer process to create the image and info
+;screens that get displayed on pause while the emulator is loading (i.e. behind
+;the start screen). There is a performance objective to always ensure this completes
+;before a game starts (which testing suggests it should). The SoundBeep at the end
+;can be used to test this performance if necessary.
+CreatePausePage()
+{
+    ;global 
+
+    ;Retrieve, size, and position the image file to be displayed on pause
+    assetTypes := StrSplit(gCfg.show_on_pause, ",") ;show_on_pause is a [Front_End] global set in the config file
+
+    typeCount := assetTypes.Length
+    Loop typeCount
+    {
+        oPauseControl.CreatePausePage(Trim(assetTypes[A_Index]))
+    }   
+
+    if (gCfg.status_beeps)
+        SoundBeep 1000
+
+    return
+}
+
+/*
+ScreenWinWaitMonitor:
+
+    if !WinActive("guiBackground")
+    {   
+        if (bkend_relinquish || debug_mode || test_mode)
+            Gui, -AlwaysOnTop ;relinquish always-on-top priority
+        
+        if (start_show_time > -1)
+        {
+            GuiControl, guiBackground:Hide, Label
+            GuiControl, guiBackground:Hide, Logo
+            GuiControl, guiBackground:Hide, Rom
+        }
+        
+        SetTimer, ScreenWinWaitMonitor, Off
+    }
+    
+return
+*/

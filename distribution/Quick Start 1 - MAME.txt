@@ -1,0 +1,74 @@
+MAME quick start guide
+=======================================================================
+Unzip arcadeEIP to a dedicated folder (e.g. C:\arcadeEIP).
+Assumes MAME 172+ is installed with roms in the MAME's \rom folder.
+Works best with a no-nag build of MAME (but not strictly required).
+
+See video here for a walk-through of these instructions:
+https://youtu.be/1RueDRhyrao
+
+*** By default, tap the period key (.) to exit a game.            ***
+*** Use ctrl-alt-k to force-exit arcadeEIP if it ever hangs.      ***
+=======================================================================
+
+1. Double-click create_cfg.bat to create arcadeEIP.ini and
+   arcadeEIP_example.ini
+   
+2. Load arcadeEIP.ini into a text editor like notepad or (preferably), 
+   notepad++.
+
+3. In the [System_mame] section of arcadeEIP.ini, edit exe_full_path= 
+   to match your system (don't remove the ",min" option at the end).
+
+4. In the [General] section, set seed_rom= to any favorite rom you 
+   know you have.
+
+5. If you'd like to hide the mouse cursor during gameplay, set hide_cursor=1
+   in the [Front_End_os] section.
+
+6a. Optional: If you have them, copy a set of game logo files (named
+    after your roms) into ..\Assets\MAME\Logos\Rom
+    (or set logo_folder= in [Global_Assets] to where they are.)
+
+6b. Optional: Instead of following step 6a, if you use LaunchBox, you may use
+    it as your content manager instead.  Just add the following lines (with 
+    paths adjusted to your machine) to the [System_mame] section.  In this 
+    case, we assume that the name of the LaunchBox platform for MAME is "Arcade".
+
+    logo_folder=D:\LaunchBox\Images\Arcade\Clear Logo
+    marquee_folder=D:\LaunchBox\Images\Arcade\Arcade - Marquee
+    system_logo=D:\LaunchBox\Images\Platforms\Arcade\Clear Logo\Arcade.png
+
+    (see the file LaunchBox.txt in the "Docs\[Front_End] examples" folder
+     for more information about integration with LaunchBox)
+
+Now...just double-click on eip.exe to run your seed game...
+
+Or at a command prompt run:
+
+   >eip mame galaga
+   
+...to run a specific game (partial names ok).
+
+While in any game:
+
+1. Press the period key (.) to exit.
+2. Press comma (,) to pause.  While in pause, use left/right arrow
+   keys or joystick to page through controls and info screens.
+3. Press apostrophe (') or hold the period key (.) for 2+ sec to toggle the
+   game selection menu on/off:
+4.    Navigate using the arrow keys or joystick.
+5.    Select a new game to play using the LCtrl key.
+6.    Use "M" key to mark a game as a favorite or "S" to change star rating
+6.    Use Space to add a game to the "Picks" list for the system and "LAlt" to
+      view that list.
+8.    See docs for many more functions.
+
+Autoswitching:
+By default, as you play games, the autoswitch list will auto-populate with
+those games. If you walk away with a game still in session, the active game will
+switch every 3 minutes. This is like a screensaver, but the games will be playable.
+By default the list holds the 20 most played games.
+
+Naturally, all this is customizable.  See the full docs for much more.
+

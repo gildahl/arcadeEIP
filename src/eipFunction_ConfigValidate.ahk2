@@ -1,0 +1,76 @@
+; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
+; © 2023 David G. Dahlstrom
+; File: eipFunction_ConfigValidate.ahk2
+
+;Use this function to implement basic initialization validation rules for arcadeEIP.ini.
+;Note that some .ini values are validated elsewhere since some validations require greater context.
+ValidateConfig()
+{
+    ;---------------------------------------------------------------------------------
+    ; config.ini validation
+    ;---------------------------------------------------------------------------------
+
+    ;[General]
+    ;debug_mode ( validated in ProcessIni() )
+
+    if !(gCfg.status_beeps == 0 || gCfg.alpha_effect == 1) {
+        LogEntry("ERROR: Exiting. The [General] 'alpha_effect' setting must be 1 or 0. Current value is: " . gCfg.alpha_effect . ".`n")
+        ExitApp
+    }
+
+    ;status_beeps
+    if !(gCfg.status_beeps == 0 || gCfg.status_beeps == 1) {
+        LogEntry("ERROR: Exiting. The [General] 'status_beeps' setting must be 1 or 0. Current value is: " . gCfg.status_beeps . ".`n")
+        ExitApp
+    }
+    
+    ;alpha_effect
+    if !(gCfg.alpha_effect == 0 || gCfg.alpha_effect == 1) {
+        LogEntry("ERROR: Exiting. The [General] 'alpha_effect' setting must be 1 or 0. Current value is: " . gCfg.alpha_effect . ".`n")
+        ExitApp
+    }
+
+    ;sound_device
+    if (!IsInteger(gCfg.sound_device)) {
+        LogEntry("ERROR: Exiting. The [General] 'sound_device' setting must be an integer (1 is the default device). Current value is: " . gCfg.sound_device . ".`n")
+        ExitApp
+    }
+
+    ;sync_volume
+    if (!IsInteger(gCfg.sync_volume) || (gCfg.sync_volume > 0 && gCfg.sound_device == 1)) {
+        LogEntry("ERROR: Exiting. The [General] 'sound_device' setting must be an integer and only used when sound_device is greater than 0. Current value is: " . gCfg.sync_volume . ".`n")
+        ExitApp
+    }
+    
+    ;show_license
+    if !(gCfg.show_license == 0 || gCfg.show_license == 1) {
+        LogEntry("ERROR: Exiting. The [General] 'show_license' setting must be 1 or 0. Current value is: " .gCfg.show_license . ".`n")
+        ExitApp
+    }
+
+    ;[Picker_Preferences]
+    
+    ;joy_vert
+    if !(gCfg.joy_vert == "off" || gCfg.joy_vert == "all") {
+        LogEntry("ERROR: Exiting. The [Picker_Preferences] 'joy_vert' setting must be `"off`" or `"all`". Current value is: `"" . gCfg.joy_vert . "`" .`n")
+        ExitApp
+    }
+    
+    ;joy_horiz
+    if !(gCfg.joy_horiz == "off" || gCfg.joy_horiz == "all") {
+        LogEntry("ERROR: Exiting. The [Picker_Preferences] 'joy_horiz' setting must be `"off`" or `"all`". Current value is: `"" . gCfg.joy_horiz . "`".`n")
+        ExitApp
+    }
+    
+    ;mouse_vert
+    if !(gCfg.mouse_vert == "off" || gCfg.mouse_vert == "all") {
+        LogEntry("ERROR: Exiting. The [Picker_Preferences] 'mouse_vert' setting must be `"off`" or `"all`". Current value is: `"" . gCfg.mouse_vert . "`".`n")
+        ExitApp
+    }
+    
+    ;mouse_horiz
+    if !(gCfg.mouse_horiz == "off" || gCfg.mouse_horiz == "all") {
+        LogEntry("ERROR: Exiting. The [Picker_Preferences] 'mouse_horiz' setting must be `"off`" or `"all`". Current value is: `"" . gCfg.mouse_horiz . "`".`n")
+        ExitApp
+    }
+}

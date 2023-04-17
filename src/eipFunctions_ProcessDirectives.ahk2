@@ -1,0 +1,522 @@
+; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
+; © 2023 David G. Dahlstrom
+; File: eipFunction_ProcessDirectives.ahk2
+
+;This function provides implementation of several command line functions.
+ProcessDirectives(&argList)
+{
+    global
+
+    local n, e, i, err, param, emu := "", input_arg, input_arg_decomp, bDirectiveArgs, emulator
+    local aSearchPaths, searchPath, searchRomName, romExt, dev, oSoundDeviceList, filePrefix
+    
+    bDirectiveArgs := false
+    
+    for n, input_arg in argList
+    {		
+        if (InStr(input_arg, "-help"))
+        {
+            if (console_mode)
+            {
+                FileAppend "The following command line parameters are supported by the console application:`n", "*"
+                for n, opt in oConsoleOptions
+                    FileAppend opt "`n", "*"
+            }
+
+            ExitApp
+        }
+        
+        ;debug_mode
+        if (InStr(input_arg, "-debug") || InStr(input_arg, "-debug_mode"))
+        {
+            input_arg_decomp := StrSplit(input_arg, ["="], " ")
+            if (input_arg_decomp[2] = "")
+                gCfg.debug_mode := "os"
+            else
+                gCfg.debug_mode := input_arg_decomp[2]
+            debug_mode_index := n
+            bDirectiveArgs := true
+        }
+        
+        if (InStr(input_arg, "-log") || InStr(input_arg, "-show_log"))
+        {
+            input_arg_decomp := StrSplit(input_arg, ["="], " ")
+            
+            if (input_arg_decomp.Has(2))
+                ShowLog(input_arg_decomp[2])
+            else if (A_Args.Has(2))
+                ShowLog(A_Args[2])
+            else
+                ShowLog()
+            
+            suppressExitMessage := true
+            ExitApp
+        }
+
+        if (InStr(input_arg, "-sound"))
+        {
+            try
+            {
+                oBASS := BASS_class()
+                oBASS.Init()
+
+                ;DllCall("AttachConsole", "int", -1)
+                ;FileAppend cExeName . " -sound`n", "*"
+
+                if (oBASS.Active == 0)
+                {
+                    FileAppend "3rd party library bass.dll not found. Sound support not available. See Sound.txt.`n", "*" ;CONOUT$
+                }
+                else
+                {
+                    oSoundDeviceList := oBASS.GetInfo()
+
+                    if (!oSoundDeviceList)
+                    {
+                        FileAppend "No sound devices detected.`n", "*" ;CONOUT$
+                    }
+                    else
+                    {
+                        for n, dev in oSoundDeviceList
+                        {
+
+                            i := dev["device"]
+                            n := dev["name"]
+                            FileAppend i . ": " . n . "`n", "*" ;CONOUT$
+                        }
+                    }
+                }
+                
+                ;SendInput "{Enter}"
+                ;DllCall("FreeConsole")
+                ExitApp
+            }
+            catch as e
+            {
+                ExitApp
+            }
+        }
+        
+        ;-createproxy D:\Emulators\Demul\Demul_digital\roms\*.zip D:\out\*.txt naomi rom_full_path
+        ;creates vector-type proxy files given source folder, dest folder, emulator name, and 
+        ;one of the romStyles listed below.
+        if (InStr(input_arg, "-createproxy"))
+        {
+            fileCount := 0
+            sourceFolder := argList[2]
+            destinationFolder := argList[3]
+            SplitPath destinationFolder,,&outFolder,&outExt
+            emulatorName := argList[4]
+            romStyle := argList[5] ;can be [rom_name], [rom_file], [rom_full_path], rom_name, rom_file, rom_full_path
+            filePrefix := argList[6]
+            
+            SplitPath sourceFolder,,&romPath,&romExt,&searchRomName
+            romExt_decomp := StrSplit(romExt, ",", " ")	
+            
+            try
+            {
+                ;DllCall("AttachConsole", "int", -1)
+                ;FileAppend cExeName . " -createproxy " . sourceFolder . " " . destinationFolder . " " . emulatorName . " " . romStyle . " " . filePrefix . "`n", "*" ;CONOUT$
+                
+                if (!FileExist(sourceFolder))
+                {
+                    FileAppend "Source folder does not exist.`n", "*"  ;CONOUT$ 
+                    ;SendInput "{Enter}"
+                    ;DllCall("FreeConsole")
+                    ExitApp
+                }
+                
+                if romStyle == "rom_name" or romStyle == "rom_full_path" or romStyle == "rom_file" romStyle == "[rom_name]" or romStyle == "[rom_file]" or romStyle == "[rom_full_path]"
+                {			
+                    for n, romExt in romExt_decomp
+                    {	
+                        searchPath := romPath . "\" . searchRomName . "." . romExt
+                        
+                        Loop Files searchPath
+                        {
+                            SplitPath A_LoopFileFullPath, &outFile,,,&outName
+
+                            if (filePrefix)
+                                outName := filePrefix . emulatorName . "_" . outName
+
+                            outFullFilePath := outFolder . "\" . outName . "." . outExt							
+                            
+                            if (FileExist(outFullFilePath)) 
+                                FileDelete(outFullFilePath)
+                            
+                            if (romStyle = "rom_name")
+                                FileAppend emulatorName . " " . outName, outFullFilePath
+                            else if (romStyle = "rom_full_path")
+                                FileAppend emulatorName . " " . A_LoopFileFullPath, outFullFilePath
+                            else if (romStyle = "rom_file")
+                                FileAppend emulatorName . " " . outFile, outFullFilePath
+                            else if (romStyle = "[rom_file]")
+                                FileAppend emulatorName . " [rom_file]", outFullFilePath
+                            else if (romStyle = "[rom_name]")
+                                FileAppend  emulatorName . " [rom_name]", outFullFilePath
+                            else if (romStyle = "[rom_full_path]")
+                                FileAppend emulatorName . " [rom_full_path]", outFullFilePath	
+                        }
+                    }
+                }
+                else
+                {
+                    FileAppend "Unknown rom vector specified on command line: " . romStyle . "`n", "*" ;CONOUT$ 
+                    ;SendInput "{Enter}"
+                    ;DllCall("FreeConsole")
+                    ExitApp
+                }
+            }
+            catch as e
+            {
+                FileAppend "Error. Please check syntax and ensure destination folder exists.`n", "*" ;CONOUT$
+                ;SendInput "{Enter}"
+                ;DllCall("FreeConsole")
+                ExitApp
+            }
+            
+            FileAppend "Success`n", "*" ;CONOUT$
+            ;SendInput "{Enter}"
+            ;DllCall("FreeConsole")
+            ExitApp
+        }
+        
+        ;support listing all systems defined in classic.ini
+        if (InStr(input_arg, "-systems"))
+        {
+            tabWidth := 5
+            
+            try
+            {
+                ;DllCall("AttachConsole", "int", -1)
+                ;FileAppend cExeName . " -systems " . emu . "`n", "*" ;CONOUT$
+                
+                sortList := "" ;emu_sys_key
+                
+                for n, emulator in oEmulators.Emulators
+                {
+                    sortList := sortList . "," . emulator.sys_key
+                }
+                
+                ;Sort, sortList, D,  ;note that the comma at the end is the delimiter
+                aSortList := StrSplit(sortList, ",", " ")
+                for n, param in aSortList
+                {
+                    FileAppend param . "`n", "*" ;CONOUT$
+                }
+                ;}
+                ;SendInput "{Enter}"
+                ;DllCall("FreeConsole")
+                ExitApp
+            }
+            catch as e
+            {
+                ExitApp
+            }
+        }
+        
+        ;support listing all roms in emulator at command line
+        ;must have a search_path defined for this to work.
+        ;files are listed alphabetically, but grouped by extension
+        if (InStr(input_arg, "-list"))
+        {
+            try
+            {
+                ;DllCall("AttachConsole", "int", -1)
+                ;FileAppend cExeName . " -list " . emu . "`n", "*" ;CONOUT$
+
+                ;-list must always be the first argument
+                if (argList.Has(1))
+                {
+                    if (argList[1] != "-list")
+                    {
+                        FileAppend "Use format -list <sys_key>", "*"
+                        ExitApp
+                    }
+                }
+                
+                ;sys_key must always be the second argument
+                if (argList.Has(2))
+                    emu := argList[2]
+                else
+                {
+                    FileAppend "Use format -list <sys_key>`n", "*"
+                    ExitApp
+                }
+
+                ;if (emu = "-list")
+                ;    emu := argList[1]
+                
+                if (!oEmulators.IsValidKey(emu))
+                {
+                    FileAppend "Emulator " . emu . " could not found in " . cConfigFileName . "`n", "*" ;CONOUT$
+                    ;SendInput "{Enter}"
+                    ;DllCall("FreeConsole")
+                    ExitApp
+                }							
+                
+                aSearchPaths := ParseSearchPath(emu)
+                if (!aSearchPaths)
+                {
+                    FileAppend "No search_path defined in " . cConfigFileName . " for this emulator`n", "*" ;CONOUT$
+                    ;SendInput "{Enter}"
+                    ;DllCall("FreeConsole")
+                    ExitApp
+                }	
+                
+                for n, searchPath in aSearchPaths
+                {							
+                    SplitPath searchPath,,&romPath, &romExt, &searchRomName
+                    romExt_decomp := StrSplit(romExt, ",", " ")	
+                    
+                    for n, romExt in romExt_decomp
+                    {	
+                        searchPath := romPath . "\" . searchRomName . "." . romExt
+                        
+                        FileAppend "`n", "*" ;CONOUT$
+                        sep := RepeatValue("=", StrLen(searchPath))
+                        FileAppend sep . "`n", "*" ;CONOUT$
+                        FileAppend searchPath . "`n", "*" ;CONOUT$
+                        FileAppend sep . "`n", "*" ;CONOUT$
+                        
+                        Loop Files searchPath
+                        {
+                            SplitPath A_LoopFileFullPath, &outFile
+                            properName := oEmulators.Emulators[emu].meta_names.GetTitle(outFile)  
+                            if (properName)
+                                outFile := outFile . " (" . properName . ")"
+                            FileAppend outFile . "`n", "*" ;CONOUT$
+                        }
+                    }	
+                }
+                ;SendInput "{Enter}"
+                ;DllCall("FreeConsole")
+                ExitApp
+            }
+            catch as e
+            {
+                err := "Error: " . FormatErrorMessage(e) 
+                FileAppend err . "`n", "*" ;CONOUT$
+                ExitApp
+            }
+        }
+        
+        if (input_arg = Trim("-find") || input_arg = Trim("-f"))
+        {
+            ;allow the -find (or -findall) token to be placed either before or after the emulator
+            ;eipc.exe -find emu rom
+            ;eipc.exe -find rom
+            ;eipc.exe emu rom -find
+            ;eipc.exe rom -find
+            
+            if (argList[1] = "-find" || argList[1] = "-f")
+            {
+                if (!argList[2])
+                    emu := "-find"
+                if (argList.Has(3))
+                {
+                    emu := argList[2]
+                    rom := argList[3]
+                }
+                else 
+                    rom := argList[2]
+            }
+            else if (argList[2] = "-find" || argList[2] = "-f")
+            {
+                rom := argList[1]
+            }
+            else if (argList[3] = "-find" || argList[3] = "-f")
+            {
+                emu := argList[1]
+                rom := argList[2]
+            }
+            
+            DisplayRomList(emu, rom, "top", "-find")
+        }
+        
+        if (input_arg = Trim("-findall") || input_arg = Trim("-fa"))
+        {
+            ;allow the -find token to be placed either before or after the emulator
+            if (argList[1] = "-findall" || argList[1] = "-fa")
+            {
+                if (!argList[2])
+                    emu := "-findall" 
+                
+                if (argList.Has(3))
+                {
+                    emu := argList[2]
+                    ct := argList.Count
+                    Loop ct
+                        rom := rom . argList[A_Index + 2] . A_Space
+                    rom := Trim(rom)
+                }
+                else
+                    rom := argList[2]
+            }
+            else if (argList[2] = "-findall" || argList[2] = "-fa")
+            {
+                rom := argList[1]
+            }
+            else if (argList[3] = "-findall" || argList[3] = "-fa")
+            {
+                emu := argList[1]
+                rom := argList[2]
+            }
+            
+            DisplayRomList(emu, rom, "all", "-findall")				
+        }
+    }
+    
+    ;Remove the directive arguments from the argList
+    if (gCfg.debug_mode != "")
+        argList.Delete(debug_mode_index)
+    
+    return bDirectiveArgs
+}
+
+;listType may be "all" or "top"
+DisplayRomList(emu, rom, listType, argName)
+{
+    global
+
+    local n, i, err, header
+
+    try
+    {
+        ;DllCall("AttachConsole", "int", -1)
+        
+        if (InStr(emu, "-f"))
+        {
+            ;FileAppend cExeName . " " . emu . "`n", "*" ;CONOUT$
+            FileAppend "Rom name missing`n", "*" ;CONOUT$
+            ;SendInput "{Enter}"
+            ;DllCall("FreeConsole")
+            ExitApp
+        }
+        
+        bSuppressLogging := true ;global
+        
+        if (!emu)
+        {
+            ;FileAppend cExeName . " " . argName . " " . rom . "`n", "*" ;CONOUT$
+            bSearchGlobal := true
+        }
+        else
+        {
+            if (!oEmulators.IsValidKey(emu))
+            {
+                FileAppend "Emulator " .  emu . " could not found in " . cConfigFileName . "`n", "*" ;CONOUT$
+                ;SendInput "{Enter}"
+                ;DllCall("FreeConsole")
+                ExitApp
+            }
+        }
+        FileAppend "Searching...", "*" ;CONOUT$
+        
+        if (GetRoms(emu, rom, &rom_list))
+        {				
+            col_1_vals := Map(1, "Key")
+            col_2_vals := Map(1, "System")
+            col_3_vals := Map(1, "Rom")
+            
+            if (listType = "all")
+            {
+                for n, rom in rom_list
+                {
+                    if (n > 1)
+                    {
+                        if (rom_list[n].system = rom_list[1].system && rom_list[n].fileName = rom_list[1].fileName && rom_list[n].fullPath = rom_list[1].fullPath)
+                            col_1_vals[n] := "* " . n-1 
+                        else
+                            col_1_vals[n] := " " . n-1
+                        col_2_vals[n] := rom_list[n].system
+                        col_3_vals[n] := rom_list[n].fileName
+                        
+                        i := col_2_vals.Count
+                        Loop i
+                        {
+                            if (A_Index > 1 && A_Index != n)
+                            {
+                                if (col_2_vals[A_Index] = col_2_vals[n] && col_3_vals[A_Index] = col_3_vals[n])
+                                {
+                                    col_3_vals[n] := rom_list[n].fileName . " (" . rom_list[n].folder . ")"
+                                    col_3_vals[A_Index] := rom_list[A_Index].fileName . " (" . rom_list[A_Index].folder . ")"
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            else if (listType = "top")
+            {
+                col_1_vals[2] := "* 1"
+                col_2_vals[2] := rom_list[1].system
+                col_3_vals[2] := rom_list[1].fileName . " (" . rom_list[1].folder . ")"
+            }
+            
+            header := GetColValue(1, col_1_vals, 2, &sep_1) . GetColValue(1, col_2_vals, 2, &sep_2) . GetColValue(1, col_3_vals, 2, &sep_3) ;. GetColValue(1, col_4_vals, 2, sep_4)
+            separator := sep_1 . sep_2 . sep_3 ;. sep_4
+            
+            FileAppend "found`n`n" . header . "`n", "*" ;CONOUT$
+            FileAppend separator . "`n", "*" ;CONOUT$
+            
+            len := col_1_vals.Count
+            Loop len
+            {
+                if (A_Index > 1)
+                {
+                    output := GetColValue(A_Index, col_1_vals, 2) . GetColValue(A_Index, col_2_vals, 2) . GetColValue(A_Index, col_3_vals, 2) ;. GetColValue(A_Index, col_4_vals, 2)
+                    FileAppend output . "`n", "*" ;CONOUT$
+                }
+            }
+        }
+        else
+            FileAppend "`nNo match found.`n", "*" ;CONOUT$
+        
+        ;SendInput "{Enter}"
+        ;DllCall("FreeConsole")
+        ExitApp				
+    }
+    catch as e
+    {
+        err := "Error: " . FormatErrorMessage(e) 
+        FileAppend err . "`n", "*" ;CONOUT$
+        ExitApp
+    }
+}
+
+;if we're running from a console window, then dump the 
+;log file to the console display.  Otherwise display the
+;log in notepad.
+ShowLog(logFileName := "")
+{	
+    ;global
+
+    if (logFileName == "")
+        logFileName := cLogFileName
+    
+    SplitPath logFileName,,,&logFileExt
+    if (logFileExt = "")
+        logFileName := logFileName . ".log"
+    
+    logFile := A_ScriptDir . "\" . logFileName
+    
+    if (console_mode)
+    {
+        ;DllCall("AttachConsole", "int", -1)
+        ;FileAppend, %cExeName% -log %logFileName%`n, CONOUT$
+        ;FileAppend cExeName . " -log " . logFileName . "`n", "*"
+        Loop Read logFile
+        {
+            FileAppend A_LoopReadLine . "`n", "*"
+        }
+        ;SendInput "{Enter}"
+        ;DllCall("FreeConsole")
+    }
+    else
+    {
+        Run "Notepad.exe " . logFile
+    }
+    
+    return
+}

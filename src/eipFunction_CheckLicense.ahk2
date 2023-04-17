@@ -1,0 +1,130 @@
+; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
+; © 2023 David G. Dahlstrom
+; File: eipFunction_CheckLicense.ahk2
+
+
+;validate license
+ValidateLicense()
+{
+	global
+
+	try 
+	{
+		bLicenseValid := CheckLicense(&sLicenseType, &sCustomerName, &sCustomerEmail, &sDaysToExpire)
+	}
+	catch as e
+	{		
+		LogEntry("ERROR: CHECK LICENSE: " . FormatErrorMessage(e) . "`n")
+		ExitApp
+	}
+	
+	if (bLicenseValid)
+	{
+		if (sLicenseType == "public") 
+			g_license_text := cProductName . ", Rev. " . CodeVersion . ". License: Public. Free for non-commercial use."
+		else if (sLicenseType = "registered")
+			g_license_text := cProductName . ", Rev. " . CodeVersion . ". License: Registered to " . sCustomerName . " for non-commercial use. No expiration."
+		else if (sLicenseType = "subscription")
+			g_license_text := cProductName . ", Rev. " . CodeVersion . ". License: Registered to " . sCustomerName . " for non-commercial use. Expires in " . sDaysToExpire . " days."
+		
+		startupMsg := "STARTUP: " . g_license_text . "`n"
+	}
+	else
+	{
+		;revert to public license
+		if (sLicenseType == "subscription") 
+		{
+			g_license_text := cProductName . ", Rev. " . CodeVersion . ". License: Subscription expired. Reverted to public non-commercial license."
+			startupMsg := "STARTUP: " . g_license_text . "`n"
+		}
+		else
+		{
+			startupMsg := "STARTUP: " . cProductName . ", Rev. " . CodeVersion . ". License: No valid license found.`n"
+			LogEntry(startupMsg)
+			LogEntry(RepeatValue("=", StrLen(startupMsg)-1) . "`n")
+			LogEntry("ERROR: No license file found. Make sure a valid " . cLicenseFileName . " file is present in the working folder, " . A_scriptdir . "`n")
+			ExitApp
+		}
+	}
+}
+
+
+;Check if license returns true (pass) or false (fail)
+;sets sName & sEmail to values from the license file
+;sDays is set to #days left if trial version, 0 if release version
+;for example, true/0 = release version, false/0 = expired
+CheckLicense(&sLicenseType, &sName, &sEmail, &sDays)
+{
+	if (!FileExist(cLicenseFileName))
+	{
+		sName := "Public License"
+		sEmail := "unregistered"
+		sLicenseType := "public"
+		sDays := 0
+
+		return true
+	}
+
+	;read and confirm license
+	Loop Read cLicenseFileName  ;arcadeEIP.lic
+	{
+		if (A_Index == 1) {
+			name := StrReplace(A_LoopReadLine, "Name:")
+			sName := name
+			name := StrSplit(name, A_Space)
+		}
+		if (A_index == 2) {
+			email := StrReplace(A_LoopReadLine, "Email:")
+			sEmail := email
+		}
+		if (A_index == 3)
+			hashVal := StrReplace(A_LoopReadLine, "License:")
+	}
+	
+	sLicenseType := ""
+	
+	;check for public version
+	secret1 := "Breakout"
+	secret2 := "SpacePanic"
+	sData := secret1 . name.Get(1,"") . name.Get(2,"") . email . secret2
+
+	sHash := Hash(sData)
+	if (InStr(sHash, hashVal)) {
+	  sLicenseType := "public"
+	  sDays := 0
+	  return true ;must be public version
+	}
+
+	;check for registered version
+	secret1 := "TimePilot"
+	secret2 := "Gravitar"
+	sData := secret1 . name.Get(1,"") . name.Get(2,"") . email . secret2
+
+	sHash := Hash(sData)
+	if (InStr(sHash, hashVal)) {
+	  sLicenseType := "registered"
+	  sDays := 0
+	  return true ;must be registered version
+	}
+
+	;check for subscription version
+	sHash := ""
+	secret1:="DonkeyKong"
+	secret2:="Warrior"
+	loop 1830 ;look-ahead supports up to a 5 year trial
+	{
+		expDate := A_Now
+		expDate := DateAdd(expDate, A_Index, "Days")
+		expDate := FormatTime(expDate, "yyyyMMdd")
+		sData := secret1 . name.Get(1,"") . name.Get(2,"") . email . secret2 . expDate
+		sHash := Hash(sData)
+		if (InStr(sHash, hashVal)) {
+			sLicenseType := "subscription"
+			sDays := A_Index
+			return true ;must be subscription version, not expired
+		}
+	}
+
+	sDays := 0
+	return false ;subscription expired or invalid key
+}

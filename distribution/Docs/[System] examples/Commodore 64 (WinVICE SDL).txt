@@ -1,0 +1,38 @@
+[System_c64]
+sys_key=c64
+asset_name=Commodore_C64
+proper_name=Commodore 64
+exe_full_path=D:\Emulators\WinVICE\x64sc.exe,nohide
+search_path=D:\Assets\Commodore_64\Software\*.crt,d64
+param_list=-ntsc -VICIIfull -sdlaspectmode 0 -sdlcustomw 1600 -sdlcustomh 1200 -sdlinitialw 1600 -sdlcustomh 1200 -autostart "[rom]"
+run_apps=winipac,joytokey,-joytokey
+map_exit=!q
+map_pause=!p
+;window_name=(x64sc)
+;marquee_folder=D:\LaunchBox\Images\Commodore 64\Arcade - Marquee
+;logo_folder=D:\LaunchBox\Images\Commodore 64\Clear Logo
+;system_logo=D:\LaunchBox\Images\Platforms\Commodore 64\Clear Logo\Commodore 64.png
+
+
+Note: The SDL2 version of WinVICE is used (version 3.6.1 tested here) instead of the GTK3 version 
+      since fullscreen in the GTK3 version does not cooperate well with arcadeEIP's overlay menu. 
+      The SDL version, however, works perfectly and also offers cleaner exit (no prompt), and the
+      general advantage of being a purely command line driven application.
+
+Note: Commented lines are examples of optional variations. Do not uncomment window_name= unless 
+      the emulator is first tested to fully work. The folder options show a typical override paths 
+      that might be used if integrating with LaunchBox.
+
+Note: This example assumes [Application] sections for joytokey and winipac exist.
+
+Note: Set the resolution parameters in the param_list to the resolution of your monitor. This is
+      important to ensure arcadeEIP's overlay menu displays at the correct resolution. I set the
+      -sdlaspectmode to 0 to stretch to the screen, but you could set to 2 for a more authentic 
+      aspect ratio.
+
+Note: It is beyond the scope of this tutorial on how to set up WinVICE; however, you will
+      probably want to use the WinVICE SDL menu (accessed with F12) to setup your joystick, and 
+      possibly sound (among other possible things).  I used a key mapped joystick along with 
+      Joytokey to handle the joysticks.  Please read the WinVICE documentation for details.
+
+

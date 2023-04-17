@@ -1,0 +1,20 @@
+[Application_winipac]
+app_key=winipac
+proper_name=WinIPAC
+exe_full_path=C:\Program Files (x86)\WinIPAC V2\WinIPAC.exe
+profile=D:\Profiles\WinIPAC\[asset_name]\[smart_name].ipc
+param_list="[profile]"
+
+
+Note: Use of [asset_name]\[smart_name] pattern is documented in "Configuration Reference.pdf".
+      When used, the software at runtime will replace [smart_name] with the rom_name and search for
+      the profile having that name in a subfolder named for the name of the asset (for example,
+      \WinIPAC\MAME\defender.cfg).  If file is not found, it will then try replacing [smart_name] 
+      with the emulator or front-end’s asset_name (for example \WinIPAC\MAME\MAME.cfg).  
+      If file is still not found, it will replace [smart_name] with the string “default” and look 
+      for it in the parent folder (i.e. in this case, the \WinIPAC\default.cfg).
+
+      The benefit of this pattern is that if a specific configuration file for the game doesn't
+      exist, it will automatically use the default one for the system, but if it is found, it will
+      be automatically used. This permits one to create profiles and drop them in the folder 
+      at any time, without having to change the configuration.

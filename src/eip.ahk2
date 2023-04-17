@@ -1,0 +1,1586 @@
+﻿; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
+; © 2023 David G. Dahlstrom
+; File: eip.ahk2
+
+#Requires AutoHotkey v2.0
+
+;#Warn All, Off
+#SingleInstance ignore ;multiple instance not allowed (to prevent front-ends like BigBox from launching multiple copies)
+InstallKeybdHook 1
+InstallMouseHook 1
+A_MaxHotkeysPerInterval := 200 ;prevents hotkey warnning after 71 keystrokes in a short period
+
+;Allow only 1 thread per hotkey and make all threads always-interruptible
+;Improves behavior of RunWaitTimer, which can otherwise have issues if a hotkey is pressed
+;on the border of pid_emulator becoming active (i.e. fixes "button mashing" testing of pause
+;and exit while emulators are in the starting up state.)
+#MaxThreadsPerHotkey 1
+Thread "Interrupt", 0
+SendMode "Input"          
+SetWorkingDir A_ScriptDir
+
+;Compiler directives
+;***********************************************************
+global CodeVersion := "0.4.0.0"
+;@Ahk2Exe-Let version = %A_PriorLine~U)^(.+"){1}(.+)".*$~$2%
+;@Ahk2Exe-SetCopyright © 2023 David G. Dahlstrom
+;@Ahk2Exe-SetProductName arcadeEIP
+;@Ahk2Exe-SetDescription arcadeEIP
+;@Ahk2Exe-SetProductVersion %U_version% beta
+;@Ahk2Exe-SetFileVersion %U_version%
+;--@Ahk2Exe-ConsoleApp
+;***********************************************************
+;---------------------------------------------------------------------------------
+;Set test_mode=true for testing *instead* of debug_mode when there is a need
+;to actually run the emulator and applications as part of the build testing.
+;*** Especially needed when testing in the IDE ***
+;Among other things, keeps mouse on and suppresses always on top methods
+;to enable access to the debugger (most of the time) during runtime.
+;Also recommended to disable window_name= lines in the ini file.
+;Note that certain effects (like Alpha) may not work quite right in test mode.
+global test_mode := false                               
+global diag_mode := true     ;do diagnostic tests (normally true)
+global console_mode := false  ;to compile console app, set to true and uncomment @Ahk2Exe-ConsoleApp above
+;---------------------------------------------------------------------------------
+
+;Start global timers
+global start_tick := A_TickCount, start_time := A_Now 
+
+;Install a system event hook to check for z-order changes
+;https://www.autohotkey.com/boards/viewtopic.php?t=68550
+;https://learn.microsoft.com/en-us/windows/win32/winauto/event-constants
+global zChanged := false
+global hHook := 0
+
+EVENT_OBJECT_REORDER := 0x8004
+hHook := SetWinEventHook(EVENT_OBJECT_REORDER, EVENT_OBJECT_REORDER, 0, CallbackCreate(HookProc, "F"), 0, 0, 0 )
+
+;This callback function simply sets the global zChanged to true indicating that the z-order
+;of some user interface element has change during runtime. This is used in RunWaitTimer to
+;push guiSelect to the top in case it was stomped on by another window.
+HookProc(hWinEventHook, event, hwnd, idObject, idChild, dwEventThread, dwmsEventTime)
+{
+   global
+
+   zChanged := true
+
+   return
+}
+
+SetWinEventHook(eventMin, eventMax, hmodWinEventProc, lpfnWinEventProc, idProcess, idThread, dwFlags)
+{
+   return DllCall("SetWinEventHook", "UInt", eventMin, "UInt", eventMax, "Ptr", hmodWinEventProc, "Ptr", lpfnWinEventProc, "UInt", idProcess, "UInt", idThread, "UInt", dwFlags, "Ptr")
+}
+
+;call this on exit
+FreeResource(hHook) {
+    DllCall("UnhookWindowsHookEx", "Ptr", hHook)
+ }
+
+;Early declarations needed in case we have to exit early
+global mouse_clicks_off  := 0
+global oPauseProc := suspend_process_class()
+
+;---------------------------------------------------------------------------------
+;Validate any console mode command-line options
+global oConsoleOptions := ["-createproxy", "-find", "-f", "-findall", "-fa", "-help", "-list", "-log", "-show_log", "-sound", "-systems"]
+global oConsoleOnlyOptions := [ "-createproxy", "-find", "-f", "-findall", "-fa", "-list", "-sound", "-systems"]
+
+bValidConsoleOption := false
+for n, opt in oConsoleOptions
+{
+    try {
+        if (A_Args[1] == opt)
+        {
+            bValidConsoleOption := true
+            break
+        }
+    }
+}
+
+bValidConsoleOnlyOption := false
+for n, opt in oConsoleOnlyOptions
+{
+    try {
+        if (A_Args[1] == opt)
+        {
+            bValidConsoleOnlyOption := true
+            break
+        }
+    }
+}
+
+if (console_mode) 
+{
+    if (!bValidConsoleOption)
+    {
+        FileAppend "The console application (eipc.exe) may only be used with the following options:`n", "*"
+        for n, opt in oConsoleOptions
+            FileAppend opt "`n", "*"
+
+        ExitApp
+    }
+}
+else
+{
+    if (bValidConsoleOnlyOption)
+    {
+        msg := ""
+        for n, opt in oConsoleOnlyOptions
+            msg := msg opt "`n"
+        MsgBox("You must use the console application (eipc.exe) to run the following commands:`n`n" msg, "arcadeEIP - Invalid Option", 64)
+        ExitApp
+    }
+}
+;---------------------------------------------------------------------------------
+; File Includes
+;---------------------------------------------------------------------------------
+#include eipFunctions.ahk2                      ;major application-specific functions
+#include eipFunctions_CreateGui.ahk2            ;create gui screens
+#include eipFunctions_Utility.ahk2		        ;library of general utility functions
+#include eipFunction_ProcessRules.ahk2		    ;Rules processor
+#include eipFunctions_ProcessDirectives.ahk2    ;Process command line directives
+#include eipFunctions_ProcessHotkeys.ahk2       ;Hotkey management and functions
+#include eipFunctions_AttractMode.ahk2          ;Attract switching functions
+#include eipClass_Emulators.ahk2                ;Emulator management class
+#include eipClass_History.ahk2                  ;Game history management and serialization
+#include eipClass_Schedule.ahk2                 ;Support for attract mode scheduling
+#include eipClass_DetectInactivity.ahk2         ;Detects inactivity supporting attract switching
+#include eipClass_MouseDelta.ahk2               ;Mouse raw input processing
+#include eipClass_FadeWindow.ahk2               ;Fades a window in and out
+#include eipClass_MameData.ahk2                 ;Get and process Mame game data
+#include eipClass_LaunchBox.ahk2                ;Support for LaunchBox/BigBox
+#include eipClass_PauseControl.ahk2             ;Support for pause screens
+#include eipClass_SelectListControl.ahk2        ;Game select screen
+#include eipClass_LVColors.ahk2                 ;Support colors in ListView control
+#include eipClass_BASS.ahk2                     ;Support for the BASS sound library
+#include eipClasses.ahk2                        ;Miscellaneous classes
+#include eipFunction_ConfigCreate.ahk2          ;Creates arcadeEIP.ini files
+#include eipFunctions_ConfigProcess.ahk2        ;Functions supporting config file processing
+#include eipFunction_ConfigValidate.ahk2        ;Validate arcadeEIP.ini settings
+#include eipFunctions_TimerThreads.ahk2          ;major thread functions launched by timers
+#include eipClass_Gdip.ahk2                     ;Graphics library (GDI+)
+#include eipFunctions_Attributed.ahk2           ;Attributed/Public domain functions from the web
+#include eipFunction_GetHighScores.ahk2         ;Support for hi2txt
+#include eipFunction_CheckLicense.ahk2          ;checkLicense & Hash functions
+
+;#include eipConfiguration.ahk                ;Configuration Screens
+;#include VA.ahk                              ;Sound library
+;#include CLR.ahk                             ;.NET Framework Interop
+;#include external_ConsoleSend.ahk	          ;Function for using the console 
+;#include external_ChangeDisplaySettings.ahk  ;Functions to change the display resolution, etc.
+
+;---------------------------------------------------------------------------------
+; ;Important list state, current state, and LV list item settings
+;---------------------------------------------------------------------------------
+;this._state[base_pl]["sublist"]   ;which sublist is currently selected (0=base or 1=picks)
+;this._state[pl]["selectedItem"]   ;== this._current_game == column 2 in LV list
+;this._state[pl]["selectedObject"] ;== this._current_object == column 3 in LV list
+
+;this._state[pl]["selectedRow"]    ;== this._current_row)
+;this._state[pl]["count"]          ;== this._current_count)		
+
+;this._state[pl]["maxRows"]
+;this._state[pl]["maxRowsB"]
+
+;this._current_playlist ;current playlist selected (could be base or pick)
+
+;LV_GetText(selectedText, selectedRow, 1)    ;proper name of the item
+;LV_GetText(selectedItem, selectedRow, 2)    ;not currently used
+;LV_GetText(selectedObject, selectedRow, 3)  ;ref to object containing extended game info
+
+;Fields in ;this._current_object[] and this._playlists[pl]["playlist"][gm][]
+;["parent"], ["vector"], ["rom_category"], ["rom_release"], ["rom_players"]
+;["rom_year"], ["rom_publisher"], ["rom_developer"], ["rom_favorite"], ["favorite_icon_file"]
+;["sys_key"], ["rom_spec"], ["proper_name"], ["logo_file"], ["system_logo_file"], ["parent"]
+;---------------------------------------------------------------------------------	
+
+;---------------------------------------------------------------------------------
+; Global Flags
+;---------------------------------------------------------------------------------
+
+;Note that some particularly important state global state flags are:
+;  1. g_guiselect_visible  : whether the game selection screen is displayed.
+;  2. g_guiselect_loaded   : whether the game selection screen has completed initialization
+;  3. g_pause_state        : whether we are currently paused
+;  4. g_guipause_visible   : whether the pause screen is currently displayed
+;  5. g_exit_code          : tells how an exit command was issued (see ExitKey() function)
+;  6. g_directswitch_args  : if this contains a game vector, arcadeEIP will switch to that game on next exit
+;  7. g_cycle              : tracks the number of games launched in this session
+
+global g_guiselect_visible := false, g_guiselect_loaded := false, g_pause_state := false
+global g_guipause_visible := false, g_exit_code := "", g_directswitch_args := "", g_cycle := 0
+
+;Miscellaneous global state flags and handles
+global bSearchGlobal := false ;true if only the rom (and no emu) is specified on the command line
+global pid_emulator := 0, emu_hwnd := 0, cur_emu := 0, fe_pid := 0, pid_screen := 0, marquee_pid := 0
+global exit_key_off := false, pause_key_off := false, magic_key_off := false
+global emu_running := false, bEmuWindowActive := false, original_taskbar_state
+global bSuppressLogging := false, use_log := 0
+;---------------------------------------------------------------------------------
+
+;Initialize the global configuration structure
+global gCfg := {}
+
+;[General]
+gCfg.debug_mode := "" ;Set to "os" or front-end fe_key to be simulated
+gCfg.status_beeps := false
+gCfg.alpha_effect := 1
+gCfg.sound_device := 1
+gCfg.sync_volume := 0
+gCfg.show_license := 1
+gCfg.hotstring_prefix:="@!@"
+gCfg.seed_rom := "mame galaga.zip"
+
+;[Marquee]
+gCfg.marquee_active := 0
+gCfg.marquee_monitor := 2
+gCfg.marquee_autostart := 0
+gCfg.marquee_autoexit := 0
+
+;[Key_Map]
+gCfg.panic_key := "^!k"
+gCfg.pause_key := ","
+gCfg.menu_toggle_key := "'"
+gCfg.menu_show_key := "="
+gCfg.menu_hide_key := "-"
+gCfg.quit_key := "~"
+gCfg.exit_key := "."
+gCfg.magic_key := "."
+gCfg.previous_key := "q,["
+gCfg.next_key := "w,]"
+gCfg.launch_key := "LCtrl"
+gCfg.list_mode_key := "LAlt"
+gCfg.add_remove_key := "Space"
+gCfg.edit_mode_key := "LShift"
+gCfg.left_key := "Left"
+gCfg.right_key := "Right"
+gCfg.up_key := "Up"
+gCfg.down_key := "Down"
+gCfg.pgup_key := "PgUp,1"
+gCfg.pgdn_key := "PgDn,2"
+gCfg.home_key := "Home,5"
+gCfg.end_key := "End,6"
+gCfg.favorite_key := "m"
+gCfg.star_key := "s"
+gCfg.star0_key := ""
+gCfg.star1_key := ""
+gCfg.star2_key := ""
+gCfg.star3_key := ""
+gCfg.star4_key := ""
+gCfg.star5_key := ""
+gCfg.all_key := "A"
+gCfg.favorites_key := "f"
+gCfg.rating_key := "r"
+gCfg.genre_key := "g"
+gCfg.year_key := "y"
+gCfg.publisher_key := "u"
+gCfg.developer_key := "d"
+gCfg.players_key := "n"
+
+;[Picker_Preferences]
+gCfg.magic_delay := 0
+gCfg.kiosk_mode := 0
+gCfg.mark_picks := 1
+gCfg.joy_vert := "all"
+gCfg.joy_horiz := "all"
+gCfg.mouse_vert := "off"
+gCfg.mouse_horiz := "off"
+gCfg.picker_asset :="EIP_Picker"    ;set through asset_name setting
+gCfg.picker_apps := ""              ;set though run_apps setting
+gCfg.all_picks_label := "All Picks"
+gCfg.top_picks_label := "Top Picks"
+gCfg.lst_max_rows := 100
+gCfg.lst_max_rowsb := 100
+gCfg.lst_font_type := "Tahoma"
+gCfg.lst_font_size := 14
+gCfg.lst_list_margin := 0
+gCfg.lst_game_font_size := 40
+gCfg.lst_sys_font_size := 30
+gCfg.lst_game_name_ratio := 0.4
+gCfg.lst_default_list := "picks"
+gCfg.lst_hide_systems := ""
+gCfg.clean_lists := 0
+
+;[Auto_Switch]
+gCfg.attract_folder := "Lists\autoswitch"
+gCfg.attract_auto := 1
+gCfg.attract_mute := 0
+gCfg.attract_delay := 180
+gCfg.attract_timer := 5
+gCfg.attract_random := 0
+
+;[Global_Assets]
+gCfg.logo_folder := ""
+gCfg.system_logo := ""
+gCfg.marquee_folder := ""
+gCfg.system_marquee := ""
+gCfg.controls_folder := ""
+gCfg.system_controls := ""
+gCfg.meta_names := ""
+
+;[Front_End]
+gCfg.fe_key := ""
+gCfg.fe_asset_name := ""
+gCfg.fe_proper_name := ""
+gCfg.hide_cursor := 0
+gCfg.start_screen := 1
+gCfg.exit_screen := 1
+gCfg.show_on_pause := ""
+gCfg.fe_run_apps := ""
+
+;[System]
+gCfg.sys_key := ""
+gCfg.asset_name := ""
+gCfg.global_asset_name := ""
+gCfg.proper_name := ""
+gCfg.rom_name := ""
+gCfg.root_folder := ""
+gCfg.exe_full_path := ""
+gCfg.rom_full_path := ""
+gCfg.rom_file := ""
+gCfg.rom_folder := ""
+gCfg.param_list := ""
+gCfg.autoswitch := 1
+gCfg.search_path := ""
+gCfg.rom_folder_parent := ""
+gCfg.run_apps := ""
+gCfg.map_exiet := ""
+gCfg.map_pause := ""
+
+;init gGui object (will hold all gui controls, but not their
+;parent windows, which are global by default)
+global gGui := {}
+
+;Miscellaneous object inits and declarations
+global oLists := Map()
+global applications := Map()
+global Emu_Args := Array()
+global play_log := Map()
+global oMapExit := Array()
+global rules := ""
+global oDom := "", oDetectInactivity, oSelectListControl := "", oMameData := ""
+
+;Miscellaneous inits and declarations
+global current_volume := -1
+global fast_load := fav_idx := g_idx := 0
+global exit_key_off, pause_key_off, magic_key_off, g_param, g_offset, orig_run_apps
+global play_next := play_previous := emu := search_tag := ""
+global g_license_text := mouse_horiz := attract_pattern := proxy_type := ""
+global cl_start_screen := cl_exit_screen := cl_run_apps := ""
+global suppressExitMessage := hotkeys_on := idle_log := false
+
+;Gui inits and declarations
+global start_back_color := exit_back_color := "Black"
+global rom_title := "", logo_full_path, controls_full_path := "", alpha_effect := 1
+global default_start_show_time := default_exit_show_time := start_show_time := exit_show_time := "-1"
+global default_start_back_color := default_exit_back_color := "Black"
+
+;Colors
+global color_dark       := "0a0a0a" ;"171B1B" dark ;"1F2425" light ;0a0a0a darkest
+global color_maroon     := "0x800000"
+global color_gray       := "0x808080"
+global color_light_gray := "0xD3D3D3"
+global color_white      := "0xFFFFFF"
+global color_dark_gray  := "0x1F2425"
+global color_green      := "0x006400"
+global color_yellow     := "0xFFFF00"
+
+;hi score inits
+global hiscore_folder := "", hiscoredat_folder := "", highscores := Array(), top_score := ""
+
+;Diagnostic and unit test
+global ut_runwait_avg := 0, ut_runwait_cycle := 0, ut_runwait_timer := 0
+global ut_runwait_timer_total := 0, ut_runwait_peak := 0
+
+;Make a copy of the original commandline arg array
+global oOriginalArgs := A_Args.Clone() 
+ 
+;Support DPI scaling
+global nScreenWidth := A_ScreenWidth * 96 // A_ScreenDPI
+global nScreenHeight := A_ScreenHeight * 96 // A_ScreenDPI
+
+OnExit(ExitFunction)
+
+;Constants
+global cExeName := "eip.exe"
+global cProductName := "arcadeEIP"
+global cLicenseFileName := cProductName . ".lic"
+global cConfigFileName := cProductName . ".ini"
+global cConfigExampleFileName := cProductName . "_example.ini"
+global cLogFileName := cProductName . ".log"
+global cFELogFileName := cProductName . "_fe.log"
+
+cBatchFileName := "runlast_native.bat"
+cLaunchFileName := "runlast_eip.bat"
+cDirectSwitchName := "Direct"
+cAttractFolder := "Lists\autoswitch"
+cListsFolder := "Lists"
+cMapsFolder := "Maps"
+cSoundFolder := "Resources\Sound"
+cFavoritesFolder := "Picks"
+cFavoriteOnIconFileName := "fav.png"
+cFavoriteOffIconFileName := "fav_off.png"
+cRatingIconFileName := "rating.png"
+cRatingOffIconFileName := "rating_off.png"
+global favorites_listname := "picks"
+
+;Define global timer periods
+global cRunWaitTimer_Period := 100
+global runwait_default_freq := 200 ;frequency of background processing (in ms)
+global cPoker_Period := 1000
+global cSchedule_Period := 1000
+global cInactivityTest_Period := 1000
+
+;Define global folders
+global favorite_on_icon_file := A_ScriptDir . "\Resources\Icons\" . cFavoriteOnIconFileName
+global favorite_off_icon_file := A_ScriptDir . "\Resources\Icons\" . cFavoriteOffIconFileName
+global rating_icon_file := A_ScriptDir . "\Resources\Icons\" . cRatingIconFileName
+global rating_off_icon_file := A_ScriptDir . "\Resources\Icons\" . cRatingOffIconFileName
+global log_file := A_ScriptDir . "\" . cLogFileName
+global batch_file := A_ScriptDir . "\" . cBatchFileName
+global launch_file := A_ScriptDir . "\" . cLaunchFileName
+global directswitch_folder := A_ScriptDir . "\" . cDirectSwitchName
+global directswitch_pattern := directswitch_folder . "\*.txt"
+global favorites_folder := A_ScriptDir . "\" . cFavoritesFolder
+gCfg.attract_folder := A_ScriptDir . "\" . cAttractFolder
+global lists_folder := A_ScriptDir . "\" . cListsFolder
+global sound_folder := A_ScriptDir . "\" . cSoundFolder
+global config_file := A_ScriptDir . "\" cConfigFileName
+global config_example := A_ScriptDir . "\" . cConfigExampleFileName
+global state_file :=  A_ScriptDir . "\.state"
+global history_file := A_ScriptDir . "\.history"
+global idle_log_file := A_ScriptDir . "\idle.log"
+global marqueePipeFile := A_ScriptDir . "\marquee.txt"
+global hi2txt_exe := A_ScriptDir . "\hi2txt\hi2txt.exe"
+global hi2txt_omit := A_ScriptDir . "\hi2txt\omit.txt"
+
+;Sound methods
+global oMasterSound := master_sound_class()
+
+;Create object to manage config (ini) cFELogFileName
+global oConfigFile := config_file_class(config_file)
+
+;Create main emulators object from the classic.ini file
+global oEmulators := emulators_class(oConfigFile)
+
+;Encapsulates some functions specific to LaunchBox/BigBox support
+global oLaunchBox := launchbox_frontend_class()
+
+;*** Unit Tests for oLaunchBox **
+;Use SetAssetPath() to enable all other values to be accessed.
+/*
+success        := oLaunchBox.SetAssetPath("D:\LaunchBox\Images\Arcade\Clear Logo")
+root           := oLaunchBox.GetRootFolder()
+platform       := oLaunchBox.GetCurrentPlatform()
+logo_folder    := oLaunchBox.GetLogoFolderOrFile()
+logo_file      := oLaunchBox.GetLogoFolderOrFile("galaga")
+marquee_folder := oLaunchBox.GetMarqueeFolderOrFile()
+marquee_file   := oLaunchBox.GetMarqueeFolderOrFile("galaga")
+platform_xml   := oLaunchBox.GetCurrentPlatformXMLFile()
+platform_logo  := oLaunchBox.GetCurrentPlatformLogoFile()
+*/
+
+;initialize play log
+play_log["log"] := Array()
+play_log["index"] := 1
+
+;Create a raw mouse handler
+global oMouseDelta := MouseDelta(MouseEvent)
+
+;Create history object
+global oHistory := history_manager_class()
+
+;Create pause control object
+global oPauseControl := pause_control_class()
+
+;---------------------------------------------------------------------------------
+; Command-line preprocessor 1
+; Process passthrough arguments
+;--------------------------------------------------------------------------------
+
+gCfg.sys_key := GetSysKeyFromCmdLine(A_Args)
+
+;For display in log only
+args_original := ArgArrayToParamString(A_Args)
+
+;The logic here is a little fuzzy, but should have the desired effect.
+;The idea is that it is up to the user to know that any dynamic commandline options
+;(such as -video gdi) must be supported by the emulator they are running--but the program can't
+;fully anticipate what will be run at this early stage since there may be proxys or vectors involved.
+;So what we do is process passthrough args on all emulators param_lists using the supplied commandline.
+;Some of these may get processed "wrong"--leading to errors, but that's ok since it just means that
+;the user provided a wrong commandline for the emulator that ultimately got launched.
+;We process the currently known sys_key last to ensure that the working A_Args list correlates
+;with the working param_list from this point forward through initial validation checking.
+g_idx_temp := g_idx
+emu_temp := emu
+for g_idx, emu in oEmulators.Emulators
+{	
+    if (g_idx != gCfg.sys_key)
+    {
+        oArgs := oOriginalArgs.Clone()
+        pList := oEmulators.Emulators[g_idx].param_list
+        pList := ProcessPassthroughArgs(&oArgs, pList)
+        oEmulators.Emulators[g_idx]._default_settings["param_list"] := pList
+    }
+    g_idx_temp := g_idx
+    emu_temp := emu
+}
+g_idx := g_idx_temp
+emu := emu_temp
+
+;Now process the initially specified (or logically specified) sys_key
+pList := oEmulators.Emulators[gCfg.sys_key].param_list
+pList := ProcessPassthroughArgs(&A_Args, pList)
+oEmulators.Emulators[gCfg.sys_key]._default_settings["param_list"] := pList
+
+;For display in log only
+args_postprocess := ArgArrayToParamString(A_Args)
+
+;---------------------------------------------------------------------------------
+
+ProcessDirectives(&A_Args)  ;process command line directives
+
+if (FileExist(log_file))
+    FileDelete(log_file) 
+
+if (FileExist(idle_log_file))
+    FileDelete(idle_log_file)
+
+;Do initial read of the configuration file (arcadeEIP.ini)
+if (!ReadConfig())
+{
+    ;since there was evidently no config file to read this setting, just set to true
+    use_log := true 
+
+    ;But note that we can't report a missing config-file here since logging
+    ;isn't initialized yet.
+}
+
+if (gCfg.status_beeps)
+    DoBeep()
+
+;check the license (.lic) file
+ValidateLicense()
+
+LogEntry(startupMsg)
+LogEntry(RepeatValue("=", StrLen(startupMsg)-1) . "`n")
+
+TimeString := FormatTime(,"Time")
+DateString := FormatTime(,"LongDate")
+
+LogEntry("INFO: Started on: " . DateString . ", at " . TimeString . "`n")
+LogEntry("INFO: Native Width: " . A_ScreenWidth . ", Native Height: " . A_ScreenHeight . "`n")
+LogEntry("INFO: DPI: " . A_ScreenDPI . ", DPI Width: " . nScreenWidth . ", DPI Height: " . nScreenHeight . "`n")
+
+;---------------------------------------------------------------------------------
+; Remove legacy files if they exist 
+;---------------------------------------------------------------------------------
+
+if (FileExist(A_ScriptDir . "\runlast.bat"))
+    FileDelete(A_ScriptDir . "\runlast.bat")
+    
+if (FileExist(A_ScriptDir . "\launchlast.bat"))
+    FileDelete(A_ScriptDir . "\launchlast.bat")
+
+;---------------------------------------------------------------------------------
+; Create sub-folders if they don't exist
+;---------------------------------------------------------------------------------
+
+CreateDirectSwitchFolder()
+
+if (!InStr(FileExist(directswitch_folder), "D"))
+{
+    try 
+        DirCreate directswitch_folder
+    catch
+        LogEntry("NOTICE: Failed to create folder, " . directswitch_folder . ".`n")
+    else
+        LogEntry("INFO: Created folder, " . directswitch_folder . ".`n")     
+}
+
+if (!InStr(FileExist(favorites_folder), "D"))
+{
+    try
+        DirCreate favorites_folder
+    catch
+        LogEntry("NOTICE: Failed to create folder, " . favorites_folder . ".`n")
+    else
+        LogEntry("INFO: Created folder, " . favorites_folder . ".`n")     
+}
+
+if (!InStr(FileExist(gCfg.attract_folder), "D"))
+{
+    try
+        DirCreate gCfg.attract_folder . "\suppress"
+    catch
+        LogEntry("NOTICE: Failed to create folder, " . gCfg.attract_folder . ".`n")
+    else
+        LogEntry("INFO: Created folder, " . gCfg.attract_folder . ".`n")      
+}
+
+if (!InStr(FileExist(lists_folder), "D"))
+{
+    try
+        DirCreate lists_folder
+    catch
+        LogEntry("NOTICE: Failed to create folder, " . lists_folder . ".`n")
+    else
+        LogEntry("INFO: Created folder, " . lists_folder . ".`n")     
+}
+
+emptyControlsFolder := A_ScriptDir . "\Assets\MAME\Controls\System"
+if (!InStr(FileExist(emptyControlsFolder), "D"))
+{
+    DirCreate emptyControlsFolder
+    ;LogEntry("INFO: Created folder, " . emptyControlsFolder . ".`n")
+}
+
+;---------------------------------------------------------------------------------
+;****  LOGGING MAY OCCUR AFTER THIS POINT ***
+
+;If the script is run with just one argument, then it *might be* a configuration startup.
+if (A_Args.Length = 1)
+{
+    ;If Front-End launch is executed, then exit the script when done.
+    ;Otherwise, allow script to continue with normal operation...
+
+    ;Show configuration wizard
+    ;*** This is temporarily removed (WIP) ***
+    if (A_Args[1] == "-config")  
+    {
+        ;ConfigStartup()
+        ;LogEntry("NOTICE: Ran in Configuration mode.`n")
+        ExitApp 	
+    }
+    else if (A_Args[1] == "-clean") ;Reverts environment to defaults -- doesn't touch arcadeEIP.ini though
+    {        
+        msgAnswer := MsgBox("Press Yes to revert back to defaults. This will erase all picks, custom lists, state, history, ratings, and favorites. Configuration will be unaffected.  `n`nPress No to cancel this dialog and do nothing.", cProductName . " - Restore Clean Settings", 52)
+        if (msgAnswer == "Yes")
+        {
+            LogEntry("INFO: " . cProductName . " called with -clean.`n")
+
+            FileDelete(A_ScriptDir . "\.history")
+            LogEntry("INFO: Deleted: " . A_ScriptDir . "\.history.`n")
+
+            FileDelete(A_ScriptDir . "\.state")
+            LogEntry("INFO: Deleted: " . A_ScriptDir . "\.state.`n")
+
+            DirDelete(directswitch_folder, 1)
+            LogEntry("INFO: Deleted: " . directswitch_folder . "`n")
+
+            DirDelete(favorites_folder, 1)
+            LogEntry("INFO: Deleted: " . favorites_folder . "`n")
+
+            DirDelete(gCfg.attract_folder, 1)
+            LogEntry("INFO: Deleted: " . gCfg.attract_folder . "`n")
+
+            DirDelete(lists_folder, 1)
+            LogEntry("INFO: Deleted: " . lists_folder . "`n")
+
+            CreateDirectSwitchFolder() 
+
+            DirCreate(favorites_folder)
+            LogEntry("INFO: Created folder, " . favorites_folder . ".`n")
+           
+            DirCreate(gCfg.attract_folder . "\suppress")
+            LogEntry("INFO: Created folder, " . gCfg.attract_folder . ".`n")
+        
+            DirCreate(lists_folder)
+            LogEntry("INFO: Created folder, " . lists_folder . ".`n")
+
+            for n, emulator in oEmulators.Emulators
+            {
+                assetspec := emulator.asset_name
+                FileDelete(A_ScriptDir . "\Assets\" . assetspec . "\Settings\favorites.ini")
+                FileDelete(A_ScriptDir . "\Assets\" . assetspec . "\Settings\ratings.ini")
+            }
+
+            ExitApp
+        }
+        else
+            ExitApp
+    }
+    else if (A_Args[1] == "-createcfg" && FileExist(config_file))
+    {
+        LogEntry("ERROR: Can't create " . cConfigFileName . ". File already exists.`n")
+        ExitApp
+    }
+    else if (A_Args[1] == "-createcfgexample" && FileExist(config_example))
+    {
+        LogEntry("ERROR: Can't create " . cConfigExampleFileName . ". File already exists.`n")
+        ExitApp
+    }
+    else if (A_Args[1] == "-createcfg" || A_Args[1] == "-createcfgexample")
+    {
+        ;Create the arcadeEIP.ini file
+        CreateConfigTemplate(A_Args[1])        
+    }
+}
+
+;---------------------------------------------------------------------------------
+; Store the original taskbar state, then hide it
+;---------------------------------------------------------------------------------
+original_taskbar_state := GetTaskbarState()
+if (original_taskbar_state == 0)
+    LogEntry("INFO: Original taskbar state is: visible`n")
+else
+    LogEntry("INFO: Original taskbar state is: hidden`n")
+
+if (!GetTaskbarState()) ;if taskbar visible
+{
+    HideShowTaskbar(true)  ;hide it
+    LogEntry("INFO: Hiding the taskbar.`n")
+} 
+
+;---------------------------------------------------------------------------------
+; Make sure config file (arcadeEIP.ini) exists
+;---------------------------------------------------------------------------------
+if !FileExist(config_file)
+{
+    LogEntry("NOTICE: Configuration file not found: " . config_file . "`n")
+    LogEntry("`n")
+    LogEntry("NOTICE: A configuration file called " . cConfigFileName . " must be present to operate this software. A normal`n")
+    LogEntry("NOTICE: sparce configuration file template may be created by typing `"" . cExeName . " -createcfg`" at`n")
+    LogEntry("NOTICE: the command prompt. A verbose example configuration file with helpful comments can be created`n")
+    LogEntry("NOTICE: by typing `"" . cExeName . " -createcfgexample`" at the command prompt.`n")
+    LogEntry("`n")
+    LogEntry("NOTICE: Please see the documentation for further instructions.`n")
+    LogEntry("ERROR: Exiting.  Could not continue.`n")
+    
+    ExitApp
+}
+
+ValidateConfig()
+
+;Initialize sound (via bass.dll)
+global oBASS := BASS_class()
+oBASS.Init()
+
+;A few unit tests for oBASS
+;oSoundInfo := oBASS.GetInfo()
+;oBASS.Play("browse")
+;s := oBASS.GetDevice()
+;j := oBASS.SetVolume(.30)
+;i := oBASS.GetVolume()
+
+;---------------------------------------------------------------------------------
+; debug mode initialization
+;---------------------------------------------------------------------------------
+;Pre-processing for debug mode
+if (gCfg.debug_mode)
+{
+    ;Special case:
+    ;If started with a front-end on the command line, and the debug_mode is set to
+    ;a different front-end, then override debug_mode with the one specified on the
+    ;command line otherwise there would be ambiguities.
+    debug_mode_override := ""
+
+    fe_sections := oConfigFile.GetGroupSections("Front_End")
+
+    i_temp := 0
+    config_section_temp := ""
+    for i, config_section in fe_sections
+    {
+        if (config_section == "Front_End_OS") ;we already processed this one above
+            continue
+
+        test_fe_key := IniRead(config_file, config_section, "fe_key", A_Space)
+        if (A_Args[1] = test_fe_key)
+            if (A_Args[1] != gCfg.debug_mode)
+        {
+            gCfg.debug_mode := A_Args[1]
+            debug_mode_override := " (override)"
+        }
+
+        i_temp := i
+        config_section_temp := config_section
+    }
+
+    i := i_temp
+    config_section := config_section_temp
+    
+    ;In all cases...
+    LogEntry("INFO: debug=" . gCfg.debug_mode . debug_mode_override . "; LAUNCHING OF EXECUTABLES WILL BE SUPPRESSED IN THIS MODE.`n")
+}
+
+;---------------------------------------------------------------------------------
+; Command-line preprocessor
+;---------------------------------------------------------------------------------
+
+;These log entry values were collected earlier, but presented to the user here
+true_word := ""
+LogEntry("INFO: Original argument list: " . args_original . "`n")
+if (args_original != args_postprocess)
+{
+    LogEntry("INFO: Argument list after passthrough arguments moved to param_list: " . args_postprocess . "`n")
+    true_word := "true "
+}
+
+;Handle any pre-processor instructions in the command-line
+if (ProcessOverrideArgs(&A_Args))
+{
+    args_postprocess := ArgArrayToParamString(A_Args)
+    LogEntry("INFO: Argument list after override arguments processed and removed: " . args_postprocess . "`n")
+    true_word := "true "
+}
+
+if (A_Args.Length == 0)
+    LogEntry("INFO: " . cExeName . " launched with no arguments.`n")
+else if (A_Args.Length == 1)
+    LogEntry("INFO: " . cExeName . " launched with the following " . true_word . "argument: " . args_postprocess . "`n")
+else
+    LogEntry("INFO: " . cExeName . " launched with the following " . true_word . "arguments: " . args_postprocess . "`n")
+
+;******* create runlast_eip.bat file ******************
+if (FileExist(launch_file))
+    FileDelete(launch_file)
+;SplitPath, cl,,batch_dir,,,batch_drive
+;FileAppend, %batch_drive%`n, %batch_file%
+;FileAppend, CD "%batch_dir%"`n, %batch_file%
+FileAppend(cExeName . " " . args_original, launch_file)
+;*****************************************************
+
+;Allow multi-word roms to be handled on command line without quotes
+if (A_Args.Length > 2 || (A_Args.Length == 2 && !oEmulators.IsValidKey(A_Args[1])))
+{
+    g_offset := 0
+    g_idx := A_Args.Length
+
+    if (oEmulators.IsValidKey(A_Args[1]))
+    {
+        temp_sys := A_Args[1]
+        g_idx := g_idx - 1
+        g_offset := 1
+    }
+
+    temp_rom := ""
+    Loop g_idx
+        temp_rom := temp_rom . " " . A_Args[A_Index + g_offset]
+
+    temp_rom := Trim(temp_rom)
+    A_Args := Array()
+    if (g_offset == 1)
+    {
+        A_Args[1] := temp_sys
+        A_Args[2] := temp_rom
+    }
+    else
+        A_Args[1] := temp_rom
+}
+
+;---------------------------------------------------------------------------------
+; Install Hotkey handlers
+;---------------------------------------------------------------------------------
+direct_hotkey_list := AddDirectSwitchHotKeys()
+
+;---------------------------------------------------------------------------------
+; Front-end startup mode
+;---------------------------------------------------------------------------------
+;If the script is run with one argument, then it might be a front-end startup.
+if (A_Args.Length = 1)
+{
+    ;If Front-End launch is executed, then exit the script when done.
+    ;Otherwise, allow script to continue with normal operation...
+    if FrontEndStartup()
+    {
+        LogEntry("NOTICE: Ran in Front-End StartUp mode.`n")
+        ExitApp 	
+    }
+}
+
+;Startup the auto-switch mode (a.k.a. attract mode) inactivity monitor
+fnc := AttractSwitch.Bind()
+oDetectInactivity := DetectInactivity_Class(fnc, gCfg.attract_delay, gCfg.attract_mute)
+oDetectInactivity.Activate()
+
+;Startup the schedule class  
+fAction := ScheduleAction.Bind("") ;this callback function is not actually used at this time
+oSchedule := Schedule_Class(gCfg.attract_timer, gCfg.attract_delay, fAction)
+
+if (gCfg.attract_timer != 0)
+{
+    oSchedule.Start() ;makes the schedule active
+}
+
+if (gCfg.attract_delay == 0) 
+    LogEntry("INFO: Auto-Switch mode is off (delay set to 0).`n")
+else if (gCfg.attract_delay < 20)
+    LogEntry("WARNING: Auto-Switch mode is off (delay set to " . gCfg.attract_delay . " seconds). Must be set to at least 20 seconds to function.`n")
+else
+    LogEntry("INFO: Auto-Switch mode is on (delay set to " . gCfg.attract_delay . " seconds, timer set to " . gCfg.attract_timer . ").`n")
+
+;Start marquee.exe if marquee mode and autostart is enabled
+if (gCfg.marquee_active && gCfg.marquee_autostart)
+{
+    If (!ProcessExist("marquee.exe"))
+    {
+        LogEntry("INFO: Starting marquee.exe (autostart).`n")
+        Run "marquee.exe -quiet", A_ScriptDir, marquee_pid
+
+        ProcessWait(marquee_pid, 5)
+    }
+}
+
+;If launched with no args and there is playlist defined, then
+;start playing the list.
+if (A_Args.Length == 0)
+{
+    AttractSwitch()
+    if (g_directswitch_args) ;only gets set if a list is defined
+    {
+        run_this := g_directswitch_args
+        g_directswitch_args := ""
+        VectorNow(run_this)
+    }
+    else if (gCfg.seed_rom)
+    {
+        LogEntry("NOTICE: Attempting to launch the seed_rom: " . gCfg.seed_rom . "`n")
+        VectorNow(gCfg.seed_rom)	
+    }
+    else
+    {
+        LogEntry("ERROR: Must run with a defined playlist, parameter, or seed_rom (try `"" . cExeName . " <sys_key> <rom_file>`"). Exiting.`n")
+        ExitApp 
+    }
+}
+
+;---------------------------------------------------------------------------------
+; Restart point for vectored roms
+;---------------------------------------------------------------------------------
+Vector:
+
+    ;Do initializations for the new game
+    pid_emulator := 0  
+    bSearchGlobal := false
+    winset_style := ""
+    search_tag := ""
+    gCfg.use_hi2txt := 0
+    top_score := ""
+    if (g_cycle > 0)
+        oPauseControl.Clear()
+    oConfigFile.ReadSection("Key_Map")
+
+    ;Initialize all asset paths
+    ;These will be populated by the ProcessIni() function below
+    gCfg.logo_folder := ""
+    gCfg.system_logo := ""
+    gCfg.marquee_folder := ""
+    gCfg.system_marquee := ""
+    gCfg.controls_folder := ""
+    gCfg.system_controls := ""
+    gCfg.meta_names := ""
+    gCfg.mameinfo_folder := ""
+
+    ;It is possible for users to create custom image types to use as pause
+    ;images. So if they do this, these should be initialized too.
+    extraTypes := StrSplit(gCfg.show_on_pause, ",")
+    szExtraTypes := extraTypes.Length
+    Loop szExtraTypes
+    {
+        extraType := Trim(extraTypes[A_Index]) . "_folder"
+        gCfg.%extraType% := ""
+
+        extraType := "system_" . Trim(extraTypes[A_Index])
+        gCfg.%extraType% := ""
+    }
+
+    ;---------------------------------------------------------------------------------
+    ; Read and process arcadeEIP.ini config file for this specific system/game
+    ;---------------------------------------------------------------------------------
+    ProcessIni()
+
+    ;---------------------------------------------------------------------------------
+    ; Build Emu_Args command line array from param_list in the ini file
+    ;---------------------------------------------------------------------------------
+    BuildEmuArgs()
+    
+    ;---------------------------------------------------------------------------------
+    ; Run rules engine 
+    ;---------------------------------------------------------------------------------
+    ProcessRules()
+
+    ;---------------------------------------------------------------------------------
+    ; Add Hot Keys (do here since some may be added/modified by rules) 
+    ;---------------------------------------------------------------------------------
+    AddHotKeys()
+
+    ;Attempt to get highscores for this rom (mame plug-in feature)
+    if (gCfg.use_hi2txt == 1)
+        GetHighScores(gCfg.rom_name . ".hi")
+
+    ;Marquee support initialization
+    marquee_full_path := SetAssetFullPath("marquee", gCfg.rom_name, gCfg.marquee_folder, gCfg.system_marquee, gCfg.global_asset_name)
+    LogEntry("INFO: Marquee file set to: " . marquee_full_path . "`n")
+
+    ;If marquee mode is configured and active and marquee.exe is running...
+    if (true)
+    ;if (marquee_full_path && gCfg.marquee_active && (ProcessExist(marquee_pid) || ProcessExist("marquee.exe")))
+    {
+        LogEntry("INFO: Sending marquee mode update.`n")        		
+
+        try
+        {	
+            ;use a pseudo pipe file to communicate with marquee.exe process
+            if (FileExist(marqueePipeFile))
+                FileDelete(marqueePipeFile)
+
+            pipeFile := FileOpen(marqueePipeFile, "w `n")
+            
+            ;Send these values to the marquee.exe process
+            pipeFile.WriteLine(gCfg.sys_key)
+            pipeFile.WriteLine(marquee_full_path)
+
+            if (top_score != "")
+                pipeFile.WriteLine(top_score)
+            else
+                pipeFile.WriteLine("NULL")
+            
+            pipeFile.Close
+            Sleep 100
+
+            FileSetAttrib "+H", marqueePipeFile
+        }
+        catch as e
+        {		
+            LogEntry("ERROR: Processing marquee mode: " . FormatErrorMessage(e) . "`n")
+            ExitApp
+        }
+    }
+
+    g_cycle++ ;this count increment needs to be after ProcessRules()
+    if (g_cycle == 1)
+    {
+        SetTimer RunWaitTimer, runwait_default_freq
+        SetTimer SelectControlTimer, 100
+        SetTimer KeepActive, 1000
+    }
+
+    ;Add game to the play log
+    play_log["log"].Push(gCfg.sys_key . " " . gCfg.rom_name)
+
+    ;support for magic_key delay
+    if (gCfg.magic_delay > 0)
+    {
+        LogEntry("INFO: Starting keyboard strobe for magic_key support.`n")
+
+        ;doing inits to 0 here is important to make sure keyboardstrobe state is
+        ;consistent if started while the magic_key is being held down.
+        magic_timer := 0
+        magicKeyState := 0
+        if (gCfg.kiosk_mode)
+            SetTimer KeyboardStrobeA, 50
+        else
+            SetTimer KeyboardStrobeB, 50
+    }
+
+    ;---------------------------------------------------------------------------------
+    ; Graphics related prep and display.
+    ; This is about the soonest we can start presenting graphics since ProcessRules()  
+    ; can contain overrides to the graphics settings.
+    ;---------------------------------------------------------------------------------
+    if (gCfg.hide_cursor && !test_mode && !gCfg.debug_mode)
+    {
+        LogEntry("INFO: hide_cursor=1; Cursor will be turned off during runtime.`n")
+        SystemCursor("Off") 
+    }
+    
+    logo_full_path := SetAssetFullPath("logo", gCfg.rom_name, gCfg.logo_folder, gCfg.system_logo, gCfg.global_asset_name)
+    
+    if (logo_full_path)
+        LogEntry("INFO: Logo file set to: " . logo_full_path . "`n")
+    else
+        LogEntry("INFO: No logo files found.`n")
+    
+    bScreenContinue := false 
+    start_timer_val := start_show_time <= 0 ? -100 : -1000 * start_show_time
+    
+    SetTimer ScreenDelay, start_timer_val
+    
+    if (start_show_time > -1 || exit_show_time > -1)
+    {
+        ;Use plug-in file if exists.
+        if (!FileExist("CreateBookendScreen.inc"))
+        {
+            ;If we are not direct-switching from another game then create 
+            ;screens normally, otherwise do a refresh only (which skips
+            ;re-creating the background).
+            if (!g_directswitch_args)
+                ScreenCreate()
+            else
+                ScreenRefresh()
+        }
+        else
+        {
+            #include *i CreateBookendScreen.inc	
+        }
+    }
+
+    ;If start/exit screens are disabled, hide their controls
+    if (start_show_time == -1)
+        HideControls("guiStart")
+    if (exit_show_time == -1)
+        HideControls("guiExit")
+
+    ;clear g_directswitch_args global to avoid re-entry
+    g_directswitch_args := ""
+
+    if (start_show_time > -1)
+    {
+        global oFadeAlphaWindow := fade_window_class(guiAlpha.Hwnd)                ;this fades the whole alpha window
+        global oFadeAlphaOverlay := fade_window_class(gGui.guiAlpha_Overlay.Hwnd)  ;this fades the overlay on top of the window
+        global oFadeStart := fade_window_class(guiStart.Hwnd)                      ;this fades in the start screen
+
+        LogEntry("INFO: Showing start screen (minimum duration: " . start_show_time . " seconds)`n") 
+        
+        ;**** House of cards warning!! *****
+        ;If changing any of these settings, TEST for these things....A LOT
+        ;1. Glitching between games (momentary display of Select screen)
+        ;2. Ensure Select screen is visible when using the Magic key after
+        ;   the first game switch (and then agan after subsequent game switches.) 
+        ;3. Make sure Alpha fading still works THE RIGHT WAY.
+        if (gCfg.debug_mode || test_mode)
+        {
+            ;set the initial z-order
+            ;guiAlpha.Opt("-AlwaysOnTop")                   
+        }
+        else
+        {
+            ;guiAlpha.Opt("-AlwaysOnTop")
+            
+            ;set the initial z-order     
+            ;guiAlpha.Opt("+AlwaysOnTop")
+            ;guiSelect.Opt("+AlwaysOnTop")
+            ;ShowControls("guiSelect") ;ShowControls should always follow a guiSelect +AlwaysOnTop directive
+
+            ;guiBackground.Opt("+AlwaysOnTop")
+            ;guiStart.Opt("+AlwaysOnTop")
+        }
+
+        ;Show the Alpha screen
+        guiAlpha.Show("W" . nScreenWidth . " H" . nScreenHeight . " X0 Y0")
+
+        ;Set the Alpha screen's transparency
+        ;This is used for the partial transparency effect when the game menu (gGui.guiSelect) is displayed 
+        WinSetTransparent 0, "ahk_id " . guiAlpha.Hwnd ;0 is transparent, 255 is opaque
+
+        ;Set transparency of the Alpha screeen's black overlay
+        ;This is used to darken the pause screen when the game menu (gGui.guiSelect) is shown over it
+        WinSetTransparent 255, "ahk_id " . gGui.guiAlpha_Overlay.Hwnd ;0 is transparent, 255 is opaque
+
+        guiSelect.Show("W" . nScreenWidth . " H" . nScreenHeight . " X0 Y0")
+        guiBackground.Show("W" . nScreenWidth . " H" . nScreenHeight . " X0 Y0")
+        guiStart.Show("W" . nScreenWidth . " H" . nScreenHeight . " X0 Y0 NA")           
+
+        ;Alpha fade-in start screen when switching games
+        if (alpha_effect)
+        {
+            WinSetTransparent 0, "ahk_id " . guiStart.Hwnd
+            
+            oFadeStart.Start(1,255,20,16)  ;fade when switching 
+                
+            ;if the SetTimer method below is reached before the fade completes it will 
+            ;glitch, so wait till its done before continuing (should take about 600ms)
+            startTick := A_TickCount
+            Loop 
+            {
+                Sleep 10
+                if (!oFadeStart.Active)
+                    break
+                if (A_TickCount - startTick > 2000)
+                {
+                    LogEntry("WARNING: Fade operation is taking too long (greater than 2 seconds)`n")
+                    break
+                }
+            }
+        }  
+        else  
+            WinSetTransparent 255, "ahk_id " . guiStart.Hwnd 
+
+        DisableControls("guiSelect")
+    }
+
+    ;Start a thread to create the image/info screens for pause while we're loading...
+    SetTimer CreatePausePage, -100
+    
+    ;---------------------------------------------------------------------------------
+    ;  Rebuild param_list from Emu_Args
+    ;---------------------------------------------------------------------------------
+    
+    BuildParamList()
+    
+    ;---------------------------------------------------------------------------------
+    ;  Run the emulator's apps
+    ;---------------------------------------------------------------------------------
+    
+    if (proxy_type = "Batch")
+        LogEntry("INFO: use_proxy: Skipping emulator run_apps. Running apps in file proxy instead.`n")
+    else
+    {	
+        orig_run_apps := gCfg.run_apps ;used by picker
+        RunApps(gCfg.asset_name, gCfg.rom_name, gCfg.run_apps)
+    }
+    
+    ;---------------------------------------------------------------------------------
+    ;  GUI: Execute start_screen delay if so configured
+    ;---------------------------------------------------------------------------------
+    
+    ;Wait till the start screen's time is up
+    Loop {
+        if (bScreenContinue)
+            break
+        Sleep 100
+    }
+    
+    ;just need the windowStyle here. Will use the rest at emulator launch
+    cl := ParseRTParams(gCfg.exe_full_path, &runStyle, &runOption, &windowStyle, &winset_style) 
+
+    if (!FileExist(cl))
+    {
+        LogEntry("NOTICE: An emulator at the location: " . cl . " could not be found.`n")
+        LogEntry("NOTICE: Please review the configuration file (" . cConfigFileName . "), and ensure that the value`n" )
+        LogEntry("NOTICE: of exe_full_path points to a valid folder and filename.`n")
+        LogEntry("ERROR: Could not continue.`n")
+    }
+
+    ;There are a few different ways that the bookend screens can be handled
+    ;Could offer these choices externally if necessary...
+    ;bkend_method := "safe"  : synchronous
+    ;bkend_method := "delay" : delay start screen asynchronously by a fixed number of seconds
+    ;bkend_method := "winwait" " delay start screen asynchronously until GUI is no longer active
+    ;
+    ;(combined) bkend_relinquish := true/false : whether to relinquish AlwaysOnTop after start_screen
+    
+    if (windowStyle == "NoHide" || proxy_type == "Batch")
+    {
+        ;safer method needed for "Desktop" style windows (like project64)
+        ;also "play it safe" for proxy batch files
+        bkend_method := "safe"
+        bkend_relinquish := true
+    }
+    else ;this method should be cleaner, but some emulators may not "show though"
+    {
+        bkend_method := "delay"
+        bkend_relinquish := false
+    }
+    
+    ;Timed methods allow the start screen to linger a bit longer,
+    ;but don't work well in debug mode.
+    if (gCfg.debug_mode || bkend_method == "safe" || test_mode)
+        ScreenClear()
+    else if (bkend_method == "delay")
+        SetTimer ScreenClear, -2000
+    ;else if (bkend_method == "winwait")
+    ;    SetTimer, ScreenWinWaitMonitor, 100
+
+    ;---------------------------------------------------------------------------------
+    ;  Launch Emulator (or Batch proxy instructions if so configured)
+    ;---------------------------------------------------------------------------------
+    
+    if (proxy_type = "Batch")
+    {
+        for g_idx, g_param in proxy_contents
+        {
+            try
+            {
+                cl := ParseRTParams(proxy_contents[g_idx], &runStyle, &runOption, &windowStyle, &winset_style)
+                
+                ;******* create runlast_native.bat file ************
+                if (FileExist(batch_file))
+                    FileDelete(batch_file)
+                SplitPath cl,,&batch_dir,,,&batch_drive
+                FileAppend batch_drive . "`n", batch_file
+                FileAppend "CD " . batch_dir . "`n", batch_file
+                FileAppend cl . " " . gCfg.param_list . "`n", batch_file
+                FileAppend "pause", batch_file
+                ;********************************************
+                
+                Launch(runStyle, cl, "", "FILE PROXY BATCH", runOption)
+            }
+            catch as e
+            {		
+                LogEntry("ERROR: FILE PROXY BATCH: " . FormatErrorMessage(e) . "`n")
+                ExitApp
+            }
+        }
+    }
+    else
+    {
+        try
+        {
+            if (gCfg.root_folder)
+                SetWorkingDir gCfg.root_folder
+            
+            ;******* create runlast_native.bat file ************
+            if (FileExist(batch_file))
+                FileDelete(batch_file)
+            SplitPath cl,,&batch_dir,,,&batch_drive
+            FileAppend batch_drive . "`n", batch_file
+            FileAppend "CD " . batch_dir . "`n", batch_file
+            FileAppend cl . " " . gCfg.param_list . "`n", batch_file
+            FileAppend "pause", batch_file
+            ;********************************************
+
+            ;**********************************************************************************************
+            ;----------------------------------------------------------------------------------------------
+            Launch(runStyle, cl, gCfg.param_list, "EMULATOR", runOption, windowStyle,,&pid_emulator)
+            ;----------------------------------------------------------------------------------------------
+            ;**********************************************************************************************
+
+            SetWorkingDir A_ScriptDir
+        }
+        catch as e
+        {		
+            LogEntry("ERROR: Launching System: " . FormatErrorMessage(e) . "`n")
+            ExitApp
+        }
+    }
+    
+    ;---------------------------------------------------------------------------------
+    ;  GUI: exit_screen display
+    ;---------------------------------------------------------------------------------
+    
+    ;re-hide cursor since some emulators force cursor back on when they exit
+    if (gCfg.hide_cursor && !test_mode && !gCfg.debug_mode)
+        SystemCursor("Off") ;comment out while debugging to prevent loss of cursor
+    
+    if (exit_show_time > -1)
+        LogEntry("INFO: Showing exit screen (minimum duration: " . exit_show_time . " seconds)`n") 
+    
+    bScreenContinue := false
+    ;exit_timer_val := exit_show_time = -1 ? 0 : 1000 * exit_show_time
+    exit_timer_val := exit_show_time <= 0 ? -100 : -1000 * exit_show_time
+    SetTimer ScreenDelay, exit_timer_val
+
+    if (exit_show_time > -1)
+    {
+        if (!test_mode)
+        {
+            ;guiBackground.Opt("-AlwaysOnTop")
+            ;guiExit.Opt("-AlwaysOnTop")
+        }
+        else
+        {
+            ;guiBackground.Opt("-AlwaysOnTop")
+            ;guiExit.Opt("-AlwaysOnTop")
+        }
+
+        guiExit.Show("W" . nScreenWidth . " H" . nScreenHeight . " X0 Y0")
+    }
+    
+    ;---------------------------------------------------------------------------------
+    ;  Run the front-end's apps
+    ;---------------------------------------------------------------------------------
+    
+    ;if (proxy_type = "Batch")
+    ;	LogEntry("INFO: use_proxy: Skipping front end run_apps. Using Batch type file proxy instead.`n")
+    ;else
+
+    ;run any "after apps" ("-" prefixed) specified with the emulator
+    RunApps(gCfg.fe_asset_name, gCfg.fe_asset_name, gCfg.run_apps, "-") 
+
+    ;only run these if we are manually exiting back to the front-end (see g_exit_code values below)
+    if (g_exit_code == 1 || !g_directswitch_args) 
+        RunApps(gCfg.fe_asset_name, gCfg.fe_asset_name, gCfg.fe_run_apps) ;run any apps specified with the front-end
+    
+    ;---------------------------------------------------------------------------------
+    ;  GUI: exit_screen delay
+    ;---------------------------------------------------------------------------------
+
+    Loop 
+    {
+        if (bScreenContinue)
+            break
+        Sleep 100
+    }
+
+    ;frequency monitor
+    if (g_exit_code == 1)
+    {
+        actCnt := oDetectInactivity.ActionCount 
+        oDetectInactivity.ActionCount := actCnt-1
+    }
+
+    ;c:=oDetectInactivity.ActionCount
+    ;OutputDebug cnt: %c%`n 
+
+    ;The action count translates roughly into how many
+    ;seconds of detected activity a game received.
+    if (oDetectInactivity.ActionCount > 5)
+    {
+        LogEntry("INFO: Detected game interaction. Updating history.`n")
+
+        ;add vector to the history file
+        oHistory.Update(gCfg.sys_key . " " . gCfg.rom_file)
+        
+        ;c:=oDetectInactivity.ActionCount
+        ;OutputDebug cnt: %c%`n 
+
+        oSelectListControl.UpdateAttractListView()
+    }
+    oDetectInactivity.ActionCount := 0  
+
+    ;g_exit_code == "" default value
+    ;g_exit_code == 0 if exited under automated control (i.e. direct-switching or autoswitch mode)
+    ;g_exit_code == 1 if exited via a hotkey (using a valid map_exit code)
+    if (g_directswitch_args && g_exit_code == 0)
+    {
+        g_exit_code := ""
+       
+        if (gCfg.attract_mute > 0) 
+            oMasterSound.Off() ;mute audio
+
+        LogEntry("INFO: Vectoring under automation to new game: " . g_directswitch_args . ".`n")
+        
+        VectorNow(g_directswitch_args)
+        Goto Vector
+    }
+    
+ExitApp
+;*********************************************************************************************
+;*********************************************************************************************
+
+;Call this function whenever exiting arcadeEIP to close and free resources
+ExitFunction(ExitReason, ExitCode)
+{
+    global
+    
+    local logFileName
+
+    FreeResource(hHook)
+
+    ;Send appropriate exit message to marquee.exe if marquee mode active
+    if (gCfg.marquee_active && ProcessExist("marquee.exe"))
+    {
+        LogEntry("INFO: Notifying marquee.exe that eip.exe is exiting (autoexit=" . gCfg.marquee_autoexit . ").`n")        		
+        
+        try
+        {	
+            if (FileExist(marqueePipeFile))
+                FileDelete marqueePipeFile
+
+            pipeFile := FileOpen(marqueePipeFile, "w `n")
+            
+            if (gCfg.marquee_autoexit)
+                pipeFile.WriteLine("!Exit!")
+            else
+                pipeFile.WriteLine("!Clear!")
+            
+            pipeFile.Close
+            Sleep 100
+            FileSetAttrib "+H", marqueePipeFile
+        }
+        catch Error
+        {		
+            LogEntry("ERROR: Processing marquee mode: " . FormatErrorMessage(e) . "`n")
+            ExitApp
+        }
+    }
+
+    if (start_show_time > -1 || exit_show_time > -1)
+    {
+        try guiBackground.Destroy()
+        try guiSelect.Destroy()
+        oSelectListControl := {}
+        try guiAlpha.Destroy()
+        try guiStart.Destroy()
+        try guiExit.Destroy()
+    }
+    
+    SystemCursor("On")
+
+    if (IsSet(oDetectInactivity))
+        oDetectInactivity.Inactivate()
+    
+    ;special case.
+    ;remove cfg subfolder if it gets created during runtime.
+    ;Important to check the time it was created just in case someone
+    ;runs eip.exe in the mame folder, otherwise it could delete
+    ;all of the cfg profiles!
+    if (FileExist("cfg"))
+    {
+        cfg_time := FileGetTime("cfg", "C")
+        cfg_time := DateDiff(cfg_time, start_time, "seconds") 
+        if (cfg_time > 0) ;i.e. if cfg_time is after start_time
+            DirDelete "cfg", 1
+    }
+    
+    if (FileExist("help.txt"))
+    {
+        help_time := FileGetTime("help.txt", "C")
+        help_time := DateDiff(help_time, start_time, "seconds")
+        if (help_time > 0)
+            DirDelete "help.txt", 1
+    }
+    
+    if (gCfg.debug_mode)
+    {
+        SplitPath log_file, &logFileName
+        ShowLog(logFileName)	
+    }
+    
+    if (!suppressExitMessage)
+        LogEntry("Exiting " . cExeName . "`n")
+    
+    if (gCfg.status_beeps)
+        DoBeep()
+
+    oMasterSound.On() ;make sure sound is turned on
+
+    ;restore original taskbar state
+    if (IsSet(original_taskbar_state))
+    {
+        if (original_taskbar_state != GetTaskbarState())
+        {
+            HideShowTaskbar(original_taskbar_state)
+            LogEntry("INFO: Restored original taskbar state.`n")
+        }
+    }
+
+    if (diag_mode)
+    {
+        if (ut_runwait_cycle == 0)
+            ut_runwait_avg := 0
+        else
+            ut_runwait_avg := ut_runwait_timer_total / ut_runwait_cycle
+        LogEntry("INFO: Runwait cycle average: " . ut_runwait_avg . ". Peak was: " . ut_runwait_peak . ".`n")
+    }
+
+    ;if we started from a front end, make sure it gets the focus back
+    ;(GameEx didn't need, but BigBox does)
+    if (fe_pid)
+       WinActivate "ahk_pid " . fe_pid
+}
+
+KillApp(theHotkey:="") 
+{
+    LogEntry("INFO: " theHotkey " pressed. Terminating " . cProductName . ".`n")
+    ExitApp
+    return
+}
+
+;Mouse clicks get passed through (via ~ prefix), but we need to deal with
+;possibility of the emulator process being paused, so if it is, unpause
+;it to avoid a crash.
+
+~LButton::
+{
+    if (oPauseProc.Active)
+    {
+        PauseKey("")
+        if (g_guiselect_visible)
+            MagicKey("0")
+    }
+}
+
+;Used for disabling mouse clicks while in Picker
+#HotIf mouse_clicks_off = 1
+LButton::
+RButton::
+MButton::
+{} 
+;WheelDown::
+;WheelUp::
+;return
+#HotIf

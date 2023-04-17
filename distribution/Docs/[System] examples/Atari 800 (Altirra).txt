@@ -1,0 +1,32 @@
+[System_atari800]
+sys_key=atari800
+asset_name=Atari_8_bit
+proper_name=Atari 800
+exe_full_path=D:\Emulators\Altirra\Altirra64.exe,nohide
+;window_name=process
+;window_name=Altirra/x64
+search_path=D:\Assets\Atari_8_bit\software\*.bin,rom,atr,xex,atx,cas,com,car
+param_list="[rom]" /f
+run_apps=ultramap,winipac
+map_exit=!{F4}
+map_pause={Blind}{F9}
+
+
+Note: Inside Altirra, set it to use windowed/borderless mode so that the menu
+      will show through.  
+
+Note: Altirra has an "experimental" DirectX 11 mode.  This seems to have a side effect in
+      that sometimes after activating the game picker menu, performance of the emulator
+      is reduced. Activating and releasing pause seems to fix it, but its probably best 
+      just to stick with the default DirectX 9 mode, as this doesn't seem to exhibit the 
+      problem.
+      
+Note: Adding the winset_A option on the exe_full_path line can be used to hide 
+      window borders in fullscreen windowed mode. However, I have found that newer
+      versions (v.4.0 for example) don't seem to need this anymore.  
+
+Note: This example assumes [Application] sections for ultramap and winipac exist.
+
+Note: window_name=process (or "Altirra/x64") is optional, but will provide more
+      aggressive focus control.  As always, try without this setting first, and only after 
+      all is working, try turning it on (window_name=process is preferred).

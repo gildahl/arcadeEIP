@@ -1,0 +1,20 @@
+[Application_ultramap]
+app_key=ultramap
+proper_name=Ultramap
+exe_full_path=C:\Program Files (x86)\UltraMap\UltraMap.exe
+profile=D:\Profiles\UltraStick\[asset_name]\[smart_name].ugc
+param_list=[profile]
+
+
+Note: Use of [asset_name]\[smart_name] pattern is documented in "Configuration Reference.pdf".
+      When used, the software at runtime will replace [smart_name] with the rom_name and search for
+      the profile having that name in a subfolder named for the name of the asset (for example,
+      \UltraMap\MAME\qbert.ugc).  If file is not found, it will then try replacing [smart_name] 
+      with the emulator or front-end’s asset_name (for example \Ultramap\MAME\MAME.ugc).  
+      If file is still not found, it will replace [smart_name] with the string “default” and look 
+      for it in the parent folder (i.e. in this case, the \Ultramap\default.ugc).
+
+      The benefit of this pattern is that if a specific configuration file for the game doesn't
+      exist, it will automatically use the default one for the system, but if it is found, it will
+      be automatically used. This permits one to create profiles and drop them in the folder 
+      at any time, without having to change the configuration.

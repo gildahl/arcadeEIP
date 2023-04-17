@@ -1,0 +1,3712 @@
+; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
+; © 2023 David G. Dahlstrom
+; File: eipClass_SelectListControl.ahk2
+
+;Class implementing the game selection screen in arcadeEIP.
+;Some general notes:
+;1. Three windows listView controls are used. Two for the verticaly scrolling game list
+;   (one above the central game name bar and one below), and one for the horizontally
+;   scrolling systems list (one row only). Both of the game list ListView controls hold
+;   the entire list of games, but are dynamically adjusted to make it appear that they
+;   act as a single contiguous list.  Importantly, the bottom of these two lists also
+;   contains a pointer (stored in column 3 of the list) to the playlist object for that
+;   game which holds the game's metadata. This pointer is retained no matter what list
+;   the game is copied into (such as favorites, master favorites, or custom lists) so that
+;   the metadata is always preserved across lists.
+;
+;2. The selection screen never takes the focus (ensuring emulators maintain the focus), 
+;   therefore, all interaction is achieved via system level hotkeys that are turned on
+;   whenever the screen is visible and off when the screen is hidden. The main function
+;   that controls displaying and hiding the selection screen is MagicKey() (not a member
+;   of this class)
+;
+;3. The selection screen is initialized in a background thread (see SelectControlTimer()).
+;   The main initialization method is _AddEmulatorItems(), which will run in the background
+;   while the first game loads (and will display a progress bar if displayed while still
+;   initializing). This ensures that initialization never blocks or slows game loading,
+;   exiting, or game switching.
+;
+;4. The select screen currently supports 4 image types.  A system logo to the left of the
+;   selected game name, a game logo to the right of the selected game name, a favorites icon
+;   to the top left of the selected game name, and a rating icon to the top right of the 
+;   selected game name.
+
+class select_list_control_class
+{	
+	_current_object := Map()
+	_current_playlist := ""
+	_current_target := 0
+	_current_count := 0
+	_current_game := ""
+	_current_game_name := ""
+	_current_row := 0
+	_state := Map()         
+
+	__New(maxRows, maxRowsB, lstFontType, lstFontSize, lstGameFontSize, lstSysFontSize, lstListMargin)
+	{
+		global 
+
+		;initialize the GDI+ (gdip) library (in gdip.ahk)
+		If !pToken := Gdip_Startup()
+		{
+			MsgBox "Gdiplus failed to start. Please ensure you have gdiplus on your system"
+			ExitApp
+		}
+
+		this._oGraphicsOverlay := select_list_control_class.graphics_overlay_class()
+		this._initializing := false
+		this._font := lstFontType
+		this._listMargin := lstListMargin
+		this._playlistFontSize := lstFontSize
+		this._gameNameFontSize := lstGameFontSize
+		this._systemNameFontSize := lstSysFontSize
+		this._maxSystems := 0
+
+		barHeightFactor := 1/10
+		topBarPosFactor := 1/3
+		centerLabelWidthFactor := gCfg.lst_game_name_ratio
+
+		;Create game list selector
+		this._barHeight := Floor(nScreenHeight * barHeightFactor)
+		this._topbar_ypos := Floor(nScreenHeight * topBarPosFactor - this._barHeight / 2)
+		this._bottombar_ypos := Floor(nScreenHeight / 5 * 4 - this._barHeight / 2)
+		this._systemLabelWidth := Floor(nScreenWidth / 3)
+		this._centerLabelWidth := Floor(nScreenWidth * centerLabelWidthFactor)
+		this._sideLabelWidth := Floor((nScreenWidth - this._centerLabelWidth) / 2)
+
+		if (maxRows < 5)
+			maxRows := 5
+		if (maxRowsB < 5)
+			maxRowsB := 5
+
+		this._maxRows := maxRows
+		this._maxRowsB := maxRowsB
+		this._current_playlist := 1
+
+		this._CreatePolygonOverlay()
+		this._CreateBaseControl()
+		;this._AddEmulatorItems()
+
+		;if (!g_guiselect_visible)
+		;	this.Hide()
+
+		this._editMode := 0
+	}
+
+	__Delete()
+	{
+		;this.Hide()
+		this._serializeState()
+	}
+
+	AddEmulatorItems()
+	{
+		this._AddEmulatorItems()
+	}
+
+	_deserializeState()
+	{
+		global
+		local loop_idx, sf, oSf, val, idx := 0, sys, listName, cnt, sel, tog
+
+		loop_idx := 0
+
+		if (!FileExist(state_file))
+		{
+			LogEntry("NOTICE: No .state file found. Using default states.`n")
+			return
+		}
+
+		sf := FileRead(state_file)
+		if (!sf)
+		{
+			LogEntry("INFO: Deserialized 0 states from .state file (file was empty).`n")
+			return
+		}
+
+		oSf := Map() ;state file object
+
+		Loop Parse sf, "`n"		
+		{	
+			oSf[A_Index] := A_LoopField
+		}
+		
+		Loop
+		{
+			val := oSf[++loop_idx]
+			if (val == "EOF")
+				break
+			else
+				idx := Integer(val)
+
+			if !IsInteger(idx)
+			{
+				LogEntry("WARNING: Deserializing failed. Index not numeric error.`n")
+				return
+			}
+
+			sys := oSf[++loop_idx]
+
+			if (idx > this._maxSystems)
+				listName := this._playlists[idx-this._maxSystems]["name"] . "-fav"
+			else
+				listName := this._playlists[idx]["name"]
+
+			if (listName == sys)	
+			{
+				cnt := oSf[++loop_idx]
+				if (this._state[idx]["count"] == cnt)
+				{
+					sel := oSf[++loop_idx]
+					this._state[idx]["selectedRow"] := sel
+
+					this._current_playlist := idx
+
+					this.Init(idx)
+					this._initializing := true
+					this.ScrollVertical("index", sel)
+
+					oBASS.Active := 0 ;suppress scroll sound effects
+					if (sel == cnt)
+					{
+						this.ScrollVertical("u")
+						this.ScrollVertical("d")
+					}
+					else
+					{
+						this.ScrollVertical("d")
+						this.ScrollVertical("u")
+					}
+					oBASS.Active := 1
+
+					tog := oSf[++loop_idx]
+					if (tog == 1)
+					{
+						this._state[idx]["sublist"] := tog
+					}
+
+					this._initializing := false
+				}
+				else
+				{
+					loop_idx+=2
+				}
+			}
+			else
+			{
+				loop_idx+=3
+			}
+			;Note that EOF should exit the loop before this test.
+			if (loop_idx >= oSf.Count)
+				break
+		}
+
+		LogEntry("INFO: Deserialized " . idx . " states from .state file.`n")
+	}
+
+	_serializeState()
+	{
+		global
+		local fState, n, s, sys, cnt, row, tog, nVal := 0
+
+		if (!g_guiselect_loaded)
+		{
+			LogEntry("INFO: Premature exit. Did not serialize to .state file.`n")
+			return			
+		}
+
+		fState := FileOpen(state_file, "w")
+
+		for n, s in this._state
+		{
+			if (s)
+			{
+				;index
+				fState.write(n . "`n") 
+
+				;name
+				if (n > this._maxSystems)
+				{
+					try
+						sys := this._playlists[n-this._maxSystems]["name"] . "-fav"
+					catch
+						continue
+				}
+				else
+					sys := this._playlists[n]["name"]
+				fState.write(sys . "`n") 
+
+				;count
+				cnt := s["count"]
+				fState.write(cnt . "`n")
+
+				;selected row
+				row := s.Get("selectedRow","")
+				fState.write(row . "`n")  
+
+				;toggle state
+				tog := s.Get("sublist","")
+				fState.write(tog . "`n") 
+
+				nVal := n
+			}
+		}
+
+		fState.write("EOF")
+
+		fState.Close()
+
+		LogEntry("INFO: Serialized " . nVal . " states to .state file.`n")
+	}
+
+	Init(pl)
+	{
+		global
+		local orig_object, orig_pl, romFile
+
+		;This line is for cases where the function is called
+		;from outside the default gui process (like RefreshAttractList())
+		orig_object := this._current_object
+
+		orig_pl := this._current_playlist 
+		this._current_playlist := pl	
+		this._initializing := true	
+
+		oBASS.Active := 0 ;suppress scroll sound effects
+		this.ScrollVertical("home")
+		this.ScrollVertical("d")
+		this.ScrollVertical("u")
+		oBASS.Active := 1
+
+		this._initializing := false
+		this._current_playlist := orig_pl
+		this._current_object := orig_object
+
+		this.UpdateMetaTags(pl)
+
+		return
+	}
+
+	UpdateMetaTags(pl)
+	{
+		global
+
+		;Make sure rom filename label remains set to current game
+		v := this._current_object.Get("vector", "")
+		vec := SplitVector(v)
+		romFile := vec.Get("rom_value","")
+
+		gGui.guiSelect_RomNameLabel.Text := romFile
+
+		romCategory := this._current_object.Get("rom_category","")
+		gGui.guiSelect_MetaLabelRight.Text := romCategory
+
+		romRelease := this._current_object.Get("rom_release","")
+		gGui.guiSelect_MetaLabelLeft.Text := romRelease
+
+		romPlayMode := this._current_object.Get("rom_players","")
+		gGui.guiSelect_MetaLabelTopRight.Text := romPlayMode
+
+		romIndexCount := this._state[this._current_playlist].Get("selectedRow", 0) . " (of " . this._state[this._current_playlist]["count"] . ")"
+		if (this._state[this._current_playlist]["count"] == 0)
+			romIndexCount := ""
+
+		if (romRelease)
+			gGui.guiSelect_MetaLabelTopLeft.Text := romIndexCount
+		else
+		{
+			gGui.guiSelect_MetaLabelLeft.Text := romIndexCount
+			gGui.guiSelect_MetaLabelTopLeft.Text := ""
+		}
+	
+		if (this._state[pl]["count"] == 0)
+		{
+			gGui.guiSelect_RomNameLabel.Text := ""
+			gGui.guiSelect_MetaLabelRight.Text := ""
+			gGui.guiSelect_MetaLabelLeft.Text := ""
+			gGui.guiSelect_MetaLabelTopRight.Text := ""
+			gGui.guiSelect_MetaLabelTopLeft.Text := ""
+		}
+	}
+
+	;Future?
+	Search(item)
+	{
+	}
+
+	_SwitchPlaylist(last_playlist)
+	{ 
+		;global
+		;local cpl
+		
+		this.HidePlaylist(last_playlist)
+		this.ShowPlaylist(this._current_playlist)
+
+		;if current playlist is empty, or select screen not visible
+		;then don't show graphics
+		cpl := this._current_playlist
+		if (this._state[cpl]["count"] == 0 || !g_guiselect_visible)
+			this._oGraphicsOverlay.HideGraphics()
+		else
+			this.ShowGraphics()
+
+		return
+	}
+
+	IsValidVector()
+	{
+		if (this._current_object.Get("vector",""))
+			return true
+		else
+			return false
+	}
+
+	SwitchGame()
+	{
+		global
+		local ob, vector
+
+		ob := this._current_object
+		vector := ob["vector"]
+		
+		DirectSwitch(vector)
+
+		return
+	}
+
+	Show()
+	{
+		Critical ;ensures ShowAll is called atomically
+		this._ShowAll()
+	}
+
+	Hide()
+	{
+		Critical ;ensures HideAll is called atomically
+		this._HideAll()
+	}
+
+	;Must be called atomically due to the possibly changing state of 
+	;the global variables, which can lead to an incoherent state
+	_ShowAll()
+	{
+		global
+
+		if (!g_guiselect_loaded)
+		{
+			gGui.guiSelect_InitProgress.Visible := true
+			gGui.guiSelect_InitText.Visible := true
+			gGui.guiSelect_ProgText.Visible := true
+		}
+		else
+		{ 
+			gGui.guiSelect_InitProgress.Visible := false
+			gGui.guiSelect_InitText.Visible := false
+			gGui.guiSelect_ProgText.Visible := false
+			gGui.guiSelect_ActionProgress.Visible := false
+
+			gGui.guiSelect_TopBarCenter.Visible := true
+			gGui.guiSelect_TopBarRight.Visible := true
+			gGui.guiSelect_TopBarLeft.Visible := true
+			gGui.guiSelect_BottomBar.Visible := true
+			gGui.guiSelect_ListViewPlaylist.Visible := true
+			gGui.guiSelect_BottomBarBorder.Visible := true
+			gGui.guiSelect_RomNameLabel.Visible := true
+			gGui.guiSelect_MetaLabelRight.Visible := true
+			gGui.guiSelect_MetaLabelLeft.Visible := true
+			gGui.guiSelect_MetaLabelTopRight.Visible := true
+			gGui.guiSelect_MetaLabelTopLeft.Visible := true
+			gGui.guiSelect_PickerLicenseBanner.Visible := true
+			
+			this.ShowPlaylist(this._current_playlist)
+			if (g_guiselect_visible)
+			{
+				this.ShowGraphics()
+			}
+		}
+		return
+	}
+
+	_HideAll()
+	{	
+		global
+		local n, pl, pl_count
+
+		this._oGraphicsOverlay.HideGraphics()
+
+		this.HidePolygons()
+		
+		try gGui.guiSelect_InitProgress.Visible := false
+		try	gGui.guiSelect_InitText.Visible := false
+		try	gGui.guiSelect_ProgText.Visible := false
+		try	gGui.guiSelect_ActionProgress.Visible := false
+		
+		gGui.guiSelect_ListViewR1.Visible := false
+		gGui.guiSelect_ListViewR2.Visible := false
+		gGui.guiSelect_TopBarCenter.Visible := false
+		gGui.guiSelect_TopBarRight.Visible := false
+		gGui.guiSelect_TopBarLeft.Visible := false
+		gGui.guiSelect_BottomBar.Visible := false
+		gGui.guiSelect_ListViewPlaylist.Visible := false
+		gGui.guiSelect_BottomBarBorder.Visible := false
+		gGui.guiSelect_RomNameLabel.Visible := false
+		gGui.guiSelect_MetaLabelRight.Visible := false
+		gGui.guiSelect_MetaLabelLeft.Visible := false
+		gGui.guiSelect_MetaLabelTopRight.Visible := false
+		gGui.guiSelect_MetaLabelTopLeft.Visible := false
+		gGui.guiSelect_PickerLicenseBanner.Visible := false
+
+		pl_count := this._playlists.Count
+		for n, pl in this._playlists
+		{
+			this.HidePlaylist(n)
+			this.HidePlaylist(n + pl_count) ;hide the favorite list too
+		}
+
+		this._exitListEditMode()
+		return  
+	}
+
+	_ShowMeta()
+	{
+		global
+		gGui.guiSelect_RomNameLabel.Visible := true
+		gGui.guiSelect_MetaLabelRight.Visible := true
+		gGui.guiSelect_MetaLabelLeft.Visible := true
+		gGui.guiSelect_MetaLabelTopRight.Visible := true
+		gGui.guiSelect_MetaLabelTopLeft.Visible := true
+		gGui.guiSelect_PickerLicenseBanner.Visible := true
+	}
+
+	_HideMeta()
+	{
+		global
+		gGui.guiSelect_RomNameLabel.Visible := false
+		gGui.guiSelect_MetaLabelRight.Visible := false
+		gGui.guiSelect_MetaLabelLeft.Visible := false
+		gGui.guiSelect_MetaLabelTopRight.Visible := false
+		gGui.guiSelect_MetaLabelTopLeft.Visible := false
+		gGui.guiSelect_PickerLicenseBanner.Visible := false
+	}
+
+	HidePlaylist(pl)
+	{
+		global
+
+		if (g_guiselect_loaded)
+		{
+			try	gGui.guiSelect_GameName%pl%.Visible := false
+			try	gGui.guiSelect_ListViewPlaylist.Visible := false
+			try	gGui.guiSelect_ListViewTop%pl%.Visible := false
+			try	gGui.guiSelect_ListViewBottom%pl%.Visible := false
+			try	gGui.guiSelect_RightLogo%pl%.Visible := false
+			try	gGui.guiSelect_LeftLogo%pl%.Visible := false
+		}
+
+		return
+	}
+
+	ShowPlaylist(pl)
+	{
+		global
+
+		if (g_guiselect_loaded)
+		{
+			try gGui.guiSelect_GameName%pl%.Visible := true
+			try gGui.guiSelect_ListViewPlaylist.Visible := true		
+			try gGui.guiSelect_ListViewTop%pl%.Visible := true
+			try gGui.guiSelect_ListViewBottom%pl%.Visible := true
+			try	gGui.guiSelect_RightLogo%pl%.Visible := true
+			try	gGui.guiSelect_LeftLogo%pl%.Visible := true
+		}
+
+		return
+	}
+
+	HidePolygons()
+	{
+		global
+		gGui.guiTriangleLeft.Hide()
+		gGui.guiTriangleRight.Hide()
+		gGui.guiMinusLeft.Hide()
+		gGui.guiMinusRight.Hide()
+		gGui.guiPlusLeft.Hide()
+		gGui.guiPlusRight.Hide()
+	}
+
+	;This is the main system/list initialization routine
+	_AddEmulatorItems()
+	{
+		global
+
+		local fv_idx, n, vector, vec, filename, emulators, emulator ;, test_filename,idx, item
+		local cleanLists, cleanedProperName, sysKey, systemKey, catver_file, cstList
+		local logo_folder, logo_file, system_logo_file, rom_category
+
+		local pl_idx_map := Map()
+		local cl_idx_map := Map()
+
+		this._playlists := Map()
+
+		pl_idx := 1
+		fv_idx := 1 ;game index for Master Picks
+		picker_load_timer := 0
+
+		picker_load_timer := A_TickCount	
+		LogEntry("INFO: Begin loading picker menu.`n")
+
+		;updates vector file list if in auto mode
+		UpdateAutoAttractList()
+
+		;sort the emulator list by proper name (if it exists)
+		;note that we append sys_key to each entry to ensure the uniqueness of each entry
+		;since proper names aren't guaranteed to be unique.
+		orderedEmulatorList := ""
+		for n, emulator in oEmulators.Emulators
+		{
+			if (emulator.proper_name)
+				orderedEmulatorList := orderedEmulatorList . emulator.sort_prefix . emulator.proper_name . "`t" . emulator.proper_name . "`t" . emulator.sys_key
+			else
+				orderedEmulatorList := orderedEmulatorList . emulator.sort_prefix . emulator.proper_name . "`t" . emulator.sys_key . "`t" . emulator.sys_key
+
+			if (A_Index != oEmulators.Emulators.Count)
+				orderedEmulatorList := orderedEmulatorList . "`n"
+		}
+
+		orderedCustomLists := ""
+		for n, customList in oLists
+		{
+			if (customList.proper_name)
+				orderedCustomLists := orderedCustomLists . customList.sort_prefix . customList.proper_name . "`t" . customList.proper_name
+			else
+				orderedCustomLists := orderedCustomLists . customList.sort_prefix . customList.proper_name . "`t" . customList.list_key
+
+			if (A_Index != oLists.Length)
+				orderedCustomLists := orderedCustomLists . "`n"
+		}
+
+		orderedEmulatorList := Sort(orderedEmulatorList)
+		orderedCustomLists := Sort(orderedCustomLists)
+
+		Loop Parse orderedCustomLists, "`n"
+		{
+			for n, cstLists in oLists 
+			{
+				fields := StrSplit(A_LoopField, "`t")
+				if (cstLists.proper_name == fields[2])
+				{
+					cstList := cstLists ;need this because cstLists goes out of scope after the break
+					break
+				}
+			}
+
+			lk := cstList.list_key
+			cl_idx_map.%lk% := 1
+			pl_idx_map.%lk% := pl_idx
+
+			;Create playlist for each emulator custom list			
+			this._playlists[pl_idx] := Map()
+			this._playlists[pl_idx]["type"] := "list" ;type can be "list", "favorites", or "system"
+			this._playlists[pl_idx]["name"] := cstList.list_key
+			this._playlists[pl_idx]["list_logo"] := ""
+			this._playlists[pl_idx]["proper_name"] := cstList.proper_name ? cstList.proper_name : cstList.list_key
+			this._playlists[pl_idx]["playlist"] := Map()
+
+			pl_idx++
+		}
+
+		;Create a playlist for the special "All Picks" list
+		fav_idx := pl_idx ;favorites playlist index (a global)
+		this._playlists[fav_idx] := Map()
+		this._playlists[pl_idx]["type"] := "favorites"         ;************* CHECK THIS index ****************
+		this._playlists[fav_idx]["name"] := favorites_listname ;pseudo sys_key for this list
+		this._playlists[fav_idx]["list_logo"] := ""
+		this._playlists[fav_idx]["proper_name"] := ""  ;"Master Picks"
+		this._playlists[fav_idx]["playlist"] := Map()
+		
+		pl_idx++
+
+		progEmuCount := oEmulators.Emulators.Count
+
+		;Create the playlist in alpha order by proper name
+		Loop Parse orderedEmulatorList, "`n"
+		{
+			if (InStr(A_LoopField, "Vectrex"))
+				a:=1
+			;update progress bar
+			prog_val := Floor(A_index / progEmuCount * 50)
+			gGui.guiSelect_InitProgress.Value := prog_val
+
+			;Get the (oEmulator) emulator structure for the ordered emulator
+			for n, emulators in oEmulators.emulators 
+			{
+				fields := StrSplit(A_LoopField, "`t")
+				if (emulators.proper_name == fields[2] && emulators.sys_key == fields[3]) 
+				{   
+					emulator := emulators
+					break
+				}
+			}
+
+			;skip any systems marked hidden
+			Loop Parse gCfg.lst_hide_systems, "CSV" 
+			{
+				if (emulator.sys_key == Trim(A_LoopField))
+					continue 2	
+			}
+
+			;We'll be using the search paths defined for each system to populate the lists
+			aSearchPaths := ParseSearchPath(emulator.sys_key)
+			if (!aSearchPaths)
+				continue
+
+			duplicate_test := Map()
+
+			gm_idx := 0
+
+			;Create playlist for each emulator system			
+			this._playlists[pl_idx] := Map()
+			this._playlists[pl_idx]["type"] := "system"
+			this._playlists[pl_idx]["name"] := emulator.sys_key
+			this._playlists[pl_idx]["proper_name"] := emulator.proper_name ? emulator.proper_name : emulator.sys_key
+			this._playlists[pl_idx]["list_logo"] := oEmulators.Emulators[emulator.sys_key].system_logo
+			this._playlists[pl_idx]["playlist"] := Map()
+
+			initSysText := emulator.sys_key
+			initSysText2 := this._playlists[pl_idx]["proper_name"]
+
+			;check if there is a catver.ini file for this system
+			catver_file := ""
+
+			if (oEmulators.Emulators[emulator.sys_key].use_catver == "1")
+			{
+				catver_file := oEmulators.Emulators[emulator.sys_key].mameinfo_folder . "\catver.ini"
+
+				if (SubStr(catver_file, 1, 1) == ".")
+					catver_file := A_ScriptDir . SubStr(catver_file, 2)
+				if (!FileExist(catver_file))
+					catver_file := ""
+			}
+			
+			for n, searchPath in aSearchPaths
+			{							
+				SplitPath searchPath,,&romPath,&romExt,&searchRomName
+				romExt_decomp := StrSplit(romExt, ",", " ")	
+				
+				for n, romExt in romExt_decomp
+				{	
+					searchPath := romPath . "\" . searchRomName . "." . romExt					
+					sep := RepeatValue("=", StrLen(searchPath))
+
+					gGui.guiSelect_ProgText.Text := "Reading games for system: " . initSysText . " (" . initSysText2 . ") from [" . searchPath . "]"
+					
+					Loop Files searchPath
+					{
+						SplitPath A_LoopFileFullPath, &romFile
+						vec := emulator.sys_key . " " . romFile
+
+						properName := oEmulators.Emulators[emulator.sys_key].meta_names.GetTitle(romFile) ;GetTitle(romspec, "clean")
+
+						;We assume that if the meta file is virtual, it comes from a managed list so that any roms
+						;that are not in it (i.e. no properName found) should be excluded from our lists.
+						;"virtual" meta files are created for external content managed systems like LaunchBox/BigBox
+						if (oEmulators.Emulators[emulator.sys_key].meta_names.cache_exists && oEmulators.Emulators[emulator.sys_key].meta_names.cache_is_virtual && !properName)
+							orphaned_rom := true
+						else
+							orphaned_rom := false
+
+						;skip if this is a duplicate rom or if there is no enty for this item in the metafile
+						;Note that the metafile check will only fail if there actually is a metafile.
+						;if (duplicate_test[vec] != 1 && properName != "missing_from_metafile" && !orphaned_rom)
+						if (duplicate_test.Get(vec,"") != 1 && properName != "missing_from_metafile" && !orphaned_rom)
+						{	
+							gm_idx++
+
+							duplicate_test[vec] := 1 ;The value 1 is just a token
+
+							this._playlists[pl_idx]["playlist"][gm_idx] := Map()
+							this._playlists[pl_idx]["playlist"][gm_idx]["sys_key"] := emulator.sys_key
+							this._playlists[pl_idx]["playlist"][gm_idx]["rom_spec"] := romFile
+							this._playlists[pl_idx]["playlist"][gm_idx]["vector"] := vec
+							
+							SplitPath romFile,,,,&romSpec ;get rid of any extension if romSpec is a filename
+							if (!properName)
+								properName := romSpec
+							this._playlists[pl_idx]["playlist"][gm_idx]["proper_name"] := properName
+							
+							logo_folder := oEmulators.Emulators[emulator.sys_key].logo_folder
+
+							logo_file := logo_folder . "\" . romSpec . ".png"
+
+							system_logo_file := oEmulators.Emulators[emulator.sys_key].system_logo
+							
+							this._playlists[pl_idx]["playlist"][gm_idx]["logo_file"] := logo_file
+							this._playlists[pl_idx]["playlist"][gm_idx]["system_logo"] := system_logo_file	
+
+							rom_category := oEmulators.Emulators[emulator.sys_key].meta_names.GetGenre(romFile)
+							if (rom_category)
+								this._playlists[pl_idx]["playlist"][gm_idx]["rom_category"] := rom_category
+							
+							if (!rom_category)
+							{
+								;lf there is a catver.ini file available for this system, use that if no category info was in 
+								;the cache.  Note that we only put genre (i.e. category) info in the meta cache if it is a virtual
+								;cache. So the following code to read a catver.ini file for the genre information will be used
+								;in both the case where there is an actual meta file/cache or no meta file/cache.
+								if (oEmulators.Emulators[emulator.sys_key].use_catver == "1")
+								{
+									if (catver_file)
+									{
+										;OutputDebug "catver_file: " . catver_file . " romSpec: " . romSpec . "`n"
+										rom_category := IniRead(catver_file, "Category", romSpec, "")
+									}	
+									if (rom_category)
+										this._playlists[pl_idx]["playlist"][gm_idx]["rom_category"] := rom_category						
+								}
+							}							
+							
+							assetspec := oEmulators.Emulators[emulator.sys_key].asset_name
+							favoritesPath := A_ScriptDir . "\Assets\" . assetspec . "\Settings"
+							favoritesFile := favoritesPath . "\favorites.ini"
+					
+							if (FileExist(favoritesFile))
+							{
+								bFavorite := IniRead(favoritesFile, "Favorites", romFile, 0)
+
+								rom_favorite := bFavorite == 1 ? "true" : "false"
+
+								if (rom_favorite == "true")
+									favorite_icon_file := favorite_on_icon_file
+								else
+									favorite_icon_file := favorite_off_icon_file
+
+								this._playlists[pl_idx]["playlist"][gm_idx]["rom_favorite"] := rom_favorite
+								this._playlists[pl_idx]["playlist"][gm_idx]["favorite_icon"] := favorite_icon_file
+							}	
+							else
+							{
+								this._playlists[pl_idx]["playlist"][gm_idx]["rom_favorite"] := "false"
+								this._playlists[pl_idx]["playlist"][gm_idx]["favorite_icon"] := favorite_off_icon_file
+							}
+
+							ratingsPath := A_ScriptDir . "\Assets\" . assetspec . "\Settings"
+							ratingsFile := ratingsPath . "\ratings.ini"
+					
+							if (FileExist(ratingsFile))
+							{
+								nRating := IniRead(ratingsFile, "Ratings", romFile, 0)
+								this._playlists[pl_idx]["playlist"][gm_idx]["rom_rating"] := nRating
+							}	
+							else
+							{
+								this._playlists[pl_idx]["playlist"][gm_idx]["rom_rating"] := 0
+							}
+							/*
+							;possibly make this an option
+							else
+							{
+								;Use LaunchBox value if avalilable and there is no favorites.ini
+								rom_favorite := oEmulators.Emulators[emulator.sys_key]._meta_array["meta_names"].GetFavorite(romFile)
+								this._playlists[pl_idx]["playlist"][gm_idx]["rom_favorite"] := rom_favorite
+							}	
+							*/												
+
+							rom_publisher := oEmulators.Emulators[emulator.sys_key].meta_names.GetPublisher(romFile)
+							this._playlists[pl_idx]["playlist"][gm_idx]["rom_publisher"] := rom_publisher
+
+							rom_developer := oEmulators.Emulators[emulator.sys_key].meta_names.GetDeveloper(romFile)
+							this._playlists[pl_idx]["playlist"][gm_idx]["rom_developer"] := rom_developer
+
+							rom_players := oEmulators.Emulators[emulator.sys_key].meta_names.GetPlayMode(romFile)
+							this._playlists[pl_idx]["playlist"][gm_idx]["rom_players"] := rom_players
+
+							rom_release := oEmulators.Emulators[emulator.sys_key].meta_names.GetReleaseDate(romFile)
+							this._playlists[pl_idx]["playlist"][gm_idx]["rom_year"] := rom_year := SubStr(rom_release, 1, 4)
+
+							rom_release := SubStr(rom_release, 1 , 4)
+							if (rom_release && (rom_publisher || rom_developer))
+								rom_release := rom_release . " by "
+							if (rom_publisher && rom_developer && rom_publisher != rom_developer)
+								rom_release := rom_release . rom_publisher . " [" . rom_developer . "]"
+							else if (rom_publisher)
+								rom_release := rom_release . rom_publisher
+							else if (rom_developer)
+								rom_release := rom_release . rom_publisher
+
+							this._playlists[pl_idx]["playlist"][gm_idx]["rom_release"] := rom_release
+
+							;Include a reference to the master playlist keys (list and game indexs) in the object to 
+							;function together as a stable uid for the game. For example, used for naming external resources,
+						    ;like images, to the game that can be referenced no matter what custom list the object is in.)
+							this._playlists[pl_idx]["playlist"][gm_idx]["parent"] := Map("list", pl_idx, "game", gm_idx) 
+
+							isFav := false
+
+							for n, customList in oLists
+							{
+								filename := lists_folder . "\" . customList.list_key . "\" . emulator.sys_key . " " . romFile . ".txt"	
+								
+								if (FileExist(filename))
+								{
+									lk := customList.list_key
+									cl_idx := cl_idx_map.%lk%
+									cpl_idx := pl_idx_map.%lk%
+
+									this._playlists[cpl_idx]["playlist"][cl_idx] := this._playlists[pl_idx]["playlist"][gm_idx]
+
+									cl_idx_map.%lk%++
+
+									;While we're here, check if this is a favorite in this list's local favorites folder
+									filename := favorites_folder . "\" . customList.list_key . "\" . emulator.sys_key . " " . romFile . ".txt"
+									if (FileExist(filename))
+										isFav := true							
+								}
+							}
+
+							;Add a playlist stub to Master Favorites list if it is a favorite
+							filename := favorites_folder . "\" . emulator.sys_key . "\" . emulator.sys_key . " " . romFile . ".txt"
+							if (FileExist(filename) || isFav)
+							{
+								this._playlists[fav_idx]["playlist"][fv_idx] := this._playlists[pl_idx]["playlist"][gm_idx]
+								
+								fv_idx++
+							}							
+						}	
+
+						;*****************************************************************************************************
+						; Permit loading to be interrupted if exiting app or switching games
+						;*****************************************************************************************************
+
+						;allows exiting to interrupt if an exit call was made, but it was not for a vector switch
+						if (!IsEmulatorActive() && !g_directswitch_args)
+						{
+							g_guiselect_loaded := true ;not really true, but lets shutdown proceed with no warnings from RunWaitTimer
+							return
+						}
+
+						;If switching games while still iniitializing list, destroy this screen and start over after next game loads.
+						;It would be nice to keep loading through the switchover, but pseudo threading model in AHK prevents this
+						;since the main thread won't continue until this thread finsishes.
+
+						;If this is ever an issue, a pause/continue capability could be considered, but probably not worth the effort. 
+						if (g_directswitch_args)
+						{
+
+							guiSelect.Destroy()
+							CreateSelectScreen()
+							SetTimer SelectControlTimer, 100
+							return
+						}
+						;*****************************************************************************************************							
+					}
+				}	
+			}
+			pl_idx++
+		}
+
+		;Add gamelists to the control for each playlist
+		emu_count := this._playlists.Count
+
+		;Add games to the playlists
+		o := 0
+		o_temp := 0
+		for n, pl_item in this._playlists
+		{
+			initSysText := pl_item["name"]
+			initSysText2 := pl_item["proper_name"]
+
+			gGui.guiSelect_ProgText.Text := "Loading games into list: " . initSysText . " (" . initSysText2 . ")"
+
+			f := n + emu_count
+			this._CreateGameListControl(n) ;use ordinary rather than associative array since names might have unusable characters
+			this._CreateGameListControl(f) ;create the associated favorites list (offset by emu_count)
+			
+			;Use the playlist generated above to create the listview (i.e. visible) list
+			fc := 0
+			o := 0 ;important initialization in cases where the playlist is empty. 
+			o_temp := 0
+			for o, s_item in pl_item["playlist"]
+			{
+				properName := s_item["proper_name"]
+				vector := s_item["vector"]
+				systemKey := s_item["sys_key"]
+				sysKey := pl_item["name"] ;this is the list name
+
+				cleanLists := oEmulators.Emulators[systemKey].clean_lists
+
+				if (n <= fav_idx || cleanLists == 2 || cleanLists == -1)
+					cleanedProperName := StripEnclosures(properName, cleanLists)
+				else
+					cleanedProperName := StripEnclosures(properName, 0) ;just revert doubled (( )) or [[ ]] to single
+						
+				gGui.guiSelect_ListViewTop%n%.Add(, cleanedProperName)
+				gGui.guiSelect_ListViewBottom%n%.Add(, cleanedProperName, , ObjPtrAddRef(s_item))
+
+				if (n != fav_idx)
+					filename := favorites_folder . "\" . sysKey . "\" . vector . ".txt"
+				else
+					filename := favorites_folder . "\" . favorites_listname . "\" . vector . ".txt"
+					
+				;use [system] clean_lists setting if available, otherwise use global
+				if (FileExist(filename))
+				{
+					;if clean_lists feature turned on, remove () and [] text.
+					cleanedProperName := StripEnclosures(properName, cleanLists) 
+					gGui.guiSelect_ListViewTop%f%.Add(, cleanedProperName)
+					gGui.guiSelect_ListViewBottom%f%.Add(, cleanedProperName, , ObjPtrAddRef(s_item))
+					fc++
+				}
+				
+				o_temp := o
+			}
+			o := o_temp
+
+			;initialize the state array used by VerticalScroll
+			this._state[n]["count"] := !o ? 0 : o
+			if (this._state[n]["count"] == 0)
+				gGui.guiSelect_GameName%n%.Text := "Empty"
+			this._state[n]["sublist"] := 0 ;0 is all games, 1 is the favorites (this is only an attribute of the base list)
+
+			;initialize favorites
+			this._state[f]["count"] := fc
+			this.SetListRows(f, fc)
+
+			;init each list to its starting member then init
+			this._current_playlist := n ;set the global to this list
+			this.Init(n)                ;init the list
+			
+			this._current_playlist := f ;set the global to the favorites sublist
+			this.Init(f)				;init the list
+
+			this._current_playlist := n
+
+			;Update progress bar
+			prog_val := Floor(n / emu_count * 50) + 50
+			gGui.guiSelect_InitProgress.Value := prog_val
+
+			;*****************************************************************************************************
+			; Permit loading to be interrupted if exiting app or switching games
+			;*****************************************************************************************************
+
+			;allows exiting to interrupt if an exit call was made, but it was not for a vector switch
+			if (!IsEmulatorActive() && !g_directswitch_args)
+			{
+				;Gui, guiSelect:Destroy ;cleans display prior to shutdown
+				g_guiselect_loaded := true ;not really true, but lets shutdown proceed with no warnings from RunWaitTimer
+				return
+			}
+
+			;If switching games while still iniitializing list, destroy this screen and start over after next game loads.
+			;It would be nice to keep loading through the switchover, but pseudo threading model in AHK prevents this
+			;since the main thread won't continue until this thread finsishes.
+
+			;If this is ever an issue, a pause/continue capability could be considered, but probably not worth the effort. 
+			if (g_directswitch_args)
+			{
+				guiSelect.Destroy()
+				CreateSelectScreen()
+				SetTimer SelectControlTimer, 100
+				return
+			}
+			;*****************************************************************************************************
+		}
+
+		this._maxSystems := this._playlists.Count
+
+		;Get the starting list
+		initial_list := fav_idx ;default
+		for n, s_item in this._playlists
+		{
+			if (s_item["name"] == gCfg.lst_default_list)
+			{
+				initial_list := n
+				break
+			}
+		}
+
+		;init to first playlist 
+		this._deserializeState()
+
+		this._current_playlist := initial_list
+		this._current_count := this._state[initial_list]["count"]
+
+		;this._current_object := this._playlists[initial_list]["playlist"].Get(1, Map())  
+		this._current_object := this._playlists[initial_list]["playlist"][1]  ;this._state[1]["selectedObject"]  
+		this._AddSystemItems() 
+
+		;We may have loaded states, so activate the star on any
+		;active favorites list.  Can't do that in the _deserialize method since
+		;it needs to come after AddSystemItems()
+		for n, st in this._state
+		{
+			if (st.Get("sublist", 0) == 1)
+			{
+				LV_SetColumnIcon(gGui.guiSelect_ListViewPlaylist.Hwnd, 1, n, 2)
+
+				tmp := ""
+				try tmp := this._playlists[n]["name"]
+				if (tmp == "picks")
+					gGui.guiSelect_ListViewPlaylist.Modify(1, "Col" . n, gCfg.top_picks_label)
+			}
+			else
+			{
+				tmp := ""
+				try tmp := this._playlists[n]["name"]
+				if (tmp == "picks")
+					gGui.guiSelect_ListViewPlaylist.Modify(1, "Col" . n, gCfg.all_picks_label)
+			}
+		}
+
+		this.ScrollHorizontal("index",initial_list)
+
+		g_guiselect_loaded := true
+
+		picker_load_timer := (A_TickCount - picker_load_timer)//1000
+		LogEntry("INFO: Completed loading picker menu (" . picker_load_timer . " seconds).`n")
+
+		this.Show() ;Just changes which controls are visible from progress bar to interactive
+		if (g_guiselect_visible)
+			EnableControls("guiSelect")
+
+		return
+	}
+
+	;called by _AddPlaylistItems
+	_AddSystemItems()
+	{
+		global
+		local c, n, SysItem, column 
+
+		;Column 1 is there by default, so modify (rather than add) the first 
+		;system to it separately.
+		gGui.guiSelect_ListViewPlaylist.ModifyCol(1, this._systemLabelWidth)
+		gGui.guiSelect_ListViewPlaylist.ModifyCol(1, "Center")
+		gGui.guiSelect_ListViewPlaylist.Add(, this._playlists[1]["proper_name"])
+
+		;Now add any additional systems to the list
+		;this._playlists[n]["playlist"].Count() > 0
+		for n, sysItem in this._playlists
+		{
+			if (n > 1)
+			{
+				column := A_Index
+				gGui.guiSelect_ListViewPlaylist.InsertCol(column, this._systemLabelWidth, "Name") ;the "Name" doesn't matter
+				gGui.guiSelect_ListViewPlaylist.ModifyCol(column, "Center")
+				gGui.guiSelect_ListViewPlaylist.Modify(1, "Col" . column, sysItem["proper_name"])
+			}
+		}
+
+		;Color the "Picks" column yellow
+		oLVC := LV_Colors(gGui.guiSelect_ListViewPlaylist)
+		if (IsObject(oLVC))
+			oLVC.Cell(1, oLists.Length + 1, , color_yellow)
+		else
+			LogEntry("WARNING: Could not create LV_Colors object.`n")
+
+		;add stars to favorites menu		
+		ImageListID := IL_Create(3)  ; Create an ImageList to hold 1 icon (for now)
+		gGui.guiSelect_ListViewPlaylist.SetImageList(ImageListID)  ; Assign the above ImageList to the current ListView.
+		
+		;invert whether a star is placed on picks sublists or on the master lists
+		;Default (1) places the star on the "picks" sublists.
+		if (gCfg.mark_picks == 1)
+		{
+			IL_Add(ImageListID, A_ScriptDir . "\Resources\Icons\empty.ico")
+			IL_Add(ImageListID, A_ScriptDir . "\Resources\Icons\star.ico")
+		}
+		else 
+		{
+			IL_Add(ImageListID, A_ScriptDir . "\Resources\Icons\star.ico")
+			IL_Add(ImageListID, A_ScriptDir . "\Resources\Icons\empty.ico")
+		}
+		IL_Add(ImageListID, A_ScriptDir . "\Resources\Icons\edit.ico")
+
+		c := this._playlists.Count
+        
+		;row#, column#, icon# - puts icons in columns other than one
+		Loop c
+			LV_SetColumnIcon(gGui.guiSelect_ListViewPlaylist.Hwnd, 1, A_Index, 1) 
+
+		return
+	}
+
+	;Might be nice to replace these with image/icons at some point.
+	_CreatePolygonOverlay()
+	{		
+		global
+		leftMargin := this._systemLabelWidth
+		verticalCenter := this._bottombar_ypos + this._barHeight + this._barHeight/4
+		barTop := this._bottombar_ypos + this._barHeight
+		barBottom := (this._bottombar_ypos + this._barHeight) + this._barHeight/2
+
+		;**********************************************************************
+		; Draw left triangel
+		;**********************************************************************
+
+		gGui.guiTriangleLeft := Gui(, "eipGui - guiTriangleLeft")
+		gGui.guiTriangleLeft.Opt("-Caption +ToolWindow +LastFound +AlwaysOnTop")
+		gGui.guiTriangleLeft.BackColor := color_light_gray
+		
+		dpi:=96/A_ScreenDPI
+
+		x1 := leftMargin
+		y1 := barTop
+
+		x2 := leftMargin + 40
+		y2 := verticalCenter
+
+		x3 := leftMargin
+		y3 := barBottom
+		
+		tri := x1/dpi . "-" . y1/dpi . " " . x2/dpi . "-" . y2/dpi . " " . x3/dpi . "-" y3/dpi
+		
+		WinSetRegion tri
+
+		;**********************************************************************
+		; Draw right triangle
+		;**********************************************************************
+
+		gGui.guiTriangleRight := Gui(, "eipGui - guiTriangleRight")
+		gGui.guiTriangleRight.Opt("-Caption +ToolWindow +LastFound +AlwaysOnTop")
+		gGui.guiTriangleRight.BackColor := color_light_gray
+
+		x1 := leftMargin * 2
+		y1 := barTop
+
+		x2 := leftMargin * 2 - 40
+		y2 := verticalCenter
+
+		x3 := leftMargin * 2
+		y3 := barBottom
+
+		tri := x1/dpi . "-" . y1/dpi . " " . x2/dpi . "-" . y2/dpi . " " . x3/dpi . "-" y3/dpi
+
+		;WinSet, Region, %tri%	
+		WinSetRegion tri
+
+		;**********************************************************************
+		; Draw left minus sign
+		;**********************************************************************
+
+		gGui.guiMinusLeft := Gui(, "eipGui - guiMinusLeft")
+		gGui.guiMinusLeft.Opt("-Caption +ToolWindow +LastFound +AlwaysOnTop")
+		gGui.guiMinusLeft.BackColor := color_maroon
+
+		x1 := leftMargin + 5
+		y1 := verticalCenter - 2
+
+		x2 := leftMargin + 19
+		y2 := verticalCenter - 2
+
+		x3 := leftMargin + 19
+		y3 := verticalCenter + 2
+
+		x4 := leftMargin + 5
+		y4 := verticalCenter + 2
+
+		tri := x1/dpi . "-" . y1/dpi . " " . x2/dpi . "-" . y2/dpi . " " . x3/dpi . "-" y3/dpi . " " . x4/dpi . "-" . y4/dpi
+
+		WinSetRegion tri
+
+		;**********************************************************************
+		; Draw right minus sign
+		;**********************************************************************
+
+		gGui.guiMinusRight := Gui(, "eipGui - guiMinusRight")
+		gGui.guiMinusRight.Opt("-Caption +ToolWindow +LastFound +AlwaysOnTop")
+		gGui.guiMinusRight.BackColor := color_maroon
+
+		x1 := leftMargin * 2 - 5
+		y1 := verticalCenter - 2
+
+		x2 := leftMargin * 2 - 19
+		y2 := verticalCenter - 2
+
+		x3 := leftMargin * 2 - 19
+		y3 := verticalCenter + 2
+
+		x4 := leftMargin * 2 - 5
+		y4 := verticalCenter + 2
+
+		tri := x1/dpi . "-" . y1/dpi . " " . x2/dpi . "-" . y2/dpi . " " . x3/dpi . "-" y3/dpi . " " . x4/dpi . "-" . y4/dpi
+
+		WinSetRegion tri
+
+		;**********************************************************************
+		; Draw left plus sign
+		;**********************************************************************
+
+		gGui.guiPlusLeft := Gui(, "eipGui - guiPlusLeft")
+		gGui.guiPlusLeft.Opt("-Caption +ToolWindow +LastFound +AlwaysOnTop")
+		gGui.guiPlusLeft.BackColor := color_green
+
+		x1 := leftMargin + 5
+		y1 := verticalCenter + 2
+
+		x2 := leftMargin + 5
+		y2 := verticalCenter - 2
+
+		x3 := leftMargin + 10
+		y3 := verticalCenter - 2
+
+		x4 := leftMargin + 10
+		y4 := verticalCenter - 8
+
+		x5 := leftMargin + 14
+		y5 := verticalCenter - 8
+
+		x6 := leftMargin + 14
+		y6 := verticalCenter - 2
+
+		x7 := leftMargin + 19
+		y7 := verticalCenter - 2
+
+		x8 := leftMargin + 19
+		y8 := verticalCenter + 2
+
+		x9 := leftMargin + 14
+		y9 := verticalCenter + 2
+
+		x10 := leftMargin + 14
+		y10 := verticalCenter + 7
+
+		x11 := leftMargin + 10
+		y11 := verticalCenter + 7
+
+		x12 := leftMargin + 10
+		y12 := verticalCenter + 2
+
+		tri := x1/dpi . "-" . y1/dpi . " " . x2/dpi . "-" . y2/dpi . " " . x3/dpi . "-" y3/dpi . " " . x4/dpi . "-" . y4/dpi . " " . x5/dpi . "-" . y5/dpi . " " . x6/dpi . "-" . y6/dpi . " " . x7/dpi . "-" . y7/dpi . " " . x8/dpi . "-" . y8/dpi . " " . x9/dpi . "-" . y9/dpi . " " . x10/dpi . "-" . y10/dpi . " " . x11/dpi . "-" . y11/dpi . " " . x12/dpi . "-" . y12/dpi	
+		
+		WinSetRegion tri
+
+		;**********************************************************************
+		; Draw right plus sign
+		;**********************************************************************
+
+		gGui.guiPlusRight := Gui(, "eipGui - guiPlusRight")
+		gGui.guiPlusRight.Opt("-Caption +ToolWindow +LastFound +AlwaysOnTop")
+		gGui.guiPlusRight.BackColor := color_green
+
+		x1 := leftMargin * 2 - 5
+		y1 := verticalCenter + 2
+
+		x2 := leftMargin * 2 - 5
+		y2 := verticalCenter - 2
+
+		x3 := leftMargin * 2 - 10
+		y3 := verticalCenter - 2
+
+		x4 := leftMargin * 2 - 10
+		y4 := verticalCenter - 8
+
+		x5 := leftMargin * 2 - 14
+		y5 := verticalCenter - 8
+
+		x6 := leftMargin * 2 - 14
+		y6 := verticalCenter - 2
+
+		x7 := leftMargin * 2 - 19
+		y7 := verticalCenter - 2
+
+		x8 := leftMargin * 2 - 19
+		y8 := verticalCenter + 2
+
+		x9 := leftMargin * 2 - 14
+		y9 := verticalCenter + 2
+
+		x10 := leftMargin * 2 - 14
+		y10 := verticalCenter + 7
+
+		x11 := leftMargin * 2 - 10
+		y11 := verticalCenter + 7
+
+		x12 := leftMargin * 2 - 10
+		y12 := verticalCenter + 2
+
+		tri := x1/dpi . "-" . y1/dpi . " " . x2/dpi . "-" . y2/dpi . " " . x3/dpi . "-" y3/dpi . " " . x4/dpi . "-" . y4/dpi . " " . x5/dpi . "-" . y5/dpi . " " . x6/dpi . "-" . y6/dpi . " " . x7/dpi . "-" . y7/dpi . " " . x8/dpi . "-" . y8/dpi . " " . x9/dpi . "-" . y9/dpi . " " . x10/dpi . "-" . y10/dpi . " " . x11/dpi . "-" . y11/dpi . " " . x12/dpi . "-" . y12/dpi	
+	
+		WinSetRegion tri
+	}
+
+	;This is where we create the basic screen elements for the picker
+	_CreateBaseControl()
+	{
+		global ;gGui, guiSelect
+
+		local font, playlist_font_size, barHeight, topbar_ypos, bottombar_ypos, x, y, ho, hi, yo, h, pw, slw, sw
+		local systemViewWidth, y_center, systemLabelWidth, areaT, areaB, listT, listB, w_adj, x_adj, l_adjy
+		local init_text_y, right_start, test_y, prog_h, prog_w, prog_x, prog_y, prog_text_y
+		local Gradient_1, Gradient_2, fav_offset, metaLabelWidth, systemname_font_size, centerLabelWidth, sideLabelWidth
+
+		font := this._font
+		playlist_font_size := this._playlistFontSize 
+		systemname_font_size := this._systemNameFontSize
+
+		guiSelect.SetFont(, font)
+
+		;Create game list selector
+		barHeight := this._barHeight
+		topbar_ypos := this._topbar_ypos
+		bottombar_ypos := this._bottombar_ypos
+		systemLabelWidth := this._systemLabelWidth
+		centerLabelWidth := this._centerLabelWidth
+		sideLabelWidth := this._sideLabelWidth
+		
+		right_start := sideLabelWidth + centerLabelWidth
+
+		;*****************************************************************************************
+		;  test output
+		;*****************************************************************************************
+		test_y := bottombar_ypos + barHeight + barHeight / 2 + 5
+		guiSelect.SetFont("s11")
+		gGui.guiSelect_TestMsg := guiSelect.AddText("BackgroundTrans x0 y" . test_y . " w" . nScreenWidth . " cWhite Center +0x200 vTestMsg")
+		;*****************************************************************************************
+
+		prog_h := 40
+		prog_w := nScreenWidth * 2/3
+		prog_y := nScreenHeight / 2 - prog_h / 2
+		prog_x := nScreenWidth / 2 - prog_w / 2
+		prog_text_y := prog_y + prog_h + 5
+
+		gGui.guiSelect_InitProgress := guiSelect.AddProgress("x" . prog_x . " y" . prog_y . " w" . prog_w . " h" . prog_h . " cGray vInitProgress", 0)
+		guiSelect.SetFont("s12")
+	
+		gGui.guiSelect_ProgText := guiSelect.AddText("BackgroundTrans x0 y" . prog_text_y . " w" . nScreenWidth . " cWhite Center +0x200 vProgText")
+		gGui.guiSelect_ProgText.GetPos(&pTX, &pTY, &pTW, &pTH)
+		init_text_y := prog_y - pTH - 5
+		gGui.guiSelect_InitText := guiSelect.AddText("BackgroundTrans x0 y" . init_text_y . " w" . nScreenWidth . " cWhite Center +0x200 vInitText", "Initializing Game Lists. Please Wait...")
+
+		;This sequence calculates the pixel height of each row in a ListView of
+		;the current font size 
+		;note, -E0x200 hides border (corresponds to WS_EX_CLIENTEDGE)
+		;note, -LV0x20 hides visual selection if clicking on a row 
+		guiSelect.SetFont("s" . playlist_font_size)
+		gGui.guiSelect_ListViewR1 := guiSelect.AddListView("Hidden x0 y0 -E0x200 -Hdr R1 vListViewR1", ["Name"])
+		gGui.guiSelect_ListViewR2 := guiSelect.AddListView("Hidden x0 y0 -E0x200 -Hdr R2 vListViewR2", ["Name"])
+		gGui.guiSelect_ListViewR3 := guiSelect.AddListView("Hidden x0 y0 -E0x200 -Hdr R3 vListViewR3", ["Name"])
+		gGui.guiSelect_ListViewR1.GetPos(&r1X, &r1Y, &r1W, &r1H)
+		gGui.guiSelect_ListViewR2.GetPos(&r2X, &r2Y, &r2W, &r2H)
+		gGui.guiSelect_ListViewR3.GetPos(&r3X, &r3Y, &r3W, &r3H)
+		this._rowHeight := r3H -  r2H
+
+		;Compute number of list rows in the top region
+		areaT := topbar_ypos 
+		listT := this._rowHeight * this._maxRows
+		if (areaT < listT)
+			this._maxRows := Floor(areaT / this._rowHeight)
+
+		;Compute number of list rows in the bottom region
+		areaB := bottombar_ypos - (topbar_ypos + barHeight) - 3 ;The -3 prevents the LV from "stepping on" the bottom bar's top border
+		listB := 4 + this._rowHeight * this._maxRowsB
+		if (areaB < listB)
+			this._maxRowsB := Floor(areaB / this._rowHeight)
+
+		;These minor adjustments put the left and right borders just
+		;outside of the screen dimensions so they are not seen
+		x:=-1
+		slw:=sideLabelWidth+2
+		sw:=nScreenWidth+2
+
+		Gradient_1 := "
+		(LTrim Join|
+		999999|999999|999999|999999|999999|999999|999999|999999|999999
+		888888|888888|888888|888888|888888|888888|888888|888888|888888
+		777777|777777|777777|777777|777777|777777|777777|777777|777777
+		666666|666666|666666|666666|666666|666666|666666|666666|666666
+		555555|555555|555555|555555|555555|555555|555555|555555|555555
+		444444|444444|444444|444444|444444|444444|444444|444444|444444
+		333333|333333|333333|333333|333333|333333|333333|333333|333333
+		222222|222222|222222|222222|222222|222222|222222|222222|222222
+		111111|111111|111111|111111|111111|111111|111111|111111|111111
+		)"
+
+		gGui.guiSelect_TopBarLeft := guiSelect.AddProgress("Hidden BackgroundGray x" . x . " y" topbar_ypos . " w" . sideLabelWidth . " h" . barHeight . " c" . color_dark . " vTopBarLeft", 100)
+        gGui.guiSelect_TopBarRight := guiSelect.AddProgress("Hidden BackgroundGray x" . right_start . " y" . topbar_ypos . " w" . slw . " h" . barHeight . " c" color_dark . " vTopBarRight", 100)
+
+		w_adj := centerLabelWidth + 4 ;4 is a margin
+		x_adj := sideLabelWidth - 2 ;2 is a margin
+
+		gGui.guiSelect_TopBarCenter := guiSelect.AddPicture("Hidden x" . x_adj . " y" . topbar_ypos . " w" . w_adj . " h" . barHeight . " vTopBarCenter", "HBITMAP:" . CreateDIB2(Gradient_1, 9,9, barHeight,w_adj, 1,0)) ;CreateDIB(color_gray))
+
+		;Create bottom background bar
+		Gradient_2 := "
+		(LTrim Join|
+		999999|999999|999999|999999|999999|999999|999999|999999|999999
+		666666|666666|666666|666666|666666|666666|666666|666666|666666
+		222222|222222|222222|222222|222222|222222|222222|222222|222222
+		222222|222222|222222|222222|222222|222222|222222|222222|222222
+		222222|222222|222222|222222|222222|222222|222222|222222|222222
+		222222|222222|222222|222222|222222|222222|222222|222222|222222
+		222222|222222|222222|222222|222222|222222|222222|222222|222222
+		666666|666666|666666|666666|666666|666666|666666|666666|666666
+		999999|999999|999999|999999|999999|999999|999999|999999|999999
+		)"
+
+		gGui.guiSelect_BottomBar := guiSelect.AddProgress("Hidden x" . x . " y" . bottombar_ypos . " w" . sw . " h" . barHeight . " c" . color_dark . " BackgroundGray vBottomBar", 100)
+		gGui.guiSelect_BottomBarBorder := guiSelect.AddPicture("Hidden x" systemLabelWidth . " y" . bottombar_ypos . " w" . systemLabelWidth . " h" . barHeight . " vBottomBarBorder", "HBITMAP:" . CreateDIB2(Gradient_2, 9,9, barHeight,w_adj, 1,0))
+
+		;Create mode status window (for adding/removing from lists)
+		guiSelect.SetFont("s18")
+		y:=bottombar_ypos + barHeight
+		h:=barHeight/2 
+		yo:=y+h
+		ho:=h/2
+		pw := systemLabelWidth
+
+		gGui.guiSelect_FavoritesProgress := guiSelect.AddProgress("Hidden x" . systemLabelWidth . " y" . y . " w" . pw . " h" . ho . " cBlue BackgroundBlack vFavoritesProgress", 0)
+		gGui.guiSelect_ModeStatus := guiSelect.AddPicture("Hidden x" . systemLabelWidth . " y" . y . " w" . pw . " h" . h . " vModeStatus", "HBITMAP:" . CreateDIB(color_gray))
+		gGui.guiSelect_ActionProgress := guiSelect.AddProgress("Hidden x" . systemLabelWidth . " y" . yo . " w" . pw . " h" . ho . " cBlue BackgroundBlack vActionProgress", 0)
+		gGui.guiSelect_ModeName := guiSelect.AddText("Hidden BackgroundTrans x" . systemLabelWidth . " y" . y . " w" pw . " h" . h . " cWhite Center +0x200 vModeName")
+		h := 1
+		gGui.guiSelect_ModeSeparator := guiSelect.AddPicture("Hidden x" . systemLabelWidth . " y" . y . " w" . pw . " h" . h . " vModeSeparator", "HBITMAP:" . CreateDIB(color_dark_gray))
+
+		;Three labels at bottom are on top of each other
+		;Justification determines text position
+		y := nScreenHeight - 20
+
+		metaLabelWidth := nScreenWidth - 20
+		guiSelect.SetFont("s10")
+		gGui.guiSelect_RomNameLabel := guiSelect.AddText("Hidden BackgroundTrans x10 y" . y . " w" . metaLabelWidth . " cWhite Center +0x200 vRomNameLabel")
+		gGui.guiSelect_MetaLabelLeft := guiSelect.AddText("Hidden BackgroundTrans x10 y" . y . " w" . metaLabelWidth . " cWhite Left +0x200 vMetaLabelLeft")
+		gGui.guiSelect_MetaLabelRight := guiSelect.AddText("Hidden BackgroundTrans x10 y" . y . " w" . metaLabelWidth . " cWhite Right +0x200 vMetaLabelRight")
+		gGui.guiSelect_RomNameLabel.GetPos(&label_posX, &label_posY, &label_posW, &label_posH)
+		y := nScreenHeight - Floor(label_posH * 2.5)
+		gGui.guiSelect_MetaLabelTopLeft := guiSelect.AddText("Hidden BackgroundTrans x10 y" . y . " w" . metaLabelWidth . " cWhite Left +0x200 vMetaLabelTopLeft")
+		gGui.guiSelect_MetaLabelTopRight := guiSelect.AddText("Hidden BackgroundTrans x10 y" . y . " w" . metaLabelWidth . " cWhite Right +0x200 vMetaLabelTopRight")
+
+		;License banner
+		if (sLicenseType == "public" || gCfg.show_license == 1)
+		{
+    		y := nScreenHeight - label_posH * 3
+
+			gGui.guiSelect_PickerLicenseBanner := guiSelect.AddText("Hidden BackgroundTrans x0 y" . y . " w" . nScreenWidth . " h" . label_posH . " cWhite Center +0x200 vPickerLicenseBanner")
+			gGui.guiSelect_PickerLicenseBanner.Text := g_license_Text
+		}
+			
+		;Create bottom bar playlist scroller
+		guiSelect.SetFont("s" . systemname_font_size)
+		hi := oEmulators.Emulators.Count + oLists.Length + 1 
+		systemViewWidth := systemLabelWidth * (oEmulators.Emulators.Count + oLists.Length + 1)
+
+		gGui.guiSelect_ListViewPlaylist := guiSelect.AddListView("Hidden x0 y" . bottombar_ypos . " w" . systemViewWidth . " cWhite Background" . color_dark . " -E0x200 -Hdr Center R1 vListViewPlaylist +LV0x2", ["Name"])
+		gGui.guiSelect_ListViewPlaylist.GetPos(&smposX, &smposY, &smposW, &smposH)
+		y_center := bottombar_ypos + (barHeight/2) - (smposH / 2) ;centers ListView (which is dynamically sized based on font) over the progress bar background
+		gGui.guiSelect_ListViewPlaylist.Move(systemLabelWidth, y_center)
+		
+		return
+	}
+
+	SetListRows(pl, list_count)
+	{
+		global
+		local actual_rows, actual_rowsB
+
+		;for top list control *************************************************
+		if (list_count <= this._maxRows)
+			actual_rows := list_count == 1 ? 1 : list_count - 1
+		else
+			actual_rows := this._maxRows
+
+		;special case for an empty list
+		;such as the intial size of the favorites lists
+		if (actual_rows == "")
+			actual_rows := 1
+
+		;for bottom list control ***********************************************
+		if (list_count <= this._maxRowsB)
+			actual_rowsB := list_count == 1 ? 1 : list_count - 1
+		else
+			actual_rowsB := this._maxRowsB
+
+		;special case for an empty list
+		;such as the intial size of the favorites lists
+		if (actual_rowsB == "")
+			actual_rowsB := 1
+
+		this._state[pl]["maxRows"] := actual_rows ;save maxRows as part of the state for this playlist
+		this._state[pl]["maxRowsB"] := actual_rowsB
+
+		return
+	}
+
+	_CreateGameListControl(pl)
+	{
+		global
+		local list_count, dr, actual_rows, actual_rowsB
+		local SM_CXVSCROLL, barHeight, topbar_ypos, bottombar_ypos
+		local colwtop, new_lv_w, new_lv_y, new_lv_x, lvb_y
+		local playlist_font_size
+
+		playlist_font_size := this._playlistFontSize
+		gamename_font_size := this._gameNameFontSize
+
+		this._state[pl] := Map() ;init a state structure for the list
+
+		;initialize
+		this._state[pl]["selectedRow"] := 0
+		this._state[pl]["count"] := 0
+		this._state[pl]["selectedObject"] := Map()
+	
+		list_count := this._playlists.Get(pl, Map()).Get("playlist", Map()).Count
+		this.SetListRows(pl, list_count)
+
+		actual_rows := this._state[pl]["maxRows"]
+		actual_rowsB := this._state[pl]["maxRowsB"]
+
+		;Create game list selector
+		SM_CXVSCROLL := 2
+		barHeight := this._barHeight
+		topbar_ypos := this._topbar_ypos
+		bottombar_ypos := this._bottombar_ypos
+		systemLabelWidth := this._systemLabelWidth
+		right_start := systemLabelWidth * 2
+
+		centerLabelWidth := this._centerLabelWidth
+		sideLabelWidth := this._sideLabelWidth
+
+		;Create game name text label
+		guiSelect.SetFont("s" . gamename_font_size)
+		gGui.guiSelect_GameName%pl% := guiSelect.AddText("Hidden BackgroundTrans x" . sideLabelWidth . " y" . topbar_ypos . " w" . centerLabelWidth . " h" . barHeight . " cWhite Center +0x200 vGameName%" . pl . "%")
+
+		;Create top list view
+		guiSelect.SetFont("s" . playlist_font_size)
+		;note, -E0x200 hides border (corresponds to WS_EX_CLIENTEDGE)
+		;note, -LV0x20 hides visual selection if clicking on a row 
+		gGui.guiSelect_ListViewTop%pl% := guiSelect.AddListView("Hidden x0 y0 w" . nScreenWidth . " BackgroundBlack cWhite -E0x200 -LV0x20 -Hdr Sort r" . actual_rows . " vListViewTop%" . pl . "%", ["Name","Item"])
+		
+		gGui.LVT%pl% := gGui.guiSelect_ListViewTop%pl%.Hwnd
+		gGui.guiSelect_ListViewTop%pl%.ModifyCol(1, "Center")
+
+		hscrollw := SysGet(SM_CXVSCROLL)
+		colwtop := nScreenWidth-hscrollw*2
+		gGui.guiSelect_ListViewTop%pl%.ModifyCol(1, colwtop)
+		gGui.guiSelect_ListViewTop%pl%.ModifyCol(2, 0)
+
+		gGui.guiSelect_ListViewTop%pl%.GetPos(&lvposX, &lvposY, &lvposW, &lvposH)
+		new_lv_w := lvposW + hscrollw
+		new_lv_y := topbar_ypos - lvposH - 3 ;3 is the margin above the top bar
+		new_lv_x := lvposX + hscrollw
+
+		gGui.guiSelect_ListViewTop%pl%.Move(new_lv_x, new_lv_y, new_lv_w)
+		
+		;Create bottom list view
+		lvb_y := topbar_ypos + barHeight
+		;Value of "Empty" in the header is the value shown for an empty
+		gGui.guiSelect_ListViewBottom%pl% := guiSelect.AddListView("Hidden x0 y" . lvb_y . " w" . nScreenWidth . " BackgroundBlack cWhite -E0x200 -LV0x20 -Hdr Sort r" . actual_rowsB . " vListViewBottom%" . pl . "%", ["Empty","Item","Object"])
+		gGui.LVB%pl% := gGui.guiSelect_ListViewBottom%pl%.Hwnd
+
+		gGui.guiSelect_ListViewBottom%pl%.ModifyCol(1, "Center")
+		gGui.guiSelect_ListViewBottom%pl%.ModifyCol(1, colwtop)
+		gGui.guiSelect_ListViewBottom%pl%.ModifyCol(2, 0)
+		gGui.guiSelect_ListViewBottom%pl%.ModifyCol(3, 0)
+
+		gGui.guiSelect_ListViewBottom%pl%.GetPos(&lvposX, &lvposY, &lvposW, &lvposH)
+		
+		new_lv_w := lvposW + hscrollw
+		new_lv_y := topbar_ypos + barHeight + 3 ;1 is the margin below the tob bar
+		new_lv_x := lvposX + hscrollw
+		
+		gGui.guiSelect_ListViewBottom%pl%.Move(new_lv_x, new_lv_y, new_lv_w)
+	}
+
+	_getAttractPlaylistID()
+	{
+		global
+		local pl, n := 0, n_temp := 0
+
+		for n, pl in this._playlists
+		{
+			n_temp := n
+			if (InStr(gCfg.attract_folder, pl["name"]) && pl["type"] == "list")
+				break
+		}
+
+		return n_temp
+	}
+
+	;Method to refresh the attract mode list when it is in auto mode
+	UpdateAttractListView()
+	{
+		global
+		;confirm that we're in auto mode, otherwise exit
+		if (gCfg.attract_auto < 1)
+			return
+
+		;Get the index of the attract playlist
+		attract_pl := this._getAttractPlaylistID()
+
+		if (attract_pl == 0)
+			return ;no playlist found
+
+		try 
+		{
+			gGui.guiSelect_ListViewTop%attract_pl%.Delete()
+			gGui.guiSelect_ListViewBottom%attract_pl%.Delete()
+		}
+		catch as e {
+			LogEntry("WARNING: Error clearing attract list ListView for auto mode.`n")
+			return
+		}
+
+		;Get the sorted attract_list created from the .history file.
+		;Note that this list is in count-priority order
+		attract_list := oHistory.GetAttractList()
+
+		if (!attract_list || attract_list.Length == 0)
+			return
+
+		;update vector file list if in auto mode
+		UpdateAutoAttractList() 
+
+		;For each vector in the sorted attract list (sorted by play_count),
+		;find its entry in the system playlist, then copy its playlist object
+		;into the new attract list.
+		idx := 1
+		for n, item in attract_list
+		{
+			;stop at max number allowed in list
+			if (idx > gCfg.attract_auto) 
+				break
+
+			vector := item["vector"] 
+
+			;skip if the rom is in the ..\suppress folder
+			test_filename := gCfg.attract_folder . "\suppress\" . vector . ".txt"
+			if (FileExist(test_filename))
+				continue
+
+			sysKey := SplitVector(vector)["sys_key"]
+			romspec := SplitVector(vector)["rom_value"]
+
+			;find the vector in the [System] playlists
+			n_temp := 0
+			for n, pl in this._playlists
+			{
+				n_temp := n
+				if (pl["name"] == sysKey && pl["type"] == "system")
+					break
+			}
+
+			;search though the playlist for the vector so that we can
+			;obtain the playlist item.
+			for n, pl_item in this._playlists[n_temp]["playlist"]
+			{
+				if pl_item["vector"] == vector
+				{
+					properName := pl_item["proper_name"]
+
+					cleanLists := oEmulators.Emulators[sysKey].clean_lists
+					cleanedProperName := StripEnclosures(properName, cleanLists)
+
+					gGui.guiSelect_ListViewTop%attract_pl%.Add(, cleanedProperName)
+					gGui.guiSelect_ListViewBottom%attract_pl%.Add(, cleanedProperName, idx, ObjPtrAddRef(pl_item))
+					
+					this._state[attract_pl]["count"] := ++idx	
+
+					break					
+				}
+			}
+		}	
+		this.SetListRows(attract_pl, idx)
+		this.Init(attract_pl)  ;re-init the list	
+
+		;Refresh the live attract list.
+		AttractSwitch(true)
+	}
+
+	;ct is the list index
+	SetEmptyListLabel(ct)
+	{
+		global
+		;Gui, guiSelect:Default			
+		fsz := this._gameNameFontSize
+		fnt := this._font
+		lbl := "Empty"
+	
+		guiSelect.SetFont("s" . fsz, fnt)
+		gGui.guiSelect_GameName%ct%.SetFont()
+		gGui.guiSelect_GameName%ct%.Text := lbl
+		gGui.guiSelect_RomNameLabel.Text := ""
+		gGui.guiSelect_MetaLabelRight.Text := ""
+		gGui.guiSelect_MetaLabelLeft.Text := ""
+		gGui.guiSelect_MetaLabelTopRight.Text := ""
+		gGui.guiSelect_MetaLabelTopLeft.Text := ""
+
+		this._oGraphicsOverlay.HideGraphics()
+	}
+
+	/**
+	 * Operations on the playlists favorites "sublist"
+	 * @param {any} cmd 
+	 * @returns {void}
+	 */
+	SublistCommand(cmd)
+	{
+		global
+
+		local cnt := 0, pl, cr, sr, i, r, v, fsz, fnt, gm
+		local progLimit, oDeletedRows, oDeletedRowsEntry, sourceValue, items, prog, selectedObject
+		local vector, listName, thisValue, sysKey, filename, base_pl, propName, labelText
+		local new_state, new_playlist, romspec, sysspec, assetspec, favoritesPath, favoritesFile
+		local bFavorite, newValue, p_pl, p_gm, ratingsPath, ratingsFile, nRating
+
+		pl := this._current_playlist ;local var for the current playlist
+
+		;Note that a "all" operation (delete or add) can only happen in a custom list and only when
+		;it is in edit (target) remove mode.
+		Switch cmd
+		{
+			Case "tog", "all", "genre", "year", "publisher", "developer" ,"players" ,"favorites" ,"rating":
+
+				;Delete from a custom list
+				if (this._current_target && this._current_target == pl)
+				{
+					DisableControls("guiSelect")
+
+					gGui.guiSelect_ActionProgress.Value := 0
+					gGui.guiSelect_ActionProgress.Visible := true
+					progLimit := cmd == "all" ? 100 : 50
+
+					ct := this._current_target
+					cr := this._state[pl]["selectedRow"]
+					
+					oDeletedRows := Array()
+
+					sourceValue := ""
+					if (cmd != "all" && cmd != "tog")
+					{
+						;Get the source value (i.e. appropriate value from currently selected row)
+						sourceValue := this._getSourceValue(cmd, cr, ct)
+
+						;don't delete anything if there was no sourceValue
+						;to compare with
+						if (!sourceValue)
+						{
+							EnableControls("guiSelect")
+							return
+						}
+					}				
+
+					oBASS.Play("remove")
+					
+					items := cmd == "tog" ? 1 : guiSelect_ListViewBottom%ct%.GetCount()
+
+					;This loop deletes all appropriate vector files
+					Loop items
+					{
+						prog := Floor(A_Index / items * progLimit)
+						gGui.guiSelect_ActionProgress.Value := prog
+
+						cr := cmd == "tog" ? cr : A_Index
+
+						;delete the proxy file for this item
+						selectedObject := gGui.guiSelect_ListViewBottom%ct%.GetText(cr, 3)
+						selectedObject := ObjFromPtrAddRef(Integer(selectedObject))
+						vector := selectedObject["vector"]
+						listName := this._playlists[ct]["name"]
+
+						if (!vector)	
+							continue
+
+						;if there was a sourceValue, then get the value of the current
+						;item. If no match, then contine without deleting
+						if (sourceValue)	
+						{
+							thisValue := this._getSourceValue(cmd, cr, ct)
+
+							if (thisValue != sourceValue)
+								continue
+						}
+
+						filename := lists_folder . "\" . listName . "\" . vector . ".txt"				
+
+						;if this is the attract playlist, perform special behavior
+						al := this._getAttractPlaylistID()
+						if (ct == al)
+						{
+							if (gCfg.attract_auto > 0)
+							{
+								oHistory.Delete(vector)
+
+								if (cmd == "tog")
+								{
+									;move vector file to the suppress folder
+									DirCreate lists_folder . "\" . listName . "\suppress"  ;in case it doesn't exist
+									filedest := lists_folder . "\" . listName . "\suppress\" . vector . ".txt"
+									FileMove filename, filedest
+								}
+								Else
+									FileDelete filename
+							}
+
+							;true parameter doesn't switch, but updates live attract mode with the changes
+							AttractSwitch(true)
+						}
+						else
+						{
+							FileDelete filename
+						}
+
+						;delete any corresponding files from favorites folder associated with this list
+						sysKey := this._playlists[ct]["name"]
+						filename := favorites_folder . "\" . sysKey . "\" . vector . ".txt"
+						try
+							FileDelete filename
+
+						this._deleteFromMasterFavorites(vector)
+
+						;maintain a list of the items we will next need to 
+						;remove from the onscreen list.  Not needed if cmd == "all"
+						;since we'll delete everything at once.
+						if (cmd != "all")
+						{
+							oDeletedRowsEntry := Map()
+							oDeletedRowsEntry["row"] := cr ;A_Index
+							oDeletedRowsEntry["vector"] := vector
+							oDeletedRows.Push(oDeletedRowsEntry)
+						}
+					}
+
+					;if this was a delete all, delete everything from the list
+					;at once.
+					if (cmd == "all")
+					{
+						this._clearList(ct)
+					}
+					else
+					{
+						;Reversing the array is done so that the indexing of remaining items
+						;doesn't change as items get deleted.
+						ReverseArray(&oDeletedRows)
+						items := oDeletedRows.Length
+
+						this._HideMeta()
+
+						;get the starting row so we can try returning to it later
+						sr := this._state[ct]["selectedRow"] 
+
+						;delete the items in oDeletedRows
+						;Note that we do not delete the playlist item associated with the row. This is important
+						;to ensure that later adds are able to get a unique game index for the session.
+						for i, entry in oDeletedRows
+						{
+							prog := Floor(A_Index / items * progLimit) + 50
+							gGui.guiSelect_ActionProgress.Value := prog
+
+							r := entry["row"]
+							v := entry["vector"]
+
+							;delete item from the list view
+							cnt := this._deleteFromLV(ct, r)
+							
+							;Also delete from Favorites list if it exists there
+							this._deleteFromFavorites(v, pl)
+						}
+
+						;reset our position in the list near deletion point
+						this._scrollToRow(sr, cnt, ct)
+
+						this._ShowMeta()
+					}
+
+					gGui.guiSelect_ActionProgress.Value := 100
+					Sleep 250
+					gGui.guiSelect_ActionProgress.Visible := false
+
+					EnableControls("guiSelect")
+
+					return
+				}
+
+				;Add games from a source to a custom list
+				If (this._current_target && this._current_target != pl)
+				{
+					DisableControls("guiSelect")
+
+					oBASS.Play("add")
+
+					gGui.guiSelect_ActionProgress.Value := 0
+					gGui.guiSelect_ActionProgress.Visible := true
+
+					ct := this._current_target ;the custom target list
+					cr := this._current_row
+
+					this._HideMeta()
+
+					mltl := gGui.guiSelect_MetaLabelTopLeft.Text
+					mll := gGui.guiSelect_MetaLabelLeft.Text
+				
+					sourceValue := ""
+					if (cmd != "all" && cmd != "tog")
+					{
+						;Get the source value (i.e. appropriate value from currently selected row)
+						sourceValue := this._getSourceValue(cmd, cr, pl)
+					}
+
+					items := cmd == "tog" ? 1 : guiSelect_ListViewBottom%pl%.GetCount()
+
+					Loop items
+					{
+						prog := Floor(A_Index / items * 100)
+						gGui.guiSelect_ActionProgress.Value := prog
+
+						cr := cmd == "tog" ? cr : A_Index
+						this._copyToTarget(pl, ct, cr, cmd, sourceValue)
+					}
+
+					this.Init(ct)
+
+					gGui.guiSelect_MetaLabelTopLeft.Text := mltl
+					gGui.guiSelect_MetaLabelLeft.Text := mll
+
+					this._ShowMeta()
+
+					gGui.guiSelect_ActionProgress.Value := 100
+					Sleep 250
+					gGui.guiSelect_ActionProgress.Visible := false
+
+					EnableControls("guiSelect")
+
+					return
+				}
+
+				;Delete from favorites
+				else if (pl > this._maxSystems)
+				{
+					DisableControls("guiSelect")
+
+					gGui.guiSelect_FavoritesProgress.Value := 0
+					gGui.guiSelect_FavoritesProgress.Visible := true
+
+					fl := pl 
+					base_pl := fl - this._maxSystems
+					cr := this._current_row
+					oDeletedRows := Array()
+
+					sourceValue := ""
+					if (cmd != "all" && cmd != "tog")
+					{
+						;Get the source value (i.e. appropriate value from currently selected row)
+						sourceValue := this._getSourceValue(cmd, cr, fl)
+
+						;don't delete anything if there was no sourceValue
+						;to compare with
+						if (!sourceValue)
+						{
+							EnableControls("guiSelect")
+							return
+						}
+					}		
+
+					oBASS.Play("remove")		
+
+					items := cmd == "tog" ? 1 : gGui.guiSelect_ListViewBottom%fl%.GetCount()
+
+					;This loop deletes all appropriate vector files
+					Loop items
+					{
+						prog := Floor(A_Index / items * 50)
+						gGui.guiSelect_FavoritesProgress.Value := prog
+
+						cr := cmd == "tog" ? cr : A_Index
+
+						;delete the proxy file for this favorite
+						try {
+							selectedObject := gGui.guiSelect_ListViewBottom%fl%.GetText(cr, 3)
+							selectedObject := ObjFromPtrAddRef(Integer(selectedObject))
+							vector := selectedObject["vector"]
+							sysKey := this._playlists[base_pl]["name"]
+						}
+						catch
+							continue
+
+						if (!vector)
+							continue
+
+						;if there was a sourceValue, then get the value of the current
+						;item. If no match, then contine without deleting
+						if (sourceValue)	
+						{
+							thisValue := this._getSourceValue(cmd, cr, fl)
+							
+							if (thisValue != sourceValue)
+								continue
+						}
+
+						filename := favorites_folder . "\" . sysKey . "\" . vector . ".txt"
+						FileDelete filename
+
+						if (sysKey != favorites_listname)		
+							this._deleteFromMasterFavorites(vector)
+
+						;maintain an list of the items we will next need to 
+						;remove from the onscreen list.  Not needed if cmd == "all".
+						if (cmd != "all")
+						{
+							oDeletedRowsEntry := Map()
+							oDeletedRowsEntry["row"] := cr ;A_Index
+							oDeletedRowsEntry["vector"] := vector
+							oDeletedRows.Push(oDeletedRowsEntry)
+						}					
+					}
+
+					if (cmd == "all")
+					{
+						this._clearList(fl)
+					}
+					else
+					{
+						;Reversing the array is done so that the indexing of remaining items
+						;doesn't change as items get deleted.
+						ReverseArray(&oDeletedRows)
+						items := oDeletedRows.Length
+
+						this._HideMeta()
+
+						;get the starting row so we can try returning to it later
+						sr := this._state[fl]["selectedRow"] 
+
+						;delete the items in oDeletedRows
+						for i, entry in oDeletedRows
+						{
+							prog := Floor(A_Index / items * 50) + 50
+							gGui.guiSelect_ActionProgress.Value := prog
+
+							r := entry["row"]
+							v := entry["vector"]
+
+							cnt := this._deleteFromLV(fl, r)
+						}
+
+						this._scrollToRow(sr, cnt, fl)
+
+						this._ShowMeta()			
+					}				
+
+					gGui.guiSelect_FavoritesProgress.Value := 100
+					Sleep 250
+					gGui.guiSelect_FavoritesProgress.Visible := false
+
+					EnableControls("guiSelect")
+				}		
+
+				;add to favorites
+				if (pl <= this._maxSystems)
+				{
+					DisableControls("guiSelect")
+
+					oBASS.Play("add")
+
+					gGui.guiSelect_FavoritesProgress.Value := 0
+					gGui.guiSelect_FavoritesProgress.Visible := true
+
+					this._HideMeta()
+
+					mltl := gGui.guiSelect_MetaLabelTopLeft.Text
+					mll := gGui.guiSelect_MetaLabelLeft.Text
+
+					fl := pl + this._maxSystems ;favorites list for this playlist
+					cr := this._current_row
+
+					sourceValue := ""
+					if (cmd != "all" && cmd != "tog")
+					{
+						;Get the source value (i.e. appropriate value from currently selected row)
+						sourceValue := this._getSourceValue(cmd, cr, pl)
+					}
+
+					items := cmd == "tog" ? 1 : gGui.guiSelect_ListViewBottom%pl%.GetCount()
+
+					Loop items
+					{
+						prog := Floor(A_Index / items * 100)
+						gGui.guiSelect_FavoritesProgress.Value := prog
+
+						cr := cmd == "tog" ? cr : A_Index
+						this._copyToTarget(pl, fl, cr, cmd, sourceValue, "favoritesList")
+					}
+
+					this.Init(fl)
+
+					gGui.guiSelect_MetaLabelTopLeft.Text := mltl
+					gGui.guiSelect_MetaLabelLeft.Text := mll
+
+					this._ShowMeta()
+
+					gGui.guiSelect_FavoritesProgress.Value := 100
+					Sleep 250
+					gGui.guiSelect_FavoritesProgress.Visible := false
+
+					EnableControls("guiSelect")
+				}	
+			
+			Case "targ":
+
+				if (pl > this._maxSystems) 
+					base_pl := pl - this._maxSystems
+				else
+					base_pl := pl
+
+				;the list is in favorites mode, so switch back to main list first
+				if (this._playlists[base_pl]["type"] == "list" && this._state[base_pl]["sublist"] == 1)
+				{
+					oBASS.Active := 0 ;turn off sound effects
+					this.SublistCommand("picks")	
+					oBASS.Active := 1 ;turn on sound effects	
+				}	
+				
+				if (this._playlists[base_pl]["type"] == "list" && this._current_target != base_pl)
+				{
+					oBASS.Play("edit_on")
+
+					LV_SetColumnIcon(gGui.guiSelect_ListViewPlaylist.Hwnd, 1, this._current_target, 1)
+					LV_SetColumnIcon(gGui.guiSelect_ListViewPlaylist.Hwnd, 1, base_pl, 3) ;row#, column#, icon# - puts icons in columns other than one
+					this._current_target := base_pl
+					
+					gGui.guiSelect_ModeStatus.Visible := true
+					gGui.guiSelect_ModeName.Visible := true
+					gGui.guiSelect_ModeSeparator.Visible := true
+					gGui.guiTriangleLeft.Show("NA w" . nScreenWidth . " h" . nScreenHeight)
+					gGui.guiTriangleRight.Show("NA w" . nScreenWidth . " h" . nScreenHeight)
+					gGui.guiMinusLeft.Show("NA w" . nScreenWidth . " h" . nScreenHeight)
+					gGui.guiMinusRight.Show("NA w" . nScreenWidth . " h" . nScreenHeight)
+
+					propName := this._playlists[base_pl]["proper_name"]
+					labelText := propName
+
+					;Adjust the font to fit the control
+					fsz := Floor(this._systemNameFontSize * .75) ;this._gameNameFontSize
+					fnt := this._font
+
+					guiSelect.SetFont("s" . fsz . " cWhite", fnt)
+					gGui.guiSelect_ModeName.SetFont()
+
+					;Replace & with && otherwise they won't be visible in the GUI GameName control.
+					labelText := StrReplace(labelText, "&", "&&")
+
+					gGui.guiSelect_ModeName.Text := labelText
+					this._editMode := 1
+				}	
+				else
+				{
+					if (this._editMode)
+					{
+						oBASS.Play("edit_off")
+						this._exitListEditMode()
+					}
+
+					this._editMode := 0
+				}
+
+				return
+			
+			Case "picks":
+
+				;if list is the selected target, exit target mode
+				if (this._current_target == pl)
+				{
+					this._exitListEditMode()
+					
+					Loop Parse gCfg.launch_key, "CSV"
+						Hotkey A_LoopField, "On"
+				}
+
+				base_pl := pl
+
+				if (pl > this._maxSystems) 
+				{
+					base_pl := pl - this._maxSystems
+					oBASS.Play("master")
+				}
+				else
+				{
+					oBASS.Play("picks")
+				}
+
+				new_state := this._state[base_pl]["sublist"] ? 0 : 1
+				new_playlist := new_state == 1 ? this._current_playlist + this._maxSystems : this._current_playlist - this._maxSystems
+
+				if (this._state[new_playlist]["count"] == 0)
+					gGui.guiSelect_GameName%new_playlist%.Text := "Empty"
+		
+				this._state[base_pl]["sublist"] := new_state
+
+				if (new_state == 1)
+				{   
+					 ;row#, column#, icon# - puts icons in columns other than one
+					LV_SetColumnIcon(gGui.guiSelect_ListViewPlaylist.Hwnd, 1, base_pl, 2)
+					if (this._playlists[base_pl]["name"] == "picks")
+						gGui.guiSelect_ListViewPlayList.Modify(1, "Col" . base_pl, gCfg.top_picks_label)
+				}
+				else
+				{
+					LV_SetColumnIcon(gGui.guiSelect_ListViewPlaylist.Hwnd, 1, base_pl, 1)
+					if (this._playlists[base_pl]["name"] == "picks")
+					{
+						gGui.guiSelect_ListViewPlayList.Modify(1, "Col" . base_pl, gCfg.all_picks_label)
+					}
+				}
+
+				this._current_object := this._state[new_playlist]["selectedObject"]
+				this._current_row := this._state[new_playlist]["selectedRow"]
+				this._current_count := this._state[new_playlist]["count"]
+
+				this._current_playlist := new_playlist
+
+				this._SwitchPlaylist(pl) ;execute the list change
+
+				this.UpdateMetaTags(pl)
+
+				return
+			
+			Case "mark":
+
+				v := this._current_object["vector"]
+
+				if (!v)  ;if empty 
+					return
+
+				romspec := SplitVector(v)["rom_value"]
+				sysspec := SplitVector(v)["sys_key"]
+				assetspec := oEmulators.Emulators[sysspec].asset_name
+
+				favoritesPath := A_ScriptDir . "\Assets\" . assetspec . "\Settings"
+				favoritesFile := favoritesPath . "\favorites.ini"
+		
+				if (!FileExist(favoritesFile))
+					DirCreate(favoritesPath)
+
+				bFavorite := IniRead(favoritesFile, "Favorites", romspec, 0)
+
+				newValue := bFavorite == 0 ? 1 : 0
+
+				if (newValue == 1)
+				{
+					this._current_object["favorite_icon"] := favorite_on_icon_file
+					this._current_object["rom_favorite"] := "true"
+					oBASS.Play("fav")
+				}
+				else
+				{
+					this._current_object["favorite_icon"] := favorite_off_icon_file
+					this._current_object["rom_favorite"] := "false"
+					oBASS.Play("unfav")
+				}
+				
+				IniWrite(newValue, favoritesFile, "Favorites", romspec)	
+
+				this.ShowGraphics()	
+
+				/*
+				;Sample test code for logos in horizontal list
+				;**********************************************************
+				ifx := this._playlists[base_pl]["list_logo"]
+				gid := this._oGraphicsOverlay.CreateListLogo(base_pl, ifx)
+				OutputDebug gid: %gid%, base_pl: %base_pl%, ifx: %ifx%`n
+				Gui, %gid%: Show, NA
+				;**********************************************************
+				*/
+			
+			Case "star", "star0", "star1", "star2", "star3", "star4", "star5":
+
+				v := this._current_object["vector"]
+
+				if (!v)  ;if empty
+					return
+
+				romspec := SplitVector(v)["rom_value"]
+				sysspec := SplitVector(v)["sys_key"]
+				assetspec := oEmulators.Emulators[sysspec].asset_name
+
+				ratingsPath := A_ScriptDir . "\Assets\" . assetspec . "\Settings"
+				ratingsFile := ratingsPath . "\ratings.ini"
+		
+				if (!FileExist(ratingsFile))
+					DirCreate(ratingsPath)
+				
+				if (cmd == "star")
+				{
+					nRating := this._current_object["rom_rating"]
+					nRating := nRating == 5 ? 0 : ++nRating			
+				}
+				else
+					nRating := SubStr(cmd, 5, 1)
+
+				if (nRating == 0)
+					oBASS.Play("nostar")
+				else
+					oBASS.Play("star")
+
+				this._current_object["rom_rating"] := nRating
+				this.ShowGraphics()
+				
+				IniWrite(nRating, ratingsFile, "Ratings", romspec)	
+		}
+	}
+
+	_exitListEditMode()
+	{
+		global
+
+		LV_SetColumnIcon(gGui.guiSelect_ListViewPlaylist.Hwnd, 1, this._current_target, 1)
+		this._current_target := 0
+
+		gGui.guiSelect_ModeName.Visible := false
+		gGui.guiSelect_ModeStatus.Visible := false
+		gGui.guiSelect_ModeSeparator.Visible := false
+		gGui.guiTriangleLeft.Hide()
+		gGui.guiTriangleRight.Hide()
+		gGui.guiMinusLeft.Hide()
+		gGui.guiMinusRight.Hide()
+		gGui.guiPlusLeft.Hide()
+		gGui.guiPlusRight.Hide()
+
+		;GuiControl,,ModeName,
+		gGui.guiSelect_ModeName.Text := ""
+	}
+
+	;pl=source list, ct=target list, cr=row
+	;cmd=tag id (such as "all", "genre", "year", etc.)
+	;value=optional search value based on the cmd value
+	;calling function should call this.Init(ct) after any batch
+	_copyToTarget(pl, ct, cr, cmd, value:="", targType:="customList")
+	{
+		global
+		
+		vector := ""
+		try {
+			;Get info from the source list
+			properName := gGui.guiSelect_ListViewBottom%pl%.GetText(cr, 1)
+			selectedObject := gGui.guiSelect_ListViewBottom%pl%.GetText(cr, 3)
+
+			oObject := ObjFromPtrAddRef(Integer(selectedObject))
+			vector := oObject["vector"]
+		}	
+		catch {
+			return
+		}	
+
+		if (!vector)
+			return	
+
+		;don't copy blank tags unless cmd is "all"
+		if (cmd != "all" && cmd != "tog" && !value)
+			return
+
+		;if a source value was passed, get the value of the current
+		;row to compare with it. If comparison fails, skip record (i.e. return)
+		if (value)	
+		{
+			thisValue := this._getSourceValue(cmd, cr, pl)
+
+			if (thisValue != value)
+				return
+		}
+
+		sysKey := ""
+		try sysKey := this._playlists[pl]["name"] ;won't be there if it is a favorites list
+		systemKey := oObject["sys_key"]
+
+		;return if this is a duplicate
+		;(applies to both system favorites lists and custom lists)
+        ;ct is the destination
+		Loop gGui.guiSelect_ListViewBottom%ct%.GetCount()
+		{
+			selectedObjectCheck := gGui.guiSelect_ListViewBottom%ct%.GetText(A_Index, 3)
+			oObjectCheck := ObjFromPtrAddRef(Integer(selectedObjectCheck))
+			vectorCheck := oObjectCheck["vector"]
+			if (vector == vectorCheck)
+				return
+		}
+
+		if (targType == "favoritesList")
+			filedir := favorites_folder . "\" . sysKey ;systemKey
+		else if (targType == "customList") ;target is a custom list	
+		{
+			listName := this._playlists[ct]["name"]
+			filedir := lists_folder . "\" . listName
+		}
+
+		;create proxy file
+		DirCreate filedir
+		filename := filedir . "\" . vector . ".txt"
+		FileAppend vector, filename
+
+		if (targType == "customList")
+		{
+			;if this is the attract playlist, perform special behavior
+			al := this._getAttractPlaylistID()
+			if (ct == al)
+			{
+				if (gCfg.attract_auto > 0) ;if in auto mode...
+				{
+					;manual option adds the item with a starting count that
+					;is 1 greater than the currently highest play_count
+					;and allows games from sections not having attract=1
+					oHistory.Update(vector, "manual")
+
+					;Also delete from \suppress folder if it exists there
+					filedest := filedir . "\suppress\" . vector . ".txt"
+					FileDelete(filedest)
+				}
+
+				;true parameter doesn't switch, but updates live attract mode with the changes
+				AttractSwitch(true) 
+			}
+		}
+
+		cleanLists := oEmulators.Emulators[systemKey].clean_lists
+		cleanedProperName := StripEnclosures(properName, cleanLists)
+
+		;There is no need to add playlist items to the local favorites list since items in
+		;the local favorites lists are effectively just references to the corresponding base list items,
+		;and share the base list's game index (stored in column 2 of the LV)
+		if (targType == "favoritesList")
+		{
+			;add the item to this system's favorites list
+			gGui.guiSelect_ListViewTop%ct%.Add(, cleanedProperName)
+			rowNumber := gGui.guiSelect_ListViewBottom%ct%.Add(, cleanedProperName, 0, selectedObject)
+			
+			;Update the favorites list's count
+			thisCount := gGui.guiSelect_ListViewBottom%ct%.GetCount()
+			this._state[ct]["count"] := thisCount
+			this.SetListRows(ct, thisCount)
+		}
+
+		;if we were adding to a local favorites list (not the Master Favorite's favorites
+		;list), then also add the item to the base Master Favorites list.				
+		if (targType == "favoritesList" && pl != fav_idx)
+		{
+			;check for duplicates in Master Favorites
+			Loop gGui.guiSelect_ListViewBottom%fav_idx%.GetCount()
+			{
+				selectedObjectCheck := gGui.guiSelect_ListViewBottom%fav_idx%.GetText(A_Index, 3)
+				oObjectCheck := ObjFromPtrAddRef(Integer(selectedObjectCheck))
+				vectorCheck := oObjectCheck["vector"]
+				if (vector == vectorCheck)
+					return
+			}
+
+			;Add a playlist item stub. This provides our index keys and a reference
+			;back to the parent item (for use by favorites and ratings)
+			;new_idx := this._playlists[fav_idx]["playlist"].Count + 1
+			;this._playlists[fav_idx]["playlist"][new_idx] := oObject
+
+			;Add the item to the LV
+			gGui.guiSelect_ListViewTop%fav_idx%.Add(, cleanedProperName)
+			gGui.guiSelect_ListViewBottom%fav_idx%.Add(, cleanedProperName, , selectedObject)
+
+			;Update the master favorites list count
+			newCount := gGui.guiSelect_ListViewBottom%fav_idx%.GetCount()
+			this._state[fav_idx]["count"] := newCount 				
+			this.SetListRows(fav_idx, newCount)
+
+			this.Init(fav_idx) 
+		}
+
+		if (targType == "customList")
+		{
+			;Add a playlist item stub. This provides our index keys and a reference
+			;back to the parent item (for use by favorites and ratings)
+			new_idx := this._playlists[ct]["playlist"].Count + 1
+			this._playlists[ct]["playlist"][new_idx] := oObject
+
+			;Add the item to the LV
+			gGui.guiSelect_ListViewTop%ct%.Add(, cleanedProperName)
+			gGui.guiSelect_ListViewBottom%ct%.Add(, cleanedProperName, new_idx, selectedObject)	;new_idx must match item in playlist	
+
+			;update the custom list's count
+			newCount := gGui.guiSelect_ListViewBottom%ct%.GetCount()
+			this._state[ct]["count"] := newCount			
+			this.SetListRows(ct, newCount)
+
+			this.Init(ct) 
+		}
+	}
+	
+	;clears the playlist (pl)
+	;if pl is a base playlist, it also clears the associated favorites list.
+	_clearList(pl)
+	{
+		global
+	
+		;clear the base list
+		gGui.guiSelect_ListViewTop%pl%.Delete()
+		gGui.guiSelect_ListViewBottom%pl%.Delete()
+
+		this._state[pl]["count"] := 0
+		this._state[pl]["maxRows"] := 0
+		this._state[pl]["maxRowsB"] := 0 
+
+		if (pl <= this._maxSystems)
+		{
+			;clear the local favorites list too
+			fl := this._maxSystems + pl
+
+			gGui.guiSelect_ListViewTop%fl%.Delete()
+			gGui.guiSelect_ListViewBottom%fl%.Delete()
+
+			this._state[fl]["count"] := 0
+			this._state[fl]["maxRows"] := 0 ;actual_rows ;save maxRows as part of the state for this playlist
+			this._state[fl]["maxRowsB"] := 0 ;actual_rowsB
+		}
+
+		;clear the current object
+		this._current_object := Map()
+		
+		;clear all other screen graphics and set game name to Empty	
+		this.SetEmptyListLabel(pl)
+	}
+
+	;Get metadata type value from a 
+	_getSourceValue(sourceType, cr, pl)
+	{
+		sourceValue := ""
+
+		;Get the source value (i.e. appropriate value from currently selected row)
+		selectedObject := gGui.guiSelect_ListViewBottom%pl%.GetText(cr, 3)
+		oObject := ObjFromPtrAddRef(Integer(selectedObject))
+
+		Switch sourceType 
+		{
+			case "genre":
+				sourceValue := oObject.Get("rom_category", "")
+			case "year":
+				sourceValue := oObject.Get("rom_year", "")
+			case "publisher":
+				sourceValue := oObject.Get("rom_publisher")
+			case "developer":
+				sourceValue := oObject.Get("rom_developer")
+			case "players":
+				sourceValue := oObject.Get("rom_players")
+			case "favorites":
+				sourceValue := oObject.Get("rom_favorite")
+			case "rating":
+				sourceValue := oObject.Get("rom_rating")
+		}
+
+		return sourceValue
+	}
+
+	;specify cr=0 to delete all
+	_deleteFromLV(pl, cr)
+	{
+		global
+		local cnt
+
+		gGui.guiSelect_ListViewTop%pl%.Delete(cr)
+		gGui.guiSelect_ListViewBottom%pl%.Delete(cr)
+
+		if (this._state[pl]["count"] > 0)
+			this._state[pl]["count"]--	
+
+		cnt := this._state[pl]["count"]	
+
+		this.SetListRows(pl, cnt)	
+		
+		;this check prevents Init() from re-assigning the last
+		;object removed as the current object
+		if (cnt == 0)
+		{
+			this._current_object := Map()
+			this.SetEmptyListLabel(pl)
+		}
+
+		return cnt
+	}
+
+	_scrollToRow(sr, cnt, pl)
+	{ 
+		global
+
+		this._initializing := true ;blocks graphic updates		
+		gGui.guiSelect_GameName%pl%.Visible := false
+
+		;if bottom of the list
+		oBASS.Active := 0 ;suppress scroll sound effects
+		if (sr > cnt)
+		{
+			
+			this.ScrollVertical("index",cnt-1)	
+			this.ScrollVertical("d")
+		}
+		else ;anywhere else in list
+		{	
+			this.Init(pl)
+			this.ScrollVertical("index",0, true)
+			this.ScrollVertical("index",sr)
+			if (sr > 1)
+			{
+				this.ScrollVertical("u")
+				this.ScrollVertical("d")
+			}
+		}
+		oBASS.Active := 1
+		gGui.guiSelect_GameName%pl%.Visible := true
+		this._initializing := false
+	}
+
+	_deleteFromFavorites(vector, base_pl)
+	{
+		;assume local function
+
+		fl := this._maxSystems + base_pl ;favorites list is offset by maxSystems from base list
+		Loop gGui.guiSelect_ListViewBottom%fl%.GetCount()
+		{
+			selectedObjectCheck := gGui.guiSelect_ListViewBottom%fl%.GetText(A_Index, 3)
+			oObjectCheck := ObjFromPtrAddRef(Integer(selectedObjectCheck))
+			
+			if (oObjectCheck["vector"] == vector)
+			{
+				gGui.guiSelect_ListViewBottom%fl%.Delete(A_Index) ;delete from bottom list
+				gGui.guiSelect_ListViewTop%fl%.Delete(A_Index) ;delete from top list
+
+				if (!vector)
+				{
+					OutputDebug "assert_1"
+					LogEntry("ASSERT 1 ERROR:  Vector is empty.`n")
+					ExitApp
+				}
+
+				sysKey := this._playlists[base_pl]["name"]
+				filename := favorites_folder . "\" . sysKey . "\" . vector . ".txt"
+				try
+					FileDelete(filename)
+
+				if (this._state[fl]["count"] > 0)
+					this._state[fl]["count"]--				
+
+				this.SetListRows(fl, this._state[fl]["count"])
+
+				this.Init(fl)
+
+				;Also delete from Master Favorites if it exists there
+				this._deleteFromMasterFavorites(vector)
+
+				break
+			}
+		}
+	}
+
+	_deleteFromMasterFavorites(vector)
+	{
+		global
+		local n
+
+		;Also delete from Master Favorites
+		;(both main and favorite favorites list)
+		Loop gGui.guiSelect_ListViewBottom%fav_idx%.GetCount()
+		{
+			selectedObjectCheck := gGui.guiSelect_ListViewBottom%fav_idx%.GetText(A_Index, 3)
+			oObjectCheck := ObjFromPtrAddRef(Integer(selectedObjectCheck))
+			
+			if (oObjectCheck["vector"] == vector)
+			{
+				for n, pl_test in this._playlists
+				{
+					list_name := pl_test["name"]
+					if (list_name != favorites_listname)
+					{
+						if (!vector)
+						{
+							OutputDebug "assert_2"
+							LogEntry("ASSERT 2 ERROR:  Vector is empty.`n")
+							ExitApp
+						}
+
+						filename := favorites_folder . "\" . list_name . "\" . vector . ".txt"
+						
+						if (FileExist(filename))
+							return
+					}
+				}
+
+				gGui.guiSelect_ListViewBottom%fav_idx%.Delete(A_Index)
+				gGui.guiSelect_ListViewTop%fav_idx%.Delete(A_Index)
+				
+				if (this._state[fav_idx]["count"] > 0)
+					this._state[fav_idx]["count"]--			
+
+				this.SetListRows(fav_idx, this._state[fav_idx]["count"])
+
+				this.Init(fav_idx)
+
+				break
+			}
+		}
+
+		;Also delete from the favorite favorites list if present
+		this._deleteFromFavorites(vector,fav_idx)
+	}
+
+	;Controls left/right Scrolling of the systems/lists
+	ScrollHorizontal(direction, idx:=0)
+	{
+		global
+		static absPos := 1
+
+		;these two values control the scroll speed of the 
+		;horizontal menu
+		DELAY := 20  ;miliseconds between each animation frame
+		GAP := 40    ;distance to travel during each animation frame
+
+		playlist_last := this._current_playlist ;used by SwitchPlaylist()
+
+		if (direction == "index")
+		{
+			newPos := (2 * this._systemLabelWidth) - (idx * this._systemLabelWidth) 
+			gGui.guiSelect_ListViewPlaylist.Move(newPos)
+			absPos := -idx + 2
+		}
+		if (direction == "l")
+		{
+			;don't swtch if choosing left on first item in list (or its favorites)
+			if (this._current_playlist == 1 || this._current_playlist == this._maxSystems + 1)
+				return 
+
+			oBASS.Play("page")
+
+			absPos++
+
+			gGui.guiSelect_ListViewPlaylist.GetPos(&curPosX, &curPosY, &curPosW, &curPosH)
+			initPos := curPosX
+
+			Loop
+			{
+				gGui.guiSelect_ListViewPlaylist.GetPos(&curPosX, &curPosY, &curPosW, &curPosH)
+				newPos := curPosX + GAP
+				if (newPos >= initPos + this._systemLabelWidth)
+				{
+					newPos := this._systemLabelWidth * absPos
+					gGui.guiSelect_ListViewPlaylist.Move(newPos)
+					break
+				}
+				
+				gGui.guiSelect_ListViewPlaylist.Move(newPos)
+				Sleep DELAY
+			}
+
+			this._current_playlist--
+		}
+
+		if (direction == "r")
+		{
+			if (this._current_playlist == this._maxSystems || this._current_playlist == this._maxSystems*2)
+				return
+
+			oBASS.Play("page")
+
+			absPos--
+
+			gGui.guiSelect_ListViewPlaylist.GetPos(&curPosX, &curPosY, &curPosW, &curPosH)
+			initPos := curPosX
+
+			Loop
+			{
+				gGui.guiSelect_ListViewPlaylist.GetPos(&curPosX, &curPosY, &curPosW, &curPosH)
+				newPos := curPosX - GAP
+				if (newPos <= initPos - this._systemLabelWidth)
+				{
+					newPos := this._systemLabelWidth * absPos
+					gGui.guiSelect_ListViewPlaylist.Move(newPos)
+					break
+				}
+				gGui.guiSelect_ListViewPlaylist.Move(newPos)
+				Sleep DELAY
+			}
+			
+			this._current_playlist++
+		}
+
+		pl := base_pl := this._current_playlist
+		if (pl > this._maxSystems)
+			base_pl := pl - this._maxSystems
+
+		state := 0
+		try state := this._state[base_pl]["sublist"]
+
+		if (state == 0)
+			this._current_playlist := base_pl
+		else if (state == 1)
+			this._current_playlist := base_pl + this._maxSystems
+
+		pl := this._current_playlist
+		this._current_row := this._state[pl]["selectedRow"]
+		this._current_count := this._state[pl]["count"]
+		this._current_object := this._state[pl]["selectedObject"]
+
+		this.UpdateMetaTags(pl)
+
+		if (pl == this._current_target)
+		{
+			gGui.guiPlusLeft.Hide()
+			gGui.guiPlusRight.Hide()
+			gGui.guiMinusLeft.Show("NA w" . nScreenWidth . " h" nScreenHeight)
+			gGui.guiMinusRight.Show("NA w" . nScreenWidth . " h" nScreenHeight)
+		}
+		else if (this._current_target)
+		{
+			gGui.guiMinusLeft.Hide()
+			gGui.guiMinusRight.Hide()
+			gGui.guiPlusLeft.Show("NA w" . nScreenWidth . " h" nScreenHeight)
+			gGui.guiPlusRight.Show("NA w" . nScreenWidth . " h" nScreenHeight)
+		}
+
+		this._SwitchPlaylist(playlist_last)
+
+		return
+	}
+
+	;Controls up/down scrolling of games in individual system/lists
+	;*** Big HOUSE OF CARDS Warning ***
+	;Any changes in here should be followed by EXTENSIVE regression testing!!!
+	;Spot checking IS NOT ADEQUATE.
+	ScrollVertical(direction,idx:=0, suppressNameUpdate:=false)
+	{		
+		global
+		pl := this._current_playlist
+
+		maxRows := this._state[pl]["maxRows"]
+		maxRowsB := this._state[pl]["maxRowsB"]
+		selectedRow := this._state[pl].Get("selectedRow", 0)
+
+		if (this._state[pl]["count"] == 0)
+		{
+			this._current_object := this._state[pl]["selectedObject"] := Map()
+			fnt := this._gameNameFontSize
+			guiSelect.SetFont("s" . fnt)
+
+			val := gGui.guiSelect_GameName%pl%.Text
+			if (val != "Empty")
+			{
+				fnt := this._gameNameFontSize
+				guiSelect.SetFont("s" . fnt)
+				gGui.guiSelect_GameName%pl%.Text := "Empty"
+			}
+
+			return
+		}
+
+		if (direction == "index")
+        {		
+            ;Set top listview
+            rowsT := idx <= maxRows ? idx-1 : maxRows
+            new_h := rowsT * this._rowHeight - (this._listMargin)
+			new_y := this._topbar_ypos - 1 - new_h - this._listMargin	
+
+			gGui.guiSelect_ListViewTop%pl%.Move(,new_y,,new_h)
+
+			;After resizing the control, we need to adjust for any difference between the
+			;computed number of rows and the actual number of displayable rows in the control.
+			;(usually this adjustment is 0 or 1, depending on the font size used)
+			lvctrlT := gGui.LVT%pl%
+			adj := rowsT - SendMessage(0x1028,0,0,,"ahk_id " . lvctrlT)  ;LVM_GETCOUNTPERPAGE		
+
+            placeT := idx > selectedRow ? idx-1 - adj : idx-rowsT 
+            gGui.guiSelect_ListViewTop%pl%.Modify(placeT, "Vis")
+     
+            ;Now set bottom listview
+			b := gGui.guiSelect_ListViewBottom%pl%.GetCount()
+            rowsB := idx >= gGui.guiSelect_ListViewBottom%pl%.GetCount()-maxRowsB ? gGui.guiSelect_ListViewBottom%pl%.GetCount()-idx : maxRowsB
+            new_h := rowsB * this._rowHeight - this._listMargin 
+			gGui.guiSelect_ListViewBottom%pl%.Move(,,,new_h)
+
+			;Need to get any adjustment needed for the bottom control as well
+			lvctrlB := gGui.LVB%pl%			
+			adj := rowsB - SendMessage(0x1028,0,0,,"ahk_id " . lvctrlB)  ;LVM_GETCOUNTPERPAGE
+
+            placeB := idx > selectedRow ? idx + rowsB - adj: idx + 1 
+            gGui.guiSelect_ListViewBottom%pl%.Modify(placeB, "Vis")
+            
+            selectedRow := idx
+        }
+        
+		if (direction == "end")
+		{
+			if (selectedRow != gGui.guiSelect_ListViewTop%pl%.GetCount())
+				oBASS.Play("browse")
+
+            this.ScrollVertical("index", gGui.guiSelect_ListViewTop%pl%.GetCount())
+            return
+		}
+		
+		if (direction == "home")
+		{
+			if (selectedRow != 1)
+				oBASS.Play("browse")
+
+			this.ScrollVertical("index", 1)
+			return
+		}
+
+		if (direction == "pu")
+		{
+			if (selectedRow != 1)
+				oBASS.Play("browse")
+
+			row := selectedRow > maxRows ? selectedRow - maxRows : 1
+			this.ScrollVertical("index", row)
+            return
+		}
+
+		if (direction == "pd")
+		{
+			if (selectedRow != gGui.guiSelect_ListViewTop%pl%.GetCount())
+				oBASS.Play("browse")
+
+			row := selectedRow < gGui.guiSelect_ListViewTop%pl%.GetCount() - maxRowsB ? selectedRow + maxRowsB : guiSelect_ListViewTop%pl%.GetCount()
+			this.ScrollVertical("index", row)
+            return
+		}
+        
+        if (direction == "u")
+        {
+			if (selectedRow != 1)
+				oBASS.Play("browse")
+
+            row := selectedRow > 1 ? selectedRow-1 : 1
+            this.ScrollVertical("index", row)
+            return
+        }
+        
+        if (direction == "d")
+        {
+			if (selectedRow != gGui.guiSelect_ListViewTop%pl%.GetCount())
+				oBASS.Play("browse")
+
+            row := selectedRow < gGui.guiSelect_ListViewTop%pl%.GetCount() ? selectedRow+1 : gGui.guiSelect_ListViewTop%pl%.GetCount()
+            this.ScrollVertical("index", row)
+            return
+        }
+
+		selectedText := gGui.guiSelect_ListViewBottom%pl%.GetText(selectedRow, 1)    ;proper name of the item
+		
+		if (!selectedText or selectedText == "Empty")
+		{
+			selectedText := "Empty"
+			selectedObject := Map()
+		}
+		else 
+		{
+			selectedObject := gGui.guiSelect_ListViewBottom%pl%.GetText(selectedRow, 3)  ;ref to object containing extended info
+			selectedObject := selectedObject == "" ? Map() : ObjFromPtrAddRef(Integer(selectedObject))    ;object containing extended info (like logo paths)
+		}
+
+		;reduce font size if necessary to fit long names
+		fsz := this._gameNameFontSize
+		fnt := this._font
+		Loop
+		{
+			tsz := GetTextExtentPoint(selectedText, fnt, fsz)
+			if (tsz < this._centerLabelWidth) 
+				break
+			else
+				fsz--
+		}
+
+		guiSelect.SetFont("s" . fsz . " cWhite", fnt)
+		gGui.guiSelect_GameName%pl%.SetFont()
+
+		;Replace & with && otherwise they won't be visible in the GUI GameName control.
+		selectedText := StrReplace(selectedText, "&", "&&")	
+		gGui.guiSelect_GameName%pl%.Text := selectedText	
+
+		sleep_setting := 0
+		Sleep sleep_setting ;improves stepping speed and flickering
+
+		this._current_row := selectedRow
+		this._current_object := selectedObject
+
+		if (!this._initializing)
+			this.ShowGraphics()
+
+		;save the current list state
+		this._state[this._current_playlist]["selectedRow"] := selectedRow
+		this._state[this._current_playlist]["selectedObject"] := selectedObject
+
+		this.UpdateMetaTags(pl)
+
+		return selectedText
+	}
+	
+	;Used to refresh initial view of the menu graphic images
+	ShowGraphics()
+	{
+		;global
+		pl := p_pl := gm := ""
+
+		;try
+		;{
+			;images originate from the base playlist item
+			pl := this._current_playlist
+			try p_pl := this._current_object["parent"]["list"]
+			try gm := this._current_object["parent"]["game"]
+
+			if (!pl || !gm)
+				return ;nothing to show
+
+			logo_file := this._current_object["logo_file"]
+			logo_file := GetRegionalAsset(logo_file, this._current_object["sys_key"])
+			system_logo_file := this._current_object["system_logo"]
+			favorite_icon_file := this._current_object["favorite_icon"] ;use icon from the parent playlist
+			nRating := this._current_object["rom_rating"] ;get rating (0-5) of this rom
+			
+			if (!FileExist(logo_file))
+				logo_file := system_logo_file
+
+			this._oGraphicsOverlay.ShowGraphic(pl, gm, 1, logo_file)
+			this._oGraphicsOverlay.ShowGraphic(pl, gm, 2, system_logo_file)
+			this._oGraphicsOverlay.ShowGraphic(pl, gm, 3, favorite_icon_file)
+			this._oGraphicsOverlay.ShowGraphic(pl, gm, 4, rating_icon_file,,nRating)
+		;}
+		;catch as e
+		;{
+		;	LogEntry("ERROR: In ShowGraphics(): " . FormatErrorMessage(e) . "`n")
+		;}
+
+		;useful diagnostic information to be displayed on screen in test_mode
+		if (test_mode) 
+		{
+	        bl := this._current_playlist
+			if (pl > this._maxSystems) 
+				bl := this._current_playlist - this._maxSystems
+			gGui.guiSelect_TestMsg.Text := "This base list: " . bl . ", This effective list: " . pl . " | Parent list: " . p_pl . ", Game ID: " . gm		
+		}	
+	}
+
+	class graphics_overlay_class
+	{
+		__New()
+		{
+			this._last_image1_window := ""  ;rom logo
+			this._last_image2_window := ""  ;system logo
+			this._last_image3_window := ""  ;favorite icon
+			this._last_image4_window := ""  ;rating icon
+
+			this._last_image1_file := ""
+			this._last_image2_file := ""
+			this._last_image3_file := ""
+			this._last_image4_file := ""
+			
+			this._last_image4_subtype := -1 ;rating
+
+			this._last_image_file := ""
+		}
+
+		HideGraphics()
+		{
+			global
+			
+			last_image1_window := this._last_image1_window
+			last_image2_window := this._last_image2_window
+			last_image3_window := this._last_image3_window
+			last_image4_window := this._last_image4_window
+
+			if (last_image1_window)	{
+				try	gGui.%last_image1_window%.Hide()
+			}
+			if (last_image2_window) {
+				try gGui.%last_image2_window%.Hide()
+			}
+			if (last_image3_window) {
+				try	gGui.%last_image3_window%.Hide()
+			}
+			if (last_image4_window) {
+				try	gGui.%last_image4_window%.Hide()
+			}
+		}
+
+		;Displays an image from a file using GDI+ scaling. Image to display is determined by
+		;by the playlist and selection. Position on screen is determined by image_type and subtype.
+		;playlist:            playlist id 
+		;selection:           game id     
+		;image_type:          1=rom logo; 2=system logo; 3=favorite icon; 4=rating icon
+		;show_now (optional): default true (whether to show the image now or just create it)
+		;subtype: (optional): default 0 (designates sub image, such as star number in a rating)
+		ShowGraphic(playlist, selection, image_type, image_file, show_now:=true, subtype:=0)
+		{
+			global
+			Critical  ;without this, images are not always properly deleted leaving orphans
+
+			if (!playlist || !selection)
+				return
+
+			;OutputDebug playlist: %playlist%, selection: %selection%, image_type: %image_type%, image_file: %image_file%, show_now: %show_now%, subtype: %subtype%`n
+
+			;if no image file, then hide the previous one since there
+			;is apparently nothing to show for this one.
+			if (!image_file || !FileExist(image_file))
+			{
+				if (image_type == 1)
+					try gGui.%last_image1_window%.Hide()
+				if (image_type == 2)
+					try gGui.%last_image2_window%.Hide()
+				if (image_type == 3)
+					try gGui.%last_image3_window%.Hide()
+				if (image_type == 4)
+					try gGui.%last_image4_window%.Hide()
+				return
+			}
+
+			last_image1_window := this._last_image1_window
+			last_image2_window := this._last_image2_window
+			last_image3_window := this._last_image3_window
+			last_image4_window := this._last_image4_window
+
+			last_image4_subtype := this._last_image4_subtype
+
+			if (image_type == 1 && image_file == this._last_image1_file)
+			{
+				try	gGui.%last_image1_window%.Show("NA")
+				return
+			}
+			if (image_type == 2 && image_file == this._last_image2_file)
+			{
+				try	gGui.%last_image2_window%.Show("NA")
+				return
+			}
+			if (image_type == 3 && image_file == this._last_image3_file)
+			{
+				try	gGui.%last_image3_window%.Show("NA")
+				return
+			}
+			if (image_type == 4 && image_file == this._last_image4_file && subtype == this._last_image4_subtype)
+			{
+				try	gGui.%last_image4_window%.Show("NA")
+				return
+			}
+
+			if (image_type == 1)
+				this._last_image1_file := image_file
+			if (image_type == 2)
+				this._last_image2_file := image_file
+			if (image_type == 3)
+				this._last_image3_file := image_file	
+			if (image_type == 4)
+				this._last_image4_file := image_file		
+
+			if (image_type == 1 && last_image1_window)
+				try	gGui.%last_image1_window%.Hide()
+			if (image_type == 2 && last_image2_window)
+				try	gGui.%last_image2_window%.Hide()
+			if (image_type == 3 && last_image3_window)
+				try	gGui.%last_image3_window%.Hide()
+			if (image_type == 4 && last_image4_window)
+				try	gGui.%last_image4_window%.Hide()					
+
+			;Create a layered window (+E0x80000 : must be used for UpdateLayeredWindow to work!) 
+			;that is always on top (+AlwaysOnTop), and has no taskbar entry or caption
+			gui_id := playlist . "_" selection . "_" . image_type ;Graphic 1 is the game logo image
+
+			try
+				gExist := IsObject(gGui.%gui_id%)
+			catch
+				gExist := false
+
+			if (!gExist)
+			{
+				gGui.%gui_id% := Gui(, "eipGui - " gui_id)
+			    gGui.%gui_id%.Opt("-Caption +E0x80000 +LastFound +AlwaysOnTop +ToolWindow +OwnDialogs") ;+OwnerGuiOverlay")
+			}
+
+			if (show_now == true)
+				gGui.%gui_id%.Show("NA")
+
+			if (FileExist(image_file))
+				pBitmap := Gdip_CreateBitmapFromFile(image_file)
+			else 
+			{
+				LogEntry("ERROR: image file, " image_file " could not be found. Assertion error. Exiting.`n")
+				ExitApp
+			}
+
+			Width := Gdip_GetImageWidth(pBitmap)
+			Height := Gdip_GetImageHeight(pBitmap)
+
+			;Note that all screen coordinates here are native (i.e. not adjusted
+			;for screen scaling)
+			barHeightFactor := 1/10
+			centerLabelWidthFactor := gCfg.lst_game_name_ratio
+			topBarPosFactor := 1/3
+
+			t_barHeight := Floor(A_ScreenHeight * barHeightFactor)
+			t_systemLabelWidth := A_ScreenWidth / 3
+			t_centerLabelWidth := A_ScreenWidth * centerLabelWidthFactor
+			t_sideLabelWidth := (A_ScreenWidth - t_centerLabelWidth) /2
+			t_graphicMargin := 16 ;pixels to shrink graphic inside box
+			
+			;calculate image size/scale
+			Switch image_type
+			{
+				Case 1, 2:			
+					ar := Width/Height
+					pic_h := t_barHeight - t_graphicMargin
+					pic_w := pic_h * ar - t_graphicMargin
+					
+					if (pic_w > t_sideLabelWidth)
+					{
+						ar := Height/Width
+						pic_w := t_sideLabelWidth - t_graphicMargin
+						pic_h := pic_w * ar - t_graphicMargin
+					}
+
+					pic_sw := Width
+					pic_sh := Height
+			
+			 	Case 3:	;favorite and no star (unrated) icons		
+					ar := Width/Height
+					pic_h := t_barHeight // 5
+					pic_w := pic_h * ar
+
+					pic_sw := Width
+					pic_sh := Height				
+			
+				Case 4:	 ;5 through 1 star
+					ar := Width/(Height/5)
+					pic_h := t_barHeight // 5
+					pic_w := pic_h * ar
+
+					pic_sw := Width
+					pic_sh := 264	
+
+					if (subtype == 0)	
+						pic_sh := 1	
+			}
+
+			;on-screen position
+			pic_sx := pic_sy := 0
+			pic_y := A_ScreenHeight * topBarPosFactor - pic_h/2
+
+			Switch image_type
+			{
+				Case 1:
+					pic_x := (t_sideLabelWidth + t_centerLabelWidth) + t_sideLabelWidth / 2 - pic_w/2
+			
+				Case 2:
+					pic_x := t_sideLabelWidth / 2 - pic_w/2
+			
+				Case 3:			
+					pic_y := A_ScreenHeight * topBarPosFactor - t_barHeight // 2 + 2
+					pic_x := t_sideLabelWidth + 2
+			
+			    Case 4:	;5 stars and no stars (unrated) icons
+					pic_y := A_ScreenHeight * topBarPosFactor - t_barHeight // 2 + 2
+					pic_x := t_sideLabelWidth + t_centerLabelWidth - pic_w - 2
+					pic_sy := 1320 - 264 * subtype			
+			}
+
+			; Create one "canvas" bitmap large enough for both images.
+			hbm := CreateDIBSection(pic_w, pic_h)
+			hdc := CreateCompatibleDC()
+			obm := SelectObject(hdc, hbm)
+			G := Gdip_GraphicsFromHDC(hdc)
+
+			;Using High quality Bicubic (7) to resize here since it is probably the best quality
+			Gdip_SetInterpolationMode(G, 7)
+			Gdip_DrawImage(G, pBitmap, 0, 0, pic_w, pic_h, pic_sx, pic_sy, pic_sw, pic_sh)
+			Gdip_DeleteGraphics(G)
+			UpdateLayeredWindow(gGui.%gui_id%.Hwnd, hdc, pic_x, pic_y, pic_w, pic_h)
+			SelectObject(hdc, obm)
+			DeleteObject(hbm)
+			DeleteDC(hdc)
+			Gdip_DisposeImage(pBitmap)
+
+			if (image_type == 1)
+				this._last_image1_window := gui_id
+			else if (image_type == 2)
+				this._last_image2_window := gui_id
+			else if (image_type == 3)
+				this._last_image3_window := gui_id
+			else if (image_type == 4)
+			{
+				this._last_image4_window := gui_id
+				this._last_image4_subtype := subtype
+			}
+
+			return gui_id
+		}
+		
+/*
+		ShowGraphic(playlist, selection, image_type, image_file, show_now:=true, subtype:=0)
+		{
+			global
+			Critical  ;without this, images are not always properly deleted leaving orphans
+			;image_type
+			;1 = rom logo
+			;2 = system logo
+			;3 = favorite icon
+			;4 = rating icon
+
+			if (!playlist || !selection)
+				return
+
+			;OutputDebug playlist: %playlist%, selection: %selection%, image_type: %image_type%, image_file: %image_file%, show_now: %show_now%, subtype: %subtype%`n
+
+			;if no image file, then hide the previous one since there
+			;is apparently nothing to show for this one.
+			if (!image_file || !FileExist(image_file))
+			{
+				if (image_type == 1)
+					try gGui.%last_image1_window%.Hide()
+				if (image_type == 2)
+					try gGui.%last_image2_window%.Hide()
+				if (image_type == 3)
+					try gGui.%last_image3_window%.Hide()
+				if (image_type == 4)
+					try gGui.%last_image4_window%.Hide()
+				return
+			}
+
+			last_image1_window := this._last_image1_window
+			last_image2_window := this._last_image2_window
+			last_image3_window := this._last_image3_window
+			last_image4_window := this._last_image4_window
+
+			last_image4_subtype := this._last_image4_subtype
+
+			if (image_type == 1 && image_file == this._last_image1_file)
+			{
+				;Gui, %last_image1_window%: Show, NA
+				try	gGui.%last_image1_window%.Show("NA")
+				return
+			}
+			if (image_type == 2 && image_file == this._last_image2_file)
+			{
+				;Gui, %last_image2_window%: Show, NA 
+				try
+					gGui.%last_image2_window%.Show("NA")
+				return
+			}
+			if (image_type == 3 && image_file == this._last_image3_file)
+			{
+				;Gui, %last_image3_window%: Show, NA 
+				try
+					gGui.%last_image3_window%.Show("NA")
+				return
+			}
+			if (image_type == 4 && image_file == this._last_image4_file && subtype == this._last_image4_subtype)
+			{
+				;Gui, %last_image4_window%: Show, NA 
+				try
+					gGui.%last_image4_window%.Show("NA")
+				return
+			}
+
+			if (image_type == 1)
+				this._last_image1_file := image_file
+			if (image_type == 2)
+				this._last_image2_file := image_file
+			if (image_type == 3)
+				this._last_image3_file := image_file	
+			if (image_type == 4)
+				this._last_image4_file := image_file		
+
+			if (image_type == 1 && last_image1_window)
+				try
+					gGui.%last_image1_window%.Hide()
+				;Gui, %last_image1_window%:Hide
+			if (image_type == 2 && last_image2_window)
+				try
+					gGui.%last_image2_window%.Hide()
+				;Gui, %last_image2_window%:Hide
+			if (image_type == 3 && last_image3_window)
+				try
+					gGui.%last_image3_window%.Hide()
+				;Gui, %last_image3_window%:Hide
+			if (image_type == 4 && last_image4_window)
+				try
+					gGui.%last_image4_window%.Hide()					
+				;Gui, %last_image4_window%:Hide
+
+			;if (!FileExist(image_file))
+			;	return ""
+
+			;Create a layered window (+E0x80000 : must be used for UpdateLayeredWindow to work!) 
+			;that is always on top (+AlwaysOnTop), and has no taskbar entry or caption
+			gui_id := playlist . "_" selection . "_" . image_type ;Graphic 1 is the game logo image
+			;Gui, %gui_id%:+LastFoundExist
+			;gGui.%gui_id%.Opt("+LastFoundExist")
+			;if (!WinExist())
+			;try
+			;	gn := gGui.%gui_id%.Hwnd
+			;catch
+			;	gn := false
+
+			;OutputDebug "gn:" gn  " gui_id:" gui_id "`n"
+
+			;if (!gn)
+			{
+				;gGui.%gui_id% := Gui()
+				gGui.%gui_id% := Gui(, "eipGui - " gui_id)
+			    gGui.%gui_id%.Opt("-Caption +E0x80000 +LastFound +AlwaysOnTop +ToolWindow +OwnDialogs") ;+OwnerGuiOverlay")
+				gGui.Gui%gui_id% := gGui.%gui_id%.Hwnd
+				;Gui, %gui_id%: -Caption +E0x80000 +LastFound +AlwaysOnTop +ToolWindow +OwnDialogs +HwndGui%gui_id% ;+OwnerGuiOverlay 
+			}
+
+			if (show_now == true)
+				gGui.%gui_id%.Show("NA")
+				;Gui, %gui_id%: Show, NA
+
+			; Get a handle to this window we have created in order to update it later
+			hwnd := WinExist()
+
+			pBitmap := Gdip_CreateBitmapFromFile(image_file)
+			;OutputDebug "image_file:" image_file "`n"
+
+			;future exception handling
+			If !pBitmap
+			{
+				xx:=1
+			}
+			else
+				xx:=2
+
+			Width := Gdip_GetImageWidth(pBitmap)
+			Height := Gdip_GetImageHeight(pBitmap)
+
+			;Note that all screen coordinates here are native (i.e. not adjusted
+			;for screen scaling)
+			barHeightFactor := 1/10
+			centerLabelWidthFactor := gCfg.lst_game_name_ratio
+			topBarPosFactor := 1/3
+
+			t_barHeight := Floor(A_ScreenHeight * barHeightFactor)
+			t_systemLabelWidth := A_ScreenWidth / 3
+			t_centerLabelWidth := A_ScreenWidth * centerLabelWidthFactor
+			t_sideLabelWidth := (A_ScreenWidth - t_centerLabelWidth) /2
+			t_graphicMargin := 16 ;pixels to shrink graphic inside box
+			
+			;image size
+			Switch image_type
+			{
+				Case 1, 2:			
+					;OutputDebug "image_file: " image_file "`n"
+					ar := Width/Height
+					pic_h := t_barHeight - t_graphicMargin
+					pic_w := pic_h * ar - t_graphicMargin
+					
+					if (pic_w > t_sideLabelWidth)
+					{
+						ar := Height/Width
+						pic_w := t_sideLabelWidth - t_graphicMargin
+						pic_h := pic_w * ar - t_graphicMargin
+					}
+
+					pic_sw := Width
+					pic_sh := Height
+			
+			 	Case 3:	;favorite and no star (unrated) icons		
+					ar := Width/Height
+					pic_h := t_barHeight // 5
+					pic_w := pic_h * ar
+
+					pic_sw := Width
+					pic_sh := Height				
+			
+				Case 4:	 ;5 through 1 star
+					ar := Width/(Height/5)
+					pic_h := t_barHeight // 5
+					pic_w := pic_h * ar
+
+					pic_sw := Width
+					pic_sh := 264	
+
+					if (subtype == 0)	
+						pic_sh := 1	
+			}
+
+			;on-screen position
+			pic_sx := pic_sy := 0
+			pic_y := A_ScreenHeight * topBarPosFactor - pic_h/2
+
+			Switch image_type
+			{
+				Case 1:
+					pic_x := (t_sideLabelWidth + t_centerLabelWidth) + t_sideLabelWidth / 2 - pic_w/2
+			
+				Case 2:
+					pic_x := t_sideLabelWidth / 2 - pic_w/2
+			
+				Case 3:			
+					pic_y := A_ScreenHeight * topBarPosFactor - t_barHeight // 2 + 2
+					pic_x := t_sideLabelWidth + 2
+			
+			    Case 4:	;5 stars and no stars (unrated) icons
+					pic_y := A_ScreenHeight * topBarPosFactor - t_barHeight // 2 + 2
+					pic_x := t_sideLabelWidth + t_centerLabelWidth - pic_w - 2
+					pic_sy := 1320 - 264 * subtype			
+			}
+
+			; Create one "canvas" bitmap large enough for both images.
+			hbm := CreateDIBSection(pic_w, pic_h)
+			;hbm := CreateDIBSection(pic_w<pic_w2 ? pic_w2 : pic_w, pic_h<pic_h2 ? pic_h2 : pic_h)
+			; Get a device context compatible with the screen
+			hdc := CreateCompatibleDC()
+			; Select the bitmap into the device context
+			; i.e. select the "canvas", storing a handle to the default bitmap
+			obm := SelectObject(hdc, hbm)
+			; Get a pointer to the graphics of the bitmap, for use with drawing functions
+			; i.e. Create a GDI+ Graphics context to draw with.
+			G := Gdip_GraphicsFromHDC(hdc)
+			;Using Bilinear (7) to resize here since bicubic (7) is kinda slow and I can't see an improvement
+			Gdip_SetInterpolationMode(G, 7)
+			; Gdip_DrawImage(pGraphics, pBitmap, dx, dy, dw, dh, sx, sy, sw, sh, Matrix)
+			; d is for destination and s is for source. We will not talk about the matrix yet (this is for changing colours when drawing)
+			Gdip_DrawImage(G, pBitmap, 0, 0, pic_w, pic_h, pic_sx, pic_sy, pic_sw, pic_sh)
+			; Delete the GDI+ Graphics context in order to use the GDI device context.
+			Gdip_DeleteGraphics(G)
+			; Update the specified window we have created (hwnd1) with a handle to our bitmap (hdc), specifying the x,y,w,h we want it positioned on our screen	
+			UpdateLayeredWindow(hwnd, hdc, pic_x, pic_y, pic_w, pic_h)
+			;G := Gdip_GraphicsFromHDC(hdc)
+			; Clear the canvas.
+			;Gdip_GraphicsClear(G)
+			; Draw the second image.
+			;Gdip_SetInterpolationMode(G, 7)
+			;Gdip_DrawImage(G, pBitmap2, 0, 0, pic_w2, pic_h2, 0, 0, Width2, Height2)
+			; Delete the GDI+ Graphics context in order to use the GDI device context.
+			;Gdip_DeleteGraphics(G)
+			; Update the second window. (Note hwnd2 not hwnd1.)
+			;UpdateLayeredWindow(hwnd2, hdc, pic_x2, pic_y2, pic_w2, pic_h2)
+			; Select the object back into the hdc
+			SelectObject(hdc, obm)
+			; Now the bitmap may be deleted
+			DeleteObject(hbm)
+			; Also the device context related to the bitmap may be deleted
+			DeleteDC(hdc)
+			; The bitmap we made from the image may be deleted
+			Gdip_DisposeImage(pBitmap)
+			;Gdip_DisposeImage(pBitmap2)
+
+			if (image_type == 1)
+				this._last_image1_window := gui_id
+			else if (image_type == 2)
+				this._last_image2_window := gui_id
+			else if (image_type == 3)
+				this._last_image3_window := gui_id
+			else if (image_type == 4)
+			{
+				this._last_image4_window := gui_id
+				this._last_image4_subtype := subtype
+			}
+
+			return gui_id
+		}
+		*/
+/*
+		;Creates a hidden list logo image and returns its guid
+		;Logos always created at proper size in centered position.
+		CreateListLogo(list_index, image_file)
+		{
+			global
+			;Create a layered window (+E0x80000 : must be used for UpdateLayeredWindow to work!) 
+			;that is always on top (+AlwaysOnTop), and has no taskbar entry or caption
+			gui_id := "listlogo_" . list_index ;Unique name for this logo
+			;OutputDebug Here gui_id: %gui_id%`n
+			;Gui, %gui_id%:+LastFoundExist
+			gGui.%gui_id%.Opt("+LastFoundExist")
+			if (!WinExist())
+			{
+				gGui.%gui_id% := Gui(, "eipGui - " gui_id)
+				gGui.%gui_id%.Opt("-Caption +E0x80000 +LastFound +AlwaysOnTop +ToolWindow +OwnDialogs") ;+OwnerGuiOverlay")
+				gGui.Gui%gui_id% := gGui.%gui_id%.Hwnd
+				;Gui, %gui_id%: -Caption +E0x80000 +LastFound +AlwaysOnTop +ToolWindow +OwnDialogs +HwndGui%gui_id% ;+OwnerGuiOverlay 
+			}
+			;if (show_now == true)
+				;Gui, %gui_id%: Show, NA
+
+			; Get a handle to this window we have created in order to update it later
+			hwnd := WinExist()
+
+			pBitmap := Gdip_CreateBitmapFromFile(image_file)
+
+			;future exception handling
+			If !pBitmap
+			{
+				xx:=1
+			}
+			else
+				xx:=2
+
+			Width := Gdip_GetImageWidth(pBitmap)
+			Height := Gdip_GetImageHeight(pBitmap)
+
+			;Note that all screen coordinates here are native (i.e. not adjusted
+			;for screen scaling)
+			;Gui, ListView, ListViewPlaylist
+			;GuiControlGet, lv_pos, guiSelect:Pos, ListViewPlaylist
+			gGui.guiSelect_ListViewPlaylist.GetPos(&lv_posX, &lv_posY, &lv_posW, &lv_posH)
+			t_spaceHeight := Floor(lv_posH * A_ScreenDPI / 96) - 4 ;4 is the top/bottom margin
+			t_spaceWidth := Floor(A_ScreenWidth / 3)
+
+			t_spaceYPos := Floor(lv_posY * A_ScreenDPI / 96) + 2 ;2 is half of 4 above
+			t_spaceXPos := Floor((A_ScreenWidth / 2) - (t_spaceWidth / 2))
+
+			OutputDebug "H: " . t_spaceHeight . ", W: " . t_spaceWidth . ", X: " . t_spaceXPos . ", Y: " . t_spaceYPos . "`n"
+			
+			;image size					
+			ar := Width/Height
+			pic_h := t_spaceHeight
+			pic_w := pic_h * ar 
+			
+			if (pic_w > t_spaceWidth)
+			{
+				ar := Height/Width
+				pic_w := t_spaceWidth
+				pic_h := pic_w * ar
+			}
+
+			pic_sw := Width
+			pic_sh := Height
+
+			;on-screen position
+			pic_sx := pic_sy := 0
+			pic_y :=  Floor((t_spaceYPos + t_spaceHeight/2) - (pic_h/2))	
+			pic_x := Floor((A_ScreenWidth/2)-(pic_w/2))
+			
+			; Create one "canvas" bitmap large enough for both images.
+			hbm := CreateDIBSection(pic_w, pic_h)
+			;hbm := CreateDIBSection(pic_w<pic_w2 ? pic_w2 : pic_w, pic_h<pic_h2 ? pic_h2 : pic_h)
+			; Get a device context compatible with the screen
+			hdc := CreateCompatibleDC()
+			; Select the bitmap into the device context
+			; i.e. select the "canvas", storing a handle to the default bitmap
+			obm := SelectObject(hdc, hbm)
+			; Get a pointer to the graphics of the bitmap, for use with drawing functions
+			; i.e. Create a GDI+ Graphics context to draw with.
+			G := Gdip_GraphicsFromHDC(hdc)
+			;Using Bilinear (7) to resize here since bicubic (7) is kinda slow and I can't see an improvement
+			Gdip_SetInterpolationMode(G, 7)
+			; Gdip_DrawImage(pGraphics, pBitmap, dx, dy, dw, dh, sx, sy, sw, sh, Matrix)
+			; d is for destination and s is for source. We will not talk about the matrix yet (this is for changing colours when drawing)
+			Gdip_DrawImage(G, pBitmap, 0, 0, pic_w, pic_h, pic_sx, pic_sy, pic_sw, pic_sh)
+			; Delete the GDI+ Graphics context in order to use the GDI device context.
+			Gdip_DeleteGraphics(G)
+			; Update the specified window we have created (hwnd1) with a handle to our bitmap (hdc), specifying the x,y,w,h we want it positioned on our screen	
+			UpdateLayeredWindow(hwnd, hdc, pic_x, pic_y, pic_w, pic_h)
+			;G := Gdip_GraphicsFromHDC(hdc)
+			; Clear the canvas.
+			;Gdip_GraphicsClear(G)
+			; Draw the second image.
+			;Gdip_SetInterpolationMode(G, 7)
+			;Gdip_DrawImage(G, pBitmap2, 0, 0, pic_w2, pic_h2, 0, 0, Width2, Height2)
+			; Delete the GDI+ Graphics context in order to use the GDI device context.
+			;Gdip_DeleteGraphics(G)
+			; Update the second window. (Note hwnd2 not hwnd1.)
+			;UpdateLayeredWindow(hwnd2, hdc, pic_x2, pic_y2, pic_w2, pic_h2)
+			; Select the object back into the hdc
+			SelectObject(hdc, obm)
+			; Now the bitmap may be deleted
+			DeleteObject(hbm)
+			; Also the device context related to the bitmap may be deleted
+			DeleteDC(hdc)
+			; The bitmap we made from the image may be deleted
+			Gdip_DisposeImage(pBitmap)
+			;Gdip_DisposeImage(pBitmap2)
+
+			;OutputDebug, Returning %gui_id%`n
+			return gui_id
+		}
+		*/
+	}
+}

@@ -1,0 +1,19 @@
+[System_snes]
+sys_key=snes
+asset_name=Nintendo_SNES
+proper_name=Nintendo SNES
+exe_full_path=D:\Emulators\ZSNES\zsnesw.exe,nohide
+;window_name=process
+search_path=D:\Assets\Nintendo_SNES\Roms\*.zip		
+param_list="[rom]"
+run_apps=ultramap,winipac
+map_exit={Event}!{F4}
+map_pause={Toggle}p
+
+
+Note: Set video to a windowed non-D mode at same resolution as the desktop 
+      otherwise the picker menu won't show through.
+
+Note: This example assumes [Application] sections for ultramap and winipac exist.
+
+Note: Test first, before uncommenting window_name for enhanced focus control.

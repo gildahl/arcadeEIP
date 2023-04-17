@@ -1,0 +1,51 @@
+[System_mame]
+sys_key=mame
+asset_name=MAME
+proper_name=MAME
+attract=1
+exe_full_path=D:\Emulators\MAME\mame.exe,min
+;window_name=[[rom_name]]
+search_path=[root_folder]_*\roms\*.zip
+;search_path=D:\Emulators\MAME\roms\*.zip
+param_list=[rom_name] -nowindow -joy -skip_gameinfo -autosave -nosleep -priority 1 -keyboardprovider dinput <-video,1>
+run_apps=ultramap,winipac
+rule_1=<change_root> [root_folder]_* <if_rom_in_subfolder> \roms
+rule_2=<use_proxy> [rom_name].txt <if_in_folder> [root_folder]\roms
+;rule_3=<remove_param> -autosave <if_rom_in_list> paperboy,eyes,blitz,pong
+map_pause={toggle}p
+map_exit={Event}{Esc}
+;map_pause={PauseProc}
+;map_exit={CloseActive}
+meta_names=C:\GameEx\DATA\MAME.map
+;logo_folder=D:\Assets\MAME\Logos
+;system_logo=D:\Assets\MAME\System_Logo\system_logo.png
+
+
+Note: Commented lines are examples of optional variations. For example, the first search path is one that supports
+      the <change_root> rule (rule_2) for handling multiple parallel versions of MAME (see Rules Reference.pdf for more
+      about that). The second search path is a simple direct path to the roms (*.zip files in this case).
+
+Note: The <-video,1> parameter is an option to allow passthrough of the -video MAME parameter from the arcadeEIP 
+      command-line if it is provided. For example, if you wanted to run a game in GDI video mode (perhaps to run it 
+      over a remote desktop session), this parameter allows a command line like this to work:
+
+      >eip galaga -video gdi   [runs Galaga in GDI video mode]
+
+      See the Command-Line Reference.pdf for more information on passthrough params.
+
+Note: This example assumes [Application] sections for ultramap and winipac exist.
+
+Note: This example shows a meta_names link to the GameEx MAME.map file to get proper names of roms.
+
+      >mame.exe -listfull > .meta
+
+      Keep in mind that if you integrate with LaunchBox or GameEx, you can synchronize with their MAME (or other system)
+      game name lists without need for this names meta file.
+
+Note: This example shows two optional paths to logos. These would override any settings in [Global_Assets]. To integrate
+      with LaunchBox, specify the LaunchBox clear logo and marquee folders instead of the default locations.
+
+Note: Test first, before uncommenting window_name for enhanced focus control.
+
+Note: Versions of MAME prior to .172 will require use of alternate map_exit and map_pause settings due to lack of 
+      support for the -keyboardprovider dinput parameter. Try {PauseProc} for pause and {CloseActive} or {EndProc} to exit.

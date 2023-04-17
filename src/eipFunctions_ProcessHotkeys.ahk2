@@ -1,0 +1,1704 @@
+; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
+; © 2023 David G. Dahlstrom
+; File: eipFunctions_ProcessHotkeys.ahk2
+
+;Since arcadeEIP mainly runs on top of emulators, it never takes the focus.
+;This permits it to operate independently of the emulators which have the focus.
+;Therefore, system level hotkeys are used for all user interaction with arcadeEIP.
+;These hotkeys are either enabled or disabled depending on what mode the application
+;is in (for example, game selection screen displayed or pause screen displayed)
+;Most of this hotkey management is performed using the functions in this file.
+
+;This is the main function for showing and hiding the game select screen (guiSelect)
+;Note that "option" is not actually used at this time.
+MagicKey(option, theHotkey:="")
+{
+    global
+
+    ;*** HOUSE OF CARDS ALERT ***
+    ;BEWARE that the sequence of events in this function are
+    ;very delicate.  Test throroughly if changing anything here.
+    if (magic_key_off)
+        return
+
+    if (!bEmuWindowActive)
+        return
+
+    if (!g_guiselect_visible) ;guiSelect hidden, so lets show it.
+    {
+        ModifyHotkeys("blocking")
+
+        ;Set speed of RunWaitTimer frequency
+        ;Determines scroll performance in the select screen.
+        SetTimer RunWaitTimer, cRunWaitTimer_Period
+
+        ;if picker screen does not dismiss, check to see if magic_key is mapped to pause_key or exit_key
+        ;and then ensure that pause_key or exit_key is mapped the same in the picker cp configuration as in
+        ;the game's cp configuration.          
+        MouseGetPos ,, &pid_screen
+
+        oMouseDelta.SetState(1) 
+        oDetectInactivity.Suspend()
+        mouse_clicks_off := 1
+    
+        guiAlpha.Opt("+AlwaysOnTop")
+        WinSetTransColor "Black 240", "ahk_id " . guiSelect.Hwnd
+
+        if (g_pause_state)
+        {
+            oFadeAlphaOverlay.Start(1,200,20,16) ;dim the alpha (pause) overlay
+        }
+        
+        oFadeAlphaWindow.Start(1,150,20,16) ;dim the alpha screen
+
+        ;Wait for picker apps to load
+        if (gCfg.picker_apps)
+        {
+            Hotkey gCfg.magic_key, "Off"
+            ShowControls("guiPause")
+            RunApps(gCfg.picker_asset, "", gCfg.picker_apps)
+            HideControls("guiPause")
+            Hotkey gCfg.magic_key, "On"
+        }
+
+        g_guiselect_visible := true ;must be above ShowControls
+        guiSelect.Opt("+AlwaysOnTop")
+        ShowControls("guiSelect") ;ShowControls should always follow a guiSelect +AlwaysOnTop directive          
+    }
+    else ;guiSelect is visible, so let's hide it.
+    {   
+        if (g_pause_state)
+            oFadeAlphaOverlay.Start(200,0,20,16) ;undim the alpha (pause) overlay   
+
+        oFadeAlphaWindow.Start(150,0,20,16) ;undim the alpha screen
+        
+        oDetectInactivity.Resume()
+        oMouseDelta.SetState(0)
+
+        guiSelect.Opt("-AlwaysOnTop")
+
+        ;return focus to the emulator, but not if we are still paused
+        ;(if the process is paused, it will crash; and if we are displaying
+        ;a pause screen, we don't want to bury it.)
+        if (!oPauseProc.Active && !g_guipause_visible) 
+        {
+            ;MouseGetPos &OutputVarX, &OutputVarY, &OutputVarWin, &OutputVarControl, 2
+            ;eHwnd := WinGetID("ahk_pid " . pid_emulator)
+            ;emu_hwnd := "ahk_id " . emu_id
+
+            ControlFocus(WinGetID("ahk_pid " . pid_emulator))
+            ;ControlFocus,,ahk_pid %pid_emulator%
+        }
+        
+        g_guiselect_visible := false
+
+        mouse_clicks_off := 0
+        HideControls("guiSelect")  
+
+        ;WinSet, AlwaysOnTop, Off, ahk_pid %pid_emulator%
+        ;WinSet, Style, 0x1000000, ahk_pid %pid_emulator%
+
+        ;Wait for apps to reload
+        ;option 0 means we're returning to the current game so no point
+        ;to reload the current game's profile.
+        if (gCfg.picker_apps && option == "0") 
+        {   
+            Hotkey gCfg.magic_key, "Off"
+            ShowControls("guiPause")
+            RunApps(gCfg.asset_name, gCfg.rom_name, orig_run_apps)
+            HideControls("guiPause")
+            Hotkey gCfg.magic_key, "On"
+        }
+
+        ;Reset RunWaitTimer to default frequecy
+        SetTimer RunWaitTimer, runwait_default_freq
+
+        ModifyHotkeys("passthrough")
+    }
+
+    KeyWait gCfg.magic_key ;blocks auto-repeat 
+}
+
+;Pause/unpause game
+;Also shows or hides the pause screen. This pause screen can hold various
+;kinds of custom information and images.
+;Possible keyState values are "", (Down), or "Up"
+PauseKey(keyState, theHotkey:="")
+{
+    global
+
+    static paused := false
+    static lastTick := 0
+    static lastKeyState := "Up"
+
+    ;Enforce a delay between pause keystrokes to avoid "button mashing" side effects.
+    ;if last key was "down", then allow "up" with no restriction
+    ;if last key was "up", then only allow a "down" to pass next, and only after a delay
+
+    pass := false
+
+    if (lastKeyState == "" && keyState == "Up")
+        pass := true
+    else if (lastKeyState == "Up")
+    {
+        ;enforce a minimum 300ms delay between pause keystrokes
+        if (keyState == "" && A_TickCount - lastTick > 300) 
+            pass := true
+    }
+
+    if (!pass)
+        return
+
+    lastKeyState := keyState
+    lastTick := A_TickCount
+
+    ;*****************************************************
+
+    ;Can't pause if...
+    ;1. there isn't an active emulator
+    ;2. there is no pause command mapping
+    ;3. the game select screen is already active (ok to pause prior to game select activation though)
+    if (!bEmuWindowActive || !gCfg.map_pause || g_guiselect_visible)
+    {
+        return
+    }
+
+    ;Split map_pause into 1 or 2 values depending on format
+    ;1. {Toggle} x, which sends an x-Down and x-Up
+    ;2. {a}|{b}, which sends a then b
+    ;3. {x}, which just send an x
+    oMapPauseArray := StrSplit(gCfg.map_pause, "|")	
+	if (oMapPauseArray.Length > 2 || StrLen(oMapPauseArray[1]) == 0)
+	    return
+
+    oMapPause := Map()
+    for n, val in oMapPauseArray
+    {
+        oMapPause[n] := oMapPauseArray[n]
+    }
+	
+    ;the {Toggle} tag is a shortcut so one can write: {Toggle} p
+    ;instead of: {p DownR}|{p up}
+    if (InStr(oMapPause[1], "{Toggle}")) 
+    {
+        pause_cmd := Trim(StrReplace(oMapPause[1], "{Toggle}", A_Space))
+        oMapPause[1] := "{" . pause_cmd . " DownR}"
+        oMapPause[2] := "{" . pause_cmd . " up}"
+    }
+
+    ;Pause the emulator using the appropriate method
+    if (gCfg.map_pause == "{PauseProc}") ;if this is a synthetic pause
+    {
+        if (keyState == "")
+        {
+            if (!paused) ;Synthetic PAUSE
+            {
+                SetTimer RunWaitTimer, 0 ;prevents pid from being used in RunWaitTimer while paused
+                oDetectInactivity.Suspend()
+                if (!g_guiselect_visible) ;avoid bringing guiAlpha to the top when guiSelect is displayed.
+                    guiAlpha.Opt("+AlwaysOnTop") ;we will need it on top if guiSelect is not displayed
+             
+                oMasterSound.Off() ;pausing the process while a sound is active can produce a hum.
+                oPauseProc.Suspend()
+            }
+            else ;Synthetic UNPAUSE
+            {
+                oDetectInactivity.Resume()
+                oMasterSound.On()                  
+
+                oPauseProc.Resume()
+                Sleep 200 ;needed to prevent ControlFocus from being called before proc has finished resuming which can result in a crash
+        
+                MouseGetPos &OutputVarX, &OutputVarY, &OutputVarWin, &OutputVarControl, 2
+                ControlFocus OutputVarControl, "ahk_pid " . pid_emulator
+                
+                SetTimer RunWaitTimer, cRunWaitTimer_Period
+            }
+            paused := paused ? false : true
+        }
+        else ;if (keyState == "Up")
+            return			
+    }	
+    else if (gCfg.pause_key && gCfg.map_pause) ;if this is a native/mapped pause
+    {
+        if (oMapPause.Count == 1) ;use if a single input message is adequate
+        {
+            if (keyState == "")
+            {
+                pause_cmd := oMapPause[1]
+                SendInput pause_cmd
+                paused := paused ? false : true
+            }
+            else ;if (keyState == "Up")
+            {
+                return
+            }
+        }
+        else if (oMapPause.Count == 2)  ;(pauseToggle) ;only used if a full keystroke must be emulated (like MAME native pause)
+        {
+            if (keyState =="Up")
+            {
+                pause_cmd := oMapPause[2]
+                SendInput pause_cmd
+ 
+                paused := paused ? false : true
+            }
+            else
+            {
+                pause_cmd := oMapPause[1]
+                SendInput pause_cmd
+
+                return
+            }
+        }
+    }
+
+    ;Display the appropriate pause visuals
+    if (paused)
+    {
+        oDetectInactivity.Suspend()
+        g_pause_state := true
+        mouse_clicks_off := 1
+
+        if (!g_guiselect_visible && oPauseControl.HasContent())
+        {
+            SoundBeep
+            guiAlpha.Opt("+AlwaysOnTop")    
+            WinSetTransparent 0, "ahk_id " . gGui.guiAlpha_Overlay.Hwnd ;0 is transparent, 255 is opaque
+            oFadeAlphaWindow.Start(100,255,20,16)             
+            ShowControls("guiPause") ;shows pause images, if any, and turns hotkeys on
+            g_guipause_visible := true
+        }
+        else if (gCfg.map_pause == "{PauseProc}") ;only called if there are no pause images to show
+        {
+            guiAlpha.Opt("+AlwaysOnTop") 
+            oFadeAlphaWindow.Start(1,150,20,16) ;just fade the screen
+        }
+        oBASS.Play("pause")
+    }
+    else
+    {
+        if (!g_guiselect_visible && oPauseControl.HasContent())
+        {      
+            SoundBeep
+            SoundBeep      
+            HideControls("guiPause") ;hides pause images, if any, and turns hotkeys off 
+            oFadeAlphaWindow.Start(255,0,20,16)
+            WinSetTransparent 255, "ahk_id " . gGui.guiAlpha_Overlay.Hwnd ;0 is transparent, 255 is opaque 
+            g_guipause_visible := false
+        }
+        else if (gCfg.map_pause == "{PauseProc}")
+            oFadeAlphaWindow.Start(150,0,20,16)   
+
+        oDetectInactivity.Resume()
+        g_pause_state := false
+        mouse_clicks_off := 0
+
+        ;Make sure the emulator gets the focus back
+        ;ControlFocus,,ahk_pid %pid_emulator%
+
+        oBASS.Play("unpause")
+    }
+
+    return
+}
+
+;Implements exit key function (along with its companion function, ExitKeyUp())
+;internal == "" if exited by native means (not under classicPlayer control)
+;internal == 0 if exited under automated control (i.e. direct-switching or attract mode)
+;internal == 1 if exited via a hotkey (using a valid map_exit code)
+ExitKey(internal, theHotkey:="")
+{
+    global
+ 	local exit_cmd
+
+    g_exit_code := internal
+
+    if (exit_key_off)
+        return
+
+    if (!bEmuWindowActive)
+        return
+
+    ;Exit the game select screen if it is currently visible
+    if (g_guiselect_visible)
+        MagicKey(0)
+
+    ;Unpause if we are paused. Particularly important if 
+    ;we have paused the process (i.e. synthetic pause)
+    if (g_pause_state)
+    {            
+        PauseKey("")
+        Sleep 100
+        PauseKey("Up")
+    }
+	
+	oMapExit := StrSplit(gCfg.map_exit, "|")
+	
+	if (oMapExit.Length > 2 || StrLen(oMapExit[1]) == 0)
+	    return
+	
+	exit_cmd := oMapExit[1]
+	
+	if (InStr(exit_cmd, "{CloseTop}"))
+	{
+        exit_cmd := DoExitFunction("CloseTop", exit_cmd)
+	}
+	
+	if (InStr(exit_cmd, "{CloseActive}"))
+	{
+        exit_cmd := DoExitFunction("CloseActive", exit_cmd)
+	}
+	
+	if (InStr(exit_cmd, "{WinClose"))
+	{		
+        exit_cmd := DoExitFunction("WinClose", exit_cmd)        
+	}
+	
+	if (InStr(exit_cmd, "{EndProc}"))
+	{
+        exit_cmd := DoExitFunction("EndProc", exit_cmd)
+	}
+	
+	if (InStr(exit_cmd, "{Event"))
+	{
+        exit_cmd := DoExitFunction("Event", exit_cmd)
+        return
+	}
+	
+	if (exit_cmd)
+    {
+		Send exit_cmd
+        LogEntry("INFO: Sent Exit Key Sequence: " . exit_cmd . ".`n")
+    }
+
+	return
+}
+
+;Implements exit key function (along with its companion function ExitKey())
+ExitKeyUp(theHotkey:="")
+{	
+    global 
+
+	local exit_cmd, tag
+
+    if (exit_key_off)
+        return
+
+    if (!bEmuWindowActive)
+        return
+	
+	if (oMapExit.Length == 1 || StrLen(oMapExit[2]) == 0)
+		return		
+	
+	exit_cmd := oMapExit[2]
+	
+	if (InStr(exit_cmd, "{CloseTop}"))
+	{
+        exit_cmd := DoExitFunction("CloseTop", exit_cmd)
+	}
+	
+	if (InStr(exit_cmd, "{CloseActive}"))
+	{
+        exit_cmd := DoExitFunction("CloseActive", exit_cmd)
+	}
+	
+	if (InStr(exit_cmd, "{WinClose"))
+	{	
+        exit_cmd := DoExitFunction("WinClose", exit_cmd)
+	}
+	
+	if (InStr(exit_cmd, "{EndProc}"))
+	{
+        exit_cmd := DoExitFunction("EndProc", exit_cmd)
+	}
+	
+	if (InStr(exit_cmd, "{Event"))
+	{
+        exit_cmd := DoExitFunction("Event", exit_cmd)
+        return
+	}
+	
+	if (exit_cmd)
+    {
+		Send exit_cmd
+        LogEntry("INFO: Sent Exit Key Sequence (Up): " . exit_cmd . ".`n")
+    }
+	
+	return
+}
+
+;Support function called by ExitKey() and ExitKeyUp()
+DoExitFunction(func, exit_cmd)
+{  
+    global 
+
+    if (func == "CloseTop")
+    {
+        MouseGetPos ,, &id, &control
+        winTitle := WinGetTitle("ahk_id " . id)
+        WinClose winTitle
+
+        exit_cmd := Trim(StrReplace(exit_cmd, "{CloseTop}", A_Space))
+    } 
+    if (func == "CloseActive")
+    {
+        WinClose "A"
+
+        exit_cmd := Trim(StrReplace(exit_cmd, "{CloseActive}", A_Space))
+    }
+    if (func == "WinClose")
+    {
+        Sleep 100
+        a := InStr(exit_cmd, "{WinClose")  ;start pos of the {WinClose} tag
+        b := InStr(exit_cmd, "}",,a,1)  ;end postion of the {WinClose} tag
+        c := InStr(exit_cmd, ",",,a)  ;position of first comma, if any
+        if (c != 0)
+        {
+            d := SubStr(exit_cmd, c+1, b-c-1)    ;the sub to parse for terms
+            oWinList := StrSplit(d, ",", " ")
+
+            for n, win in oWinList
+            {
+                LogEntry("INFO: {WinClose} closing window: " . win . "`n")
+                WinClose win
+                Sleep 100
+            }
+        }
+        e := SubStr(exit_cmd, a, b-a+1)
+        exit_cmd := Trim(StrReplace(gCfg.map_exit, e, A_Space))
+
+        return exit_cmd
+    }
+    else if (func == "EndProc")
+    {
+
+        ;First we will try killing the active window, then we will kill the process.
+        ;act_win := WinActive( "A" )
+        ;WinClose, ahk_id %act_win%
+        LogEntry("INFO: {EndProc} terminating emulator process.`n")
+        ProcessClose pid_emulator ;kill the emulator process
+
+        exit_cmd := Trim(StrReplace(exit_cmd, "{EndProc}", A_Space))
+
+        return exit_cmd
+    }
+    else if (func == "Event")
+    {
+
+        ;These default values work well for mame
+        skd_delay := -1
+        skd_duration := 110
+
+        ;This code permits the {Event} tag to be appended with values to override the default SetKeyDuration
+        ;values above, for example, by specifying {Event,-1,-1}. Altirra needs to to avoid beeping
+        a := InStr(exit_cmd, "{Event")                      ;start pos of the {Event tag
+        b := InStr(exit_cmd, "}",,a,1)                      ;end postion of the {Event tag
+        c := SubStr(exit_cmd, a, b-a)                       ;the {Event tag to parse for terms
+        oTerms := StrSplit(c,",",A_Space)                   ;number of comma separated terms
+        d := SubStr(exit_cmd, a, b-a+1)                     ;Identify the {Event} tag, including any terms 
+        exit_cmd := Trim(StrReplace(exit_cmd, d, A_Space))  ;Remove the tag
+        e := oTerms.Length                                   ;replace skd_delay and skd_duration with terms if found
+        if (e >= 2)
+            skd_delay := oTerms[2]
+        if (e == 3)
+            skd_duration := oTerms[3]
+      
+        oldKeyDelay := A_KeyDelay
+        oldKeyDuration := A_KeyDuration
+        SetKeyDelay skd_delay, skd_duration 
+
+        SendEvent exit_cmd  
+        LogEntry("INFO: Sent {Event} Exit Key Sequence: " . exit_cmd . ".`n")   
+
+        SetKeyDelay oldKeyDelay, oldKeyDuration ;restore previous values
+
+        return exit_cmd
+    }
+}
+
+;Hide controls on specified gui windows
+HideControls(guiName)
+{
+    global
+
+    if (guiName == "guiPause")
+    {
+        Critical
+        oPauseControl.GoPage("hide")
+        DisableControls("guiPause")
+    }
+
+    if (guiName == "guiSelect")
+    {
+        oSelectListControl.Hide()
+        DisableControls("guiSelect")
+    }
+
+    if (guiName == "guiStart")
+    {
+        gGui.guiStart_Label.Visible := false
+        gGui.guiStart_Rom.Visible := false
+        gGui.guiStart_Logo.Visible := false
+        gGui.guiStart_LicenseBanner.Visible := false
+    }
+
+    if (guiName == "guiExit")
+    {
+        gGui.guiExit_Label.Visible := false
+        gGui.guiExit_Logo.Visible := false
+    }
+}
+
+;Show controls on specified gui windows
+ShowControls(guiName)
+{
+    global
+
+    if (guiName == "guiPause")
+    {
+        Critical
+        oPauseControl.GoPage("start")
+        EnableControls("guiPause")
+    }
+
+    if (guiName == "guiSelect")
+    {
+        ;if (IsSet(oSelectListControl))
+        ;if (g_guiselect_loaded)
+        ;{
+            oSelectListControl.Show()
+            EnableControls("guiSelect")
+        ;}
+    }
+
+    if (guiName == "guiStart")
+    {
+        gGui.guiStart_Label.Visible := true
+        gGui.guiStart_Rom.Visible := true
+        gGui.guiStart_Logo.Visible := true
+        gGui.guiStart_LicenseBanner.Visible := true
+    }
+
+    if (guiName == "guiExit")
+    {
+        gGui.guiExit_Label.Visible := true
+        gGui.guiExit_Rom.Visible := true
+        gGui.guiExit_Logo.Visible := true
+    }
+}
+
+;Enable hotkeys for specified windows.
+;EnableControls is called by ShowControls() above.
+EnableControls(guiName)
+{
+    global
+
+    if (guiName == "guiPause")
+    {
+        ;Turn on the left/right keys for navigation
+        Loop Parse gCfg.left_key, "CSV"
+            Hotkey A_LoopField, "On"
+
+        Loop Parse gCfg.right_key, "CSV"
+            Hotkey A_LoopField, "On"
+
+        ;Turn off the next and previous game controls
+        Loop Parse gCfg.next_key, "CSV"
+            Hotkey A_LoopField, "Off"
+
+        Loop Parse gCfg.previous_key, "CSV"
+            Hotkey A_LoopField, "Off"
+    }
+
+    if (guiName == "guiSelect")
+    {
+        Loop Parse gCfg.left_key, "CSV"
+            Hotkey A_LoopField, "On"
+
+        Loop Parse gCfg.right_key, "CSV"
+            Hotkey A_LoopField, "On"
+
+        Loop Parse gCfg.up_key, "CSV"
+            Hotkey A_LoopField, "On"
+
+        Loop Parse gCfg.down_key, "CSV"
+            Hotkey A_LoopField, "On"
+        
+        Loop Parse gCfg.launch_key, "CSV"
+            Hotkey A_LoopField, "On"
+        
+        Loop Parse gCfg.pgdn_key, "CSV"
+            Hotkey A_LoopField, "On"
+
+        Loop Parse gCfg.pgup_key, "CSV"
+            Hotkey A_LoopField, "On"
+
+        Loop Parse gCfg.home_key, "CSV"
+            Hotkey A_LoopField, "On"
+        
+        Loop Parse gCfg.end_key, "CSV"
+            Hotkey A_LoopField, "On"
+
+        Loop Parse gCfg.list_mode_key, "CSV"
+            Hotkey A_LoopField, "On"
+        
+        Loop Parse gCfg.edit_mode_key, "CSV"
+            Hotkey A_LoopField, "On"
+
+        Loop Parse gCfg.all_key, "CSV"
+            Hotkey A_LoopField, "On"
+
+        Loop Parse gCfg.genre_key, "CSV"
+            Hotkey A_LoopField, "On"
+
+        Loop Parse gCfg.year_key, "CSV"
+            Hotkey A_LoopField, "On"
+
+        Loop Parse gCfg.publisher_key, "CSV"
+            Hotkey A_LoopField, "On"
+
+        Loop Parse gCfg.developer_key, "CSV"
+            Hotkey A_LoopField, "On"
+
+        Loop Parse gCfg.players_key, "CSV"
+            Hotkey A_LoopField, "On"
+
+        Loop Parse gCfg.rating_key, "CSV"
+            Hotkey A_LoopField, "On"
+
+        Loop Parse gCfg.favorite_key, "CSV"
+            Hotkey A_LoopField, "On"
+
+        Loop Parse gCfg.star5_key, "CSV"
+            Hotkey A_LoopField, "On"
+
+        Loop Parse gCfg.star4_key, "CSV"
+            Hotkey A_LoopField, "On"
+
+        Loop Parse gCfg.star3_key, "CSV"
+            Hotkey A_LoopField, "On"
+
+        Loop Parse gCfg.star2_key, "CSV"
+            Hotkey A_LoopField, "On"
+
+        Loop Parse gCfg.star1_key, "CSV"
+            Hotkey A_LoopField, "On"
+
+        Loop Parse gCfg.star0_key, "CSV"
+            Hotkey A_LoopField, "On"
+
+        Loop Parse gCfg.star_key, "CSV"
+            Hotkey A_LoopField, "On"
+
+        Loop Parse gCfg.favorites_key, "CSV"
+            Hotkey A_LoopField, "On"
+        
+        Loop Parse gCfg.add_remove_key, "CSV"
+            Hotkey A_LoopField, "On"
+
+        ;Turn off the next and previous game controls
+        Loop Parse gCfg.next_key, "CSV"
+            Hotkey A_LoopField, "Off"
+
+        Loop Parse gCfg.previous_key, "CSV"
+            Hotkey A_LoopField, "Off"
+    }
+}
+
+;Disable hotkeys for specified windows.
+;DisableControls is called by HideControls() above
+DisableControls(guiName)
+{
+    global
+
+    if (guiName == "guiPause")
+    {
+        Loop Parse gCfg.left_key, "CSV"
+            Hotkey A_LoopField, "Off"
+
+        Loop Parse gCfg.right_key, "CSV"
+            Hotkey A_LoopField, "Off"
+
+        ;Turn the next and previous game controls back on
+        Loop Parse gCfg.next_key, "CSV"
+            Hotkey A_LoopField, "On"
+
+        Loop Parse gCfg.previous_key, "CSV"
+            Hotkey A_LoopField, "On"
+    }
+
+    if (guiName == "guiSelect")
+    {
+        if (!g_pause_state) ;if pause is off
+        {
+            ;pause uses these keys to cycle between images, so we only 
+            ;turn them off if pause is off
+            Loop Parse gCfg.left_key, "CSV"
+                Hotkey A_LoopField, "Off"
+
+            Loop Parse gCfg.right_key, "CSV"
+                Hotkey A_LoopField, "Off"
+
+            ;Turn the next and previous game controls back on, but if pause
+            ;is still on, we don't want them turned back on yet since exiting pause
+            ;will do that.
+            Loop Parse gCfg.next_key, "CSV"
+                Hotkey A_LoopField, "On"
+
+            Loop Parse gCfg.previous_key, "CSV"
+                Hotkey A_LoopField, "On"
+        }
+
+        Loop Parse gCfg.up_key, "CSV"
+            Hotkey A_LoopField, "Off"
+
+        Loop Parse gCfg.down_key, "CSV"
+            Hotkey A_LoopField, "Off"
+
+        Loop Parse gCfg.launch_key, "CSV"
+            Hotkey A_LoopField, "Off"
+    
+        Loop Parse gCfg.pgdn_key, "CSV"
+            Hotkey A_LoopField, "Off"
+
+        Loop Parse gCfg.pgup_key, "CSV"
+            Hotkey A_LoopField, "Off"
+
+        Loop Parse gCfg.home_key, "CSV"
+            Hotkey A_LoopField, "Off"
+        
+        Loop Parse gCfg.end_key, "CSV"
+            Hotkey A_LoopField, "Off"
+
+        Loop Parse gCfg.list_mode_key, "CSV"
+            Hotkey A_LoopField, "Off"
+       
+        Loop Parse gCfg.edit_mode_key, "CSV"
+            Hotkey A_LoopField, "Off"
+
+        Loop Parse gCfg.all_key, "CSV"
+            Hotkey A_LoopField, "Off"
+
+        Loop Parse gCfg.genre_key, "CSV"
+            Hotkey A_LoopField, "Off"
+
+        Loop Parse gCfg.year_key, "CSV"
+            Hotkey A_LoopField, "Off"
+
+        Loop Parse gCfg.publisher_key, "CSV"
+            Hotkey A_LoopField, "Off"
+
+        Loop Parse gCfg.developer_key, "CSV"
+            Hotkey A_LoopField, "Off"
+
+        Loop Parse gCfg.players_key, "CSV"
+            Hotkey A_LoopField, "Off"
+
+        Loop Parse gCfg.rating_key, "CSV"
+            Hotkey A_LoopField, "Off"
+
+        Loop Parse gCfg.favorite_key, "CSV"
+            Hotkey A_LoopField, "Off"
+
+        Loop Parse gCfg.star5_key, "CSV"
+            Hotkey A_LoopField, "Off"
+
+        Loop Parse gCfg.star4_key, "CSV"
+            Hotkey A_LoopField, "Off"
+
+        Loop Parse gCfg.star3_key, "CSV"
+            Hotkey A_LoopField, "Off"
+
+        Loop Parse gCfg.star2_key, "CSV"
+            Hotkey A_LoopField, "Off"
+
+        Loop Parse gCfg.star1_key, "CSV"
+            Hotkey A_LoopField, "Off"
+
+        Loop Parse gCfg.star0_key, "CSV"
+            Hotkey A_LoopField, "Off"
+
+        Loop Parse gCfg.star_key, "CSV"
+            Hotkey A_LoopField, "Off"
+
+        Loop Parse gCfg.favorites_key, "CSV"
+            Hotkey A_LoopField, "Off"
+        
+        Loop Parse gCfg.add_remove_key, "CSV"
+            Hotkey A_LoopField, "Off"
+    }
+}
+
+;Creates hotkeys/hotstrings for direct game switching
+AddDirectSwitchHotKeys()
+{
+    global
+
+    local key, hstr, lowerFileName, e
+
+    hklist := Array()
+
+    HotString("EndChars", "`n") ;default is `n (ENTER) and the semi-colon
+
+    Loop Files directswitch_pattern
+    {
+        lowerFileName := StrLower(A_LoopFileName)
+        if (lowerFileName == "readme.txt")
+            continue
+
+        try
+        {
+            if (SubStr(A_LoopFileName,1,3) == gCfg.hotstring_prefix) ;default hotstring_start value is '@!@'
+            {
+                Loop Read A_LoopFileFullPath
+                {
+                    vector := A_LoopReadLine 
+                    break ;only read the first line
+                }
+    
+                SplitPath A_LoopFileName,,,, &key
+                fVector := DirectSwitch.Bind(vector)
+                
+                hklist.Push(key)
+                hstr := ":X:" . key  ;colons bound the hotstring prefix, X indicates a function call
+
+                HotString(hstr, fVector)
+            }
+            else ;assume its a hotkey spec
+            {
+                Loop Read A_LoopFileFullPath
+                {
+                    vector := A_LoopReadLine 
+                    break ;only read the first line
+                }
+        
+                SplitPath A_LoopFileName,,,, &key
+                fVector := DirectSwitch.Bind(vector)
+                hklist.Push(key)
+                Hotkey key, fVector
+            }
+        }
+        Catch as e
+        {
+            LogEntry("ERROR: Trying to process hotkey/hotstring file: " . A_LoopFileFullPath . ". Please ensure this is a correctly formatted hotkey/hotstring file or remove it from the \Direct folder.`n")
+            ExitApp
+        }
+    }
+
+    return hklist
+}
+
+;Support scrolling functions in guiSelect and the pause screen.
+ScrollList(direction, theHotkey:="")
+{
+    global
+
+    Switch direction
+    {
+        ;handle paging in the pause screen
+        Case "r":
+            if (g_pause_state && !g_guiselect_visible)
+            {
+                Loop Parse gCfg.left_key, "CSV"
+                    Hotkey A_LoopField, "Off"
+
+                PauseScroll(direction)
+                oBASS.Play("page")
+           
+                Loop Parse gCfg.left_key, "CSV"
+                    Hotkey A_LoopField, "On"
+
+                return
+            }
+
+        Case "l":
+            if (g_pause_state && !g_guiselect_visible)
+            {
+                Loop Parse gCfg.right_key, "CSV"
+                    Hotkey A_LoopField, "Off"
+
+                PauseScroll(direction)
+                oBASS.Play("page")            
+            
+                Loop Parse gCfg.right_key, "CSV"
+                    Hotkey A_LoopField, "On"
+
+                return
+            }
+    }
+
+    ;remaining keys only valid in the select screen
+    if (!g_guiselect_visible || !g_guiselect_loaded)
+        return
+
+    Switch direction
+    {
+        Case "d","u","home","end","pu","pd":        
+            oSelectListControl.ScrollVertical(direction)
+
+        Case "s":
+            if (g_directswitch_args)
+                return
+            
+            if (oSelectListControl.IsValidVector())
+            {
+                oBASS.Play("select")
+                MagicKey("1") ;the "1" indicates we're switching games
+                oSelectListControl.SwitchGame()
+            }
+
+        ;it is important for this "control" to turn off the opposing hot key
+        ;to prevent re-entry issues stemming from quickly toggling back and forth
+        ;between left and right (vertical scroll control does not seem to 
+        ; require this)
+        Case "r":
+            Loop Parse gCfg.left_key, "CSV"
+                Hotkey A_LoopField, "Off"
+
+            oSelectListControl.ScrollHorizontal(direction)
+            
+            Loop Parse gCfg.left_key, "CSV"
+                Hotkey A_LoopField, "On"
+
+        Case "l":
+            Loop Parse gCfg.right_key, "CSV"
+                Hotkey A_LoopField, "Off"
+
+            oSelectListControl.ScrollHorizontal(direction)
+            ;oBASS.Play("page")
+            
+            Loop Parse gCfg.right_key, "CSV"
+                Hotkey A_LoopField, "On"
+
+        Case "picks","tog","targ":  ;picks toggles the picks (formerly favorites) list, "tog" adds/removes single item, "targ" toggles edit mode
+            oSelectListControl.SublistCommand(direction)
+        Case "all", "genre","year", "publisher","developer","players","favorites","rating":
+            oSelectListControl.SublistCommand(direction)
+        Case "mark": ;mark as favorite
+            oSelectListControl.SublistCommand(direction)
+        Case "star5", "star4", "star3", "star2", "star1", "star0", "star":
+            oSelectListControl.SublistCommand(direction)
+    }
+
+    return
+}
+
+;Support function for ScrollList() above.
+PauseScroll(direction, screen:=0)
+{
+    ;if (screen != 0)
+    global
+
+    Switch direction
+    {
+        Case "r":            
+            Sleep 0
+            Critical
+            oPauseControl.GoPage(direction)
+            Sleep 300 ;this sleep setting sets the sensitivity  
+
+        Case "l":            
+            Sleep 0
+            Critical
+            oPauseControl.GoPage(direction)
+            Sleep 300 ;this sleep setting sets the sensitivity
+    }
+
+    return
+}
+
+;Support changing hotkeys to either be blocking or passthrough depending
+;on the mode of operation.
+;hk_style can be "passthrough" or "blocking"
+ModifyHotkeys(hk_style)
+{
+    global
+
+    local e
+    ;local fScrollNowhere, fScrollUp, fScrollDown ;fScrollLeft, fScrollRight
+    ;local fScrollSelect, fPageDown, fPageUp
+    ;local fHome, fEnd, fFav, fTarget
+    ;local fToggle
+
+    try
+    {
+        ;This style is used when a game is in session to allow most hotkeys
+        ;to passthrough to the game
+        if (hk_style == "passthrough")
+        {
+            if (gCfg.left_key) {
+                Loop Parse gCfg.left_key, "CSV"
+                {
+                    Hotkey "~" . A_LoopField, fScrollLeft
+                    Hotkey "~" . A_LoopField . " UP", fScrollNowhere
+                }
+            }
+
+            if (gCfg.right_key) {
+                Loop Parse gCfg.right_key, "CSV"
+                {
+                    Hotkey "~" . A_LoopField, fScrollRight
+                    Hotkey "~" . A_LoopField . " UP", fScrollNowhere
+                }
+            }
+
+            if (gCfg.up_key)
+                Loop Parse gCfg.up_key, "CSV"
+                    Hotkey "~" . A_LoopField, fScrollUp
+
+            if (gCfg.down_key)
+                Loop Parse gCfg.down_key, "CSV"
+                    Hotkey "~" . A_LoopField, fScrollDown
+
+            if (gCfg.launch_key)
+                Loop Parse gCfg.launch_key, "CSV"
+                    Hotkey "~" . A_LoopField, fScrollSelect
+
+            if (gCfg.pgdn_key)
+                Loop Parse gCfg.pgdn_key, "CSV"
+                    Hotkey "~" . A_LoopField, fPageDown
+
+            if (gCfg.pgup_key)
+                Loop Parse gCfg.pgup_key, "CSV"
+                    Hotkey "~" . A_LoopField, fPageUp
+
+            if (gCfg.home_key)
+                Loop Parse gCfg.home_key, "CSV"
+                    Hotkey "~" . A_LoopField, fHome
+
+            if (gCfg.end_key)
+                Loop Parse gCfg.end_key, "CSV"
+                    Hotkey "~" . A_LoopField, fEnd
+
+            if (gCfg.list_mode_key)
+                Loop Parse gCfg.list_mode_key, "CSV"
+                    Hotkey "~" . A_LoopField, fPicks
+
+            if (gCfg.edit_mode_key)
+                Loop Parse gCfg.edit_mode_key, "CSV"
+                    Hotkey "~" . A_LoopField, fTarget
+
+            if (gCfg.all_key)
+                Loop Parse gCfg.all_key, "CSV"
+                    Hotkey "~" . A_LoopField, fAll
+
+            if (gCfg.genre_key)
+                Loop Parse gCfg.genre_key, "CSV"
+                    Hotkey "~" . A_LoopField, fGenre
+
+            if (gCfg.year_key)
+                Loop Parse gCfg.year_key, "CSV"
+                    Hotkey "~" . A_LoopField, fYear
+
+            if (gCfg.publisher_key)
+                Loop Parse gCfg.publisher_key, "CSV"
+                    Hotkey "~" . A_LoopField, fPublisher
+
+            if (gCfg.developer_key)
+                Loop Parse gCfg.developer_key, "CSV"
+                    Hotkey "~" . A_LoopField, fDeveloper
+
+            if (gCfg.players_key)
+                Loop Parse gCfg.players_key, "CSV"
+                    Hotkey "~" . A_LoopField, fPlayers
+
+            if (gCfg.rating_key)
+                Loop Parse gCfg.rating_key, "CSV"
+                    Hotkey "~" . A_LoopField, fRating
+
+            if (gCfg.favorite_key)
+                Loop Parse gCfg.favorite_key, "CSV"
+                    Hotkey "~" . A_LoopField, fMark
+
+            if (gCfg.star5_key)
+                Loop Parse gCfg.star5_key, "CSV"
+                    Hotkey "~" . A_LoopField, fStar5
+
+            if (gCfg.star4_key)
+                Loop Parse gCfg.star4_key, "CSV"
+                    Hotkey "~" . A_LoopField, fStar4
+
+            if (gCfg.star3_key)
+                Loop Parse gCfg.star3_key, "CSV"
+                    Hotkey "~" . A_LoopField, fStar3
+
+            if (gCfg.star2_key)
+                Loop Parse gCfg.star2_key, "CSV"
+                    Hotkey "~" . A_LoopField, fStar2
+
+            if (gCfg.star1_key)
+                Loop Parse gCfg.star1_key, "CSV"
+                    Hotkey "~" . A_LoopField, fStar1
+
+            if (gCfg.star0_key)
+                Loop Parse gCfg.star0_key, "CSV"
+                    Hotkey "~" . A_LoopField, fStar0
+
+            if (gCfg.star_key)
+                Loop Parse gCfg.star_key, "CSV"
+                    Hotkey "~" . A_LoopField, fStar
+
+            if (gCfg.star_key)
+                Loop Parse gCfg.star_key, "CSV"
+                    Hotkey "~" . A_LoopField, fStar
+
+            if (gCfg.favorites_key)
+                Loop Parse gCfg.favorites_key, "CSV"
+                    Hotkey "~" . A_LoopField, fFavorites
+
+            if (gCfg.add_remove_key)
+                Loop Parse gCfg.add_remove_key, "CSV"
+                    Hotkey "~" . A_LoopField, fToggle
+        }
+        ;This style is used when in the picker gui, and blocks the
+        ;keys from passing through to the game
+        else if (hk_style == "blocking")
+        {
+            if (gCfg.left_key) {
+                Loop Parse gCfg.left_key, "CSV" 
+                {
+                    Hotkey A_LoopField, fScrollLeft
+                    Hotkey A_LoopField . " UP", fScrollNowhere
+                }
+            }
+
+            if (gCfg.right_key) {
+                Loop Parse gCfg.right_key, "CSV" 
+                {
+                    Hotkey A_LoopField, fScrollRight
+                    Hotkey A_LoopField . " UP", fScrollNowhere
+                }
+            }
+
+            if (gCfg.up_key)
+                Loop Parse gCfg.up_key, "CSV"
+                    Hotkey A_LoopField, fScrollUp
+
+            if (gCfg.down_key)
+                Loop Parse gCfg.down_key, "CSV"
+                    Hotkey A_LoopField, fScrollDown
+        
+            if (gCfg.launch_key)
+                Loop Parse gCfg.launch_key, "CSV"
+                    Hotkey A_LoopField, fScrollSelect
+
+            if (gCfg.pgdn_key)
+                Loop Parse gCfg.pgdn_key, "CSV"
+                    Hotkey A_LoopField, fPageDown
+
+            if (gCfg.pgup_key)
+                Loop Parse gCfg.pgup_key, "CSV"
+                    Hotkey A_LoopField, fPageUp
+
+            if (gCfg.home_key)
+                Loop Parse gCfg.home_key, "CSV"
+                    Hotkey A_LoopField, fHome
+
+            if (gCfg.end_key)
+                Loop Parse gCfg.end_key, "CSV"
+                    Hotkey A_LoopField, fEnd
+
+            if (gCfg.list_mode_key)
+                Loop Parse gCfg.list_mode_key, "CSV"
+                    Hotkey A_LoopField, fPicks
+
+            if (gCfg.edit_mode_key)
+                Loop Parse gCfg.edit_mode_key, "CSV"
+                    Hotkey A_LoopField, fTarget
+
+            if (gCfg.all_key)
+                Loop Parse gCfg.all_key, "CSV"
+                    Hotkey A_LoopField, fAll
+
+            if (gCfg.genre_key)
+                Loop Parse gCfg.genre_key, "CSV"
+                    Hotkey A_LoopField, fGenre
+
+            if (gCfg.year_key)
+                Loop Parse gCfg.year_key, "CSV"
+                    Hotkey A_LoopField, fYear
+
+            if (gCfg.publisher_key)
+                Loop Parse gCfg.publisher_key, "CSV"
+                    Hotkey A_LoopField, fPublisher
+
+            if (gCfg.developer_key)
+                Loop Parse gCfg.developer_key, "CSV"
+                    Hotkey A_LoopField, fDeveloper
+
+            if (gCfg.players_key)
+                Loop Parse gCfg.players_key, "CSV"
+                    Hotkey A_LoopField, fPlayers
+
+            if (gCfg.rating_key)
+                Loop Parse gCfg.rating_key, "CSV"
+                    Hotkey A_LoopField, fRating
+
+            if (gCfg.favorite_key)
+                Loop Parse gCfg.favorite_key, "CSV"
+                    Hotkey A_LoopField, fMark
+
+            if (gCfg.star5_key)
+                Loop Parse gCfg.star5_key, "CSV"
+                    Hotkey A_LoopField, fStar5
+
+            if (gCfg.star4_key)
+                Loop Parse gCfg.star4_key, "CSV"
+                    Hotkey A_LoopField, fStar4
+
+            if (gCfg.star3_key)
+                Loop Parse gCfg.star3_key, "CSV"
+                    Hotkey A_LoopField, fStar3
+
+            if (gCfg.star2_key)
+                Loop Parse gCfg.star2_key, "CSV"
+                    Hotkey A_LoopField, fStar2
+
+            if (gCfg.star1_key)
+                Loop Parse gCfg.star1_key, "CSV"
+                    Hotkey A_LoopField, fStar1
+
+            if (gCfg.star0_key)
+                Loop Parse gCfg.star0_key, "CSV"
+                    Hotkey A_LoopField, fStar0
+
+            if (gCfg.star_key)
+                Loop Parse gCfg.star_key, "CSV"
+                    Hotkey A_LoopField, fStar
+
+            if (gCfg.favorites_key)
+                Loop Parse gCfg.favorites_key, "CSV"
+                    Hotkey A_LoopField, fFavorites
+
+            if (gCfg.add_remove_key)
+                Loop Parse gCfg.add_remove_key, "CSV"
+                    Hotkey A_LoopField, fToggle
+        }
+    }
+    catch as e
+    {		
+        LogEntry("ERROR: ModifyHotkeys(): " . FormatErrorMessage(e) . "`n")
+        ExitApp
+    }
+}
+
+;Handle discrete toggling of the game select screen
+;mode == 0  hides the menu
+;mode == 1  shows the menu
+;mode == 2  toggles the menu
+ShowHideMenu(mode, theHotkey:="")
+{
+    if ((g_guiselect_visible && mode == "0") || (!g_guiselect_visible && mode == "1") || mode == "2")
+        MagicKey(0)
+
+    return
+}
+
+;Initialize the hotkeys
+AddHotkeys()
+{
+    global 
+
+    static last_next_key := "", last_previous_key := ""
+
+    ;functions need to be global since they are used by ModifyHotKeys() above
+    ;local fPauseKeyUp, fPauseKey
+    ;local fExitKeyUp, fExitKey
+    ;local fScrollNowhere, fScrollUp, fScrollDown, fMagicKey, fScrollSelect fScrollRight, fScrollLeft,
+    local fLaunchHotkeyApp, fExitHotkeyApp
+    local e, n, o, cl, hKey, app, key_style, hKeyVal
+    local exit_cmd
+    
+    try
+    {
+        fScrollNowhere := ScrollList.Bind("x") ;x gets thrown away
+
+        fDoNothing := DoNothing
+
+        if (last_next_key) {  ;free the last keys used
+            Loop Parse last_next_key, "CSV"
+                Hotkey "~" . A_LoopField, fDoNothing, "On"
+        }
+
+        if (last_previous_key) {  ;free the last keys used
+            Loop Parse last_previous_key, "CSV"
+                Hotkey "~" . A_LoopField, fDoNothing, "On"
+        }
+
+        ;Only create hotkeys for UI if they are defined 
+        ;(since user may not be using the feature)
+
+        if (gCfg.left_key) 
+        {
+            fScrollLeft := ScrollList.Bind("l")
+            Loop Parse gCfg.left_key, "CSV" 
+            {
+                Hotkey "~" . A_LoopField, fScrollLeft, "On"
+                Hotkey "~" . A_LoopField . " UP", fScrollNowhere, "On" ;UP prevents key from getting "stuck"
+            }
+        }
+
+        if (gCfg.right_key) 
+        {
+            fScrollRight := ScrollList.Bind("r")
+            Loop Parse gCfg.right_key, "CSV" 
+            {
+                Hotkey "~" . A_LoopField, fScrollRight, "On"
+                Hotkey "~" . A_LoopField . " UP", fScrollNowhere, "On" ;UP prevents key from getting "stuck"
+            }
+        }
+
+        if (gCfg.up_key) {
+            fScrollUp := ScrollList.Bind("u")
+            Loop Parse gCfg.up_key, "CSV"
+                Hotkey "~" . A_LoopField, fScrollUp, "On"
+        }
+
+        if (gCfg.down_key) {
+            fScrollDown := ScrollList.Bind("d")
+            Loop Parse gCfg.down_key, "CSV"
+                Hotkey "~" . A_LoopField, fScrollDown, "On"
+        }
+
+        if (gCfg.launch_key) {
+            fScrollSelect := ScrollList.Bind("s")
+            Loop Parse gCfg.launch_key, "CSV"
+                Hotkey "~" . A_LoopField, fScrollSelect, "On"
+        }
+
+        if (gCfg.pgdn_key) {
+            fPageDown := ScrollList.Bind("pd")
+            Loop Parse gCfg.pgdn_key, "CSV"
+                Hotkey "~" . A_LoopField, fPageDown, "On"
+        }
+
+        if (gCfg.pgup_key) {
+            fPageUp := ScrollList.Bind("pu")
+            Loop Parse gCfg.pgup_key, "CSV" 
+                Hotkey "~" . A_LoopField, fPageUp, "On"
+        }
+
+        if (gCfg.home_key) {
+            fHome := ScrollList.Bind("home")
+            Loop Parse gCfg.home_key, "CSV" 
+                Hotkey "~" . A_LoopField, fHome, "On"
+        }
+
+        if (gCfg.end_key) {
+            fEnd := ScrollList.Bind("end")
+            Loop Parse gCfg.end_key, "CSV" 
+                Hotkey "~" . A_LoopField, fEnd, "On"
+        }
+
+        if (gCfg.list_mode_key) {
+            fPicks := ScrollList.Bind("picks")
+            Loop Parse gCfg.list_mode_key, "CSV" 
+                Hotkey "~" . A_LoopField, fPicks, "On"
+        }
+
+        if (gCfg.edit_mode_key) {
+            fTarget := ScrollList.Bind("targ")
+            Loop Parse gCfg.edit_mode_key, "CSV" 
+                Hotkey "~" . A_LoopField, fTarget, "On"
+        }
+
+        if (gCfg.all_key) {
+            fAll := ScrollList.Bind("all")
+            Loop Parse gCfg.all_key, "CSV" 
+                Hotkey "~" . A_LoopField, fAll, "On"
+        }
+
+        if (gCfg.genre_key) {
+            fGenre := ScrollList.Bind("genre")
+            Loop Parse gCfg.genre_key, "CSV" 
+                Hotkey "~" . A_LoopField, fGenre, "On"
+        }
+
+        if (gCfg.year_key) {
+            fYear := ScrollList.Bind("year")
+            Loop Parse gCfg.year_key, "CSV" 
+                Hotkey "~" . A_LoopField, fYear, "On"
+        }
+
+        if (gCfg.publisher_key) {
+            fPublisher := ScrollList.Bind("publisher")
+            Loop Parse gCfg.publisher_key, "CSV" 
+                Hotkey "~" . A_LoopField, fPublisher, "On"
+        }
+
+        if (gCfg.developer_key) {
+            fDeveloper := ScrollList.Bind("developer")
+            Loop Parse gCfg.developer_key, "CSV" 
+                Hotkey "~" . A_LoopField, fDeveloper, "On"
+        }
+
+        if (gCfg.players_key) {
+            fPlayers := ScrollList.Bind("players")
+            Loop Parse gCfg.players_key, "CSV" 
+                Hotkey "~" . A_LoopField, fPlayers, "On"
+        }
+
+        if (gCfg.rating_key) {
+            fRating := ScrollList.Bind("rating")
+            Loop Parse gCfg.rating_key, "CSV" 
+                Hotkey "~" . A_LoopField, fRating, "On"
+        }
+
+        if (gCfg.favorite_key) {
+            fMark := ScrollList.Bind("mark")
+            Loop Parse gCfg.favorite_key, "CSV" 
+                Hotkey "~" . A_LoopField, fMark, "On"
+        }
+
+        if (gCfg.star5_key) {
+            fStar5 := ScrollList.Bind("star5")
+            Loop Parse gCfg.star5_key, "CSV" 
+                Hotkey "~" . A_LoopField, fStar5, "On"
+        }
+
+        if (gCfg.star4_key) {
+            fStar4 := ScrollList.Bind("star4")
+            Loop Parse gCfg.star4_key, "CSV" 
+                Hotkey "~" . A_LoopField, fStar4, "On"
+        }
+
+        if (gCfg.star3_key) {
+            fStar3 := ScrollList.Bind("star3")
+            Loop Parse gCfg.star3_key, "CSV" 
+                Hotkey "~" . A_LoopField, fStar3, "On"
+        }
+
+        if (gCfg.star2_key) {
+            fStar2 := ScrollList.Bind("star2")
+            Loop Parse gCfg.star2_key, "CSV" 
+                Hotkey "~" . A_LoopField, fStar2, "On"
+        }
+
+        if (gCfg.star1_key) {
+            fStar1 := ScrollList.Bind("star1")
+            Loop Parse gCfg.star1_key, "CSV" 
+                Hotkey "~" . A_LoopField, fStar1, "On"
+        }
+
+        if (gCfg.star0_key) {
+            fStar0 := ScrollList.Bind("star0")
+            Loop Parse gCfg.star0_key, "CSV" 
+                Hotkey "~" . A_LoopField, fStar0, "On"
+        }
+
+        if (gCfg.star_key) {
+            fStar := ScrollList.Bind("star")
+            Loop Parse gCfg.star_key, "CSV" 
+                Hotkey "~" . A_LoopField, fStar, "On"
+        }
+
+        if (gCfg.favorites_key) {
+            fFavorites := ScrollList.Bind("favorites")
+            Loop Parse gCfg.favorites_key, "CSV" 
+                Hotkey "~" . A_LoopField, fFavorites, "On"
+        }
+
+        if (gCfg.add_remove_key) {
+            fToggle := ScrollList.Bind("tog")
+            Loop Parse gCfg.add_remove_key, "CSV" 
+                Hotkey "~" . A_LoopField, fToggle, "On"
+        }
+
+        if (gCfg.menu_hide_key) {
+            fMenuHide := ShowHideMenu.Bind("0")
+            Loop Parse gCfg.menu_hide_key, "CSV" 
+                Hotkey "~" . A_LoopField, fMenuHide, "On"
+        }
+
+        if (gCfg.menu_show_key) {
+            fMenuShow := ShowHideMenu.Bind("1")
+            Loop Parse gCfg.menu_show_key, "CSV" 
+                Hotkey "~" . A_LoopField, fMenuShow, "On"
+        }
+
+        if (gCfg.menu_toggle_key) {
+            fMenuToggle := ShowHideMenu.Bind("2")
+            Loop Parse gCfg.menu_toggle_key, "CSV" 
+                Hotkey "~" . A_LoopField, fMenuToggle, "On"
+        }
+
+        if (gCfg.next_key) {
+            fNext := AttractNext
+            Loop Parse gCfg.next_key, "CSV"
+                Hotkey "~" . A_LoopField, fNext, "On"
+            last_next_key := gCfg.next_key
+        }
+
+        if (gCfg.previous_key) {
+            fPrevious := AttractPrevious
+            Loop Parse gCfg.previous_key, "CSV"
+                Hotkey "~" . A_LoopField, fPrevious, "On"
+            last_previous_key := gCfg.previous_key
+        }
+
+        if (gCfg.panic_key) {
+            fKillApp := KillApp
+            Hotkey gCfg.panic_key, fKillApp, "On"
+        }        
+        
+        if (gCfg.pause_key != "" && gCfg.magic_key != gCfg.pause_key) 
+        { 
+            fPauseKeyUp := PauseKey.Bind("Up")
+            fPauseKey := PauseKey.Bind("")
+            Hotkey gCfg.pause_key, fPauseKey, "On"
+            Hotkey gCfg.pause_key . " Up", fPauseKeyUp, "On"
+        }
+
+        if (gCfg.exit_key != "" && gCfg.magic_key != gCfg.exit_key)
+        {
+            fExitKeyUp := ExitKeyUp
+            fExitKey := ExitKey.Bind("1")
+            HotKey gCfg.exit_key,fExitKey, "On"
+            HotKey gCfg.exit_key . " Up", fExitKeyUp, "On"
+        }
+
+        if (gCfg.quit_key)
+        {
+            fQuitKeyUp := ExitKeyUp
+            fQuitKey := ExitKey.Bind("1")
+            HotKey gCfg.quit_key, fQuitKey, "On"
+            HotKey gCfg.quit_key . " Up", fQuitKeyUp, "On"
+        }
+
+        ;Magic key can operate as a conventional hotkey if magic_delay=0, displaying the picker 
+        ;immediately upon pressing it or, if magic_delay is set > 0, it will pass native keystrokes  
+        ;to the application unless the button is held for > magic_delay milliseconds, at which
+        ;point it will display the picker.  The Magic Key keyboard strobe logic is in the RunWaitTimer.
+
+        ;Mapping the magic_key to the pause_key or exit_key is a special case which requries the 1
+        ;magic_delay setting. If used, the normal keypress will be passed through on a short press and
+        ;display (or dismissal) of the picker will occur on a long press.  It is critical that both the
+        ;game and picker profiles are set the use the same pause_key or exit_key in such cases. Also note
+        ;that this is not supported when one of these keys is configured as a contorl panel shift key.
+        
+        if (gCfg.magic_key) 
+        {
+            if (gCfg.magic_delay > 0) ;using delayed magic key
+                fMagicKey := DoNothing ;hotkey just blocks input
+            else
+            {
+                fMagicKey := MagicKey.Bind("0") ;0 is normal invocation
+            }
+            Hotkey gCfg.magic_key, fMagicKey, "On"
+        }          
+    }
+    catch as e
+    {		
+        LogEntry("ERROR: AddHotkeys(): " . FormatErrorMessage(e) . "`n")
+        ExitApp
+    }
+
+    return
+}
+
+DoNothing(theHotkey:="")
+{
+    dummy := 0
+    return
+}
+
+ActivateHotKeys()
+{
+    global
+
+    exit_key_off := false
+    pause_key_off := false
+    magic_key_off := false
+
+    return
+}
+
+InActivateHotKeys()
+{
+    global
+
+    exit_key_off := true
+    pause_key_off := true
+    magic_key_off := true
+
+    return
+}
+
+;Switch to the next game in the attract list.
+AttractNext(theHotkey:="")
+{   
+    global
+    ;If startup initialization is still occurring, we can't switch till its done.
+    ;So put up a message.
+    if (!g_guiselect_loaded)
+    {
+        ;Display "Please Wait..." while select gui finishes loading
+        guiAlpha.Opt("+AlwaysOnTop")
+        oFadeAlphaWindow.Start(0,255,20,16)
+        gGui.guiAlpha_PauseLabel.Text := "Game list still loading. Please wait..."
+        WinSetTransparent 0, "ahk_id " . gGui.guiAlpha_Overlay.Hwnd
+        gGui.guiAlpha_PauseLabel.Visible := true
+  
+        Hotkey gCfg.pause_key, "Off"
+        Hotkey gCfg.pause_key . " Up", "Off"
+        magic_key_off := true
+    }
+
+    if (g_exit_code == 0 || g_exit_code == 1)
+        return
+
+    if (bEmuWindowActive)
+    {
+        LogEntry("INFO: Hotkey: Autoswitch mode go to next game selected.`n")
+        oDetectInactivity.ForceAction()
+    }
+
+    return
+}
+
+;Switch to the previously played game. Unlike AttractNext(), this function uses 
+;the main play_log rather than the attract list since this seems more like what one
+;would expect to happen when stepping back.
+AttractPrevious(theHotkey:="")
+{
+    global
+
+    static last_cycle := 0
+
+    if (!g_guiselect_loaded)
+        return
+
+    if (g_exit_code == 0 || g_exit_code == 1)
+        return
+
+    if (bEmuWindowActive)
+    {
+        ;can't go back past the first played game
+        if (play_log["log"].Length == 1)
+            return
+
+        if (play_log["log"][play_log["log"].Length] == play_log["log"][play_log["log"].Length-1])
+            play_log["log"].Pop() ;pop off any duplicate predecessors
+        
+        if (play_log["log"].Length > 1)
+            play_log["log"].Pop() ;pop off the current game
+        else
+            return ;we must be back at the beginning
+        
+        vct := play_log["log"][play_log["log"].Length]
+
+        LogEntry("INFO: Hotkey: Autoswitch mode go to previous game.`n")
+
+        DirectSwitch(vct)
+
+        /*
+        ;This is the old code for moving back through attract list.
+        ;Should still work, so leaving here in case ever needed.
+        play_previous := true
+        oDetectInactivity.ForceAction()
+        */
+    }
+    
+    return
+}

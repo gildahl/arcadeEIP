@@ -1,0 +1,24 @@
+[System_naomi]
+sys_key=naomi
+asset_name=Sega_Naomi
+proper_name=Sega Naomi
+exe_full_path=D:\Emulators\Demul\Demul.exe,nohide,winset_C
+window_name=gpuDX11hw |
+search_path=D:\Emulators\Demul\roms\*.zip
+param_list=-run=naomi -rom=[rom_name]
+run_apps=ultramap,winipac
+map_exit={Event,-1,-1}!{F4}
+;map_pause=Pause
+map_pause={PauseProc}
+
+Note: This example assumes [Application] sections for ultramap and winipac exist.
+
+Note: To work properly in arcadeEIP, run Demul in windowed mode (not full screen). Set 
+      Demul's video resolution to that of your monitor.
+
+      * The use of "nohide" option is needed for Demul, otherwise the window will not be visible.
+      * The use of the "winset_C" option is needed to center the window and remove the title bar and menu.
+      * The use of the window_name parameter is *mandatory* in support of the winset_C option.
+
+Note: Use of the latest (2018 or higher) version of Demul is strongly advised since earlier
+      versions had issues using analog and digital controls in the same installation.

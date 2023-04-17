@@ -1,0 +1,35 @@
+Integration with BigBox
+=======================
+
+Here are the steps to integrate:
+
+1. Add an appropriately tagged [Front_End] section to your arcadeEIP.ini file under
+   the existing [Front_End_os] section.
+
+[Front_End_bigbox]  <-- append section name with same value as the fe_key
+fe_key=bigbox
+proper_name=BigBox
+asset_name=BigBox
+exe_full_path=D:\LaunchBox\BigBox.exe
+start_screen=1
+exit_screen=1
+hide_cursor=1
+run_apps=ultramap,winipac  <-- see note
+
+* Note: This example includes a run_apps= line that specifies that ultramap and 
+  winipac (two control panel configuration tools), that should be called on each 
+  return to BigBox. You may or may not need something like this depending on your 
+  machine.  See the documentation for more about control panel configuration.
+
+1. Within LaunchBox tools, you can setup a single emulator in LaunchBox/BigBox capable
+   of supporting all arcadeEIP systems.  To do this, see the document LaunchBox.txt
+   for instructions.  This file may be found in the "\Docs\[Front_End] examples" folder.
+   
+2. Preferably, launch BigBox, using the command-line/shortcut,
+ 
+     >eip bigbox
+   
+   This will ensure the options in your [Front_End_bigbox] section are active.
+
+
+

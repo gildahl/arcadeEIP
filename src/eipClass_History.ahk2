@@ -1,0 +1,276 @@
+; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
+; © 2023 David G. Dahlstrom
+; File: eipClass_History.ahk2
+
+;This class manages the .history file, which records when users last ran
+;games and how many times they have played them.  Note that "played" is a loose
+;term here.  It basically means that we recorded inactivty action while the game
+;was running. This information is primarily used to manage the auto-switch list.
+class history_manager_class
+{
+	_oHistory := Map()
+	_oCountPriority := Array()
+
+	__New()
+	{
+		this._deserialize()
+	}
+
+	;returns the list of vectors in count priority order
+	GetAttractList()
+	{
+		return this._oCountPriority
+	}
+
+	Delete(vector)
+	{
+		for n, item in this._oHistory
+		{
+			if (item["vector"] == vector)
+			{
+				this._oHistory.RemoveAt(n)
+
+				this._serialize()
+				this._update_count_priority()
+			}
+		}
+	}
+
+	;if option=="manual" the added item will have a forced count 1 greater than the max.
+	;the game will also be allowed even if it is not in an attract=1 section
+	Update(vector, option:="")
+	{
+		;local interval, freq, n, now, highest_count, manual
+		;local first_play, period, freq
+
+		now := A_Now
+		n := 0
+		n_temp := 0
+		highest_count := 0
+		manual := 0
+
+		if (option == "manual")
+		{
+			manual := 1
+			highest_count := 1
+			for n, item in this._oHistory
+			{
+				if (item["play_count"] > highest_count)
+					highest_count += item["play_count"]
+
+				n_temp := n ;allows n to be visible outside loop
+			}
+
+			;increment to 1 greater than actual highest count
+			;giving this item the highest count
+			highest_count++ 
+		}
+
+		n := n_temp ;fix the for-loop scope change in AHK2
+
+
+		if (this._oHistory.Count > 0)
+		{
+			;find index of entry if it already exists
+			for i, item in this._oHistory
+			{
+				if (item["vector"] == vector)
+				{
+					n := i
+					break
+				}
+			}
+		}
+
+ 		;we didn't find it so initialize at the next available index
+		if (n == 0)
+		{
+			n := this._oHistory.Count + 1 ;add new item to list
+			;OutputDebug newItem %n%`n
+
+			this._oHistory[n] := Map()
+			this._oHistory[n]["vector"] := vector
+			this._oHistory[n]["play_count"] := 0
+			this._oHistory[n]["first_play"] := now
+		}
+		
+		this._oHistory[n]["manual"] := manual
+		this._oHistory[n]["most_recent"] := now
+
+		if (manual)
+			this._oHistory[n]["play_count"] := highest_count
+		else
+			this._oHistory[n]["play_count"]++
+
+		first_play := this._oHistory[n]["first_play"]
+		first_play := DateDiff(now, first_play, "Days")
+
+		period := first_play > 0 ? first_play : 1
+
+		this._oHistory[n]["frequency"] := this._oHistory[n]["play_count"]/period
+
+		freq := this._oHistory[n]["frequency"]
+
+		;write the fnew history file
+		this._serialize()
+		this._update_count_priority()
+	}
+
+	;write .history file
+	_serialize()
+	{
+		;local hiscnt, fState, n, n_temp, h, fp, mr, pc, man, v
+
+		hiscnt := this._oHistory.Count
+
+		fState := FileOpen(history_file, "w")
+
+		;write tab-delimited lines to the file
+		for n, h in this._oHistory
+		{
+			;first play
+			fp := h["first_play"]
+			fState.write(fp . "`t") 
+
+			;most recent play date
+			mr := h["most_recent"]
+			fState.write(mr . "`t") 
+
+			;play count
+			pc := h["play_count"]
+			fState.write(pc . "`t")   
+
+			;manually added
+			man := h["manual"]
+			fState.write(man . "`t") 
+
+			;vector
+			v := h["vector"]
+			fState.write(v . "`n") 
+
+			n_temp := n
+		}
+		n := n_temp
+
+		fState.write("EOF")
+
+		fState.Close()
+
+		LogEntry("INFO: Serialized " . n . " update(s) to .history file.`n")
+	}
+
+	;read .history fie
+	_deserialize()
+	{
+		;local first_play, play_count, most_recent, freq, list_idx, hf, period
+
+		list_idx := 0
+
+		if (!FileExist(history_file))
+		{
+			LogEntry("NOTICE: No .history file found. Using clean state.`n")
+			return
+		}
+
+        ;read whole file into an object
+		hf := FileRead(history_file)
+		this._oHistory := Map() ;initialize history object
+
+		;parse each line in the file object
+		Loop Parse hf, "`n"		
+		{	
+			if (A_LoopField == "EOF")
+				break
+
+			list_idx := A_Index
+			this._oHistory[list_idx] := Map()
+
+			;parse through each tab delimited item in the line
+			Loop Parse A_LoopField, "`t"
+			{
+				if (A_Index == 1)
+					this._oHistory[list_idx]["first_play"] := A_LoopField
+				else if (A_Index == 2)
+					this._oHistory[list_idx]["most_recent"] := A_LoopField
+				else if (A_Index == 3)
+				{				
+					play_count := A_LoopField
+					this._oHistory[list_idx]["play_count"] := play_count
+
+					first_play := this._oHistory[list_idx]["first_play"]
+					most_recent := this._oHistory[list_idx]["most_recent"]
+
+					;To keep frequencies "fresh", the algorithm always ensures that the first_play and most_recent timestamps
+					;are alway "pulled-up" to the greater of X or Y as shown in this diagram.
+
+					; -100days                             -25 days              Now (0 days)
+					; first_play...........X..............most_recent......Y.....now
+
+					;                        first_play...........X..............most_recent
+					;                         -75 days
+					
+
+					;first_play -= most_recent, hours ;put gap between first_play and most_recent and put in first_play
+					first_play := DateDiff(most_recent, first_play, "Hours") ;put gap between first_play and most_recent and put in first_play
+					period := first_play > 0 ? first_play : 1
+					freq := play_count/period ;calculate the frequency
+					this._oHistory[list_idx]["frequency"] := freq
+				}
+				else if (A_Index == 4)
+					this._oHistory[list_idx]["manual"] := A_LoopField
+				else if (A_Index == 5)
+				{
+					this._oHistory[list_idx]["vector"] := A_LoopField
+				}
+			}
+		}
+
+		this._update_count_priority()
+
+		LogEntry("INFO: Deserialized " . list_idx . " item(s) from .history file.`n")
+	}
+
+	;crete a count priority list from current history list
+	_update_count_priority()
+	{
+		;local n, history_item, inserted
+
+		this._oCountPriority := Array()
+
+		;fill and order the count priority object
+		for n, history_item in this._oHistory
+		{
+			item := Map()
+			item["play_count"] := history_item["play_count"]
+			item["manual"] := history_item["manual"]
+			item["vector"] := history_item["vector"]
+
+			thisSys := SplitVector(item["vector"])["sys_key"]
+
+			;only auto add games from systems having autoswitch=1 or manually added
+			try 
+			{
+				if (oEmulators.Emulators[thisSys].autoswitch || item["manual"] == 1)
+				{
+					if (n == 1)
+						this._oCountPriority.Push(item)
+					else
+					{
+						inserted := false
+						for i, count_item in this._oCountPriority
+						{
+							if (history_item["play_count"] >= count_item["play_count"])
+							{						
+								this._oCountPriority.InsertAt(i, item)
+								inserted := true
+								break
+							}
+						}
+						if (!inserted)					
+							this._oCountPriority.Push(item)
+					}
+				}
+			}	
+		}
+	}	
+}

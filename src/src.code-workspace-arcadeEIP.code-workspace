@@ -1,0 +1,166 @@
+{
+	"folders": [
+		{
+			"path": "."
+		}
+	],
+	"settings": {},
+	"launch": {
+		"version": "0.2.0",
+		"configurations": [
+
+			{
+				"name": "No Params",
+				"request": "launch",
+				"type": "autohotkey",
+				"runtime_v1": "AutoHotkey.exe",
+				"runtime_v2": "v2/AutoHotkey.exe",
+				"program": "${file}",
+				"args": [],
+				"stopOnEntry": false,
+				"maxChildren": 10000
+			},
+		
+			{
+				"name": "(marquee) -quiet",
+				"request": "launch",
+				"type": "autohotkey",
+				"runtime_v1": "AutoHotkey.exe",
+				"runtime_v2": "v2/AutoHotkey.exe",
+				"program": "${file}",
+				"args": ["-quiet"],
+				"stopOnEntry": false,
+				"maxChildren": 10000
+			},
+		
+			{
+				"name": "eip (mame galaga)",
+				"request": "launch",
+				"type": "autohotkey",
+				"runtime_v1": "AutoHotkey.exe",
+				"runtime_v2": "v2/AutoHotkey.exe",
+				"program": "${file}",
+				"args": ["mame", "galaga"],
+				"stopOnEntry": false,
+				"maxChildren": 10000
+			},
+		
+			{
+				"name": "eip (galaga)",
+				"request": "launch",
+				"type": "autohotkey",
+				"runtime_v1": "AutoHotkey.exe",
+				"runtime_v2": "v2/AutoHotkey.exe",
+				"program": "${file}",
+				"args": ["galaga"],
+				"stopOnEntry": false,
+				"maxChildren": 10000
+			},
+		
+			{
+				"name": "eip (1942)",
+				"request": "launch",
+				"type": "autohotkey",
+				"runtime_v1": "AutoHotkey.exe",
+				"runtime_v2": "v2/AutoHotkey.exe",
+				"program": "${file}",
+				"args": ["mame", "1942"],
+				"stopOnEntry": false,
+				"maxChildren": 10000
+			},
+		
+			{
+				"name": "eip (mame galaga -video gdi)",
+				"request": "launch",
+				"type": "autohotkey",
+				"runtime_v1": "AutoHotkey.exe",
+				"runtime_v2": "v2/AutoHotkey.exe",
+				"program": "${file}",
+				"args": ["mame", "galaga", "-video", "gdi"],
+				"stopOnEntry": false,
+				"maxChildren": 10000
+			},
+		
+			{
+				"name": "eip (-list)",
+				"request": "launch",
+				"type": "autohotkey",
+				"runtime_v1": "AutoHotkey.exe",
+				"runtime_v2": "v2/AutoHotkey.exe",
+				"program": "${file}",
+				"args": ["-list"],
+				"stopOnEntry": false,
+				"maxChildren": 10000
+			},
+			{
+				"name": "eip (-findall asteroid)",
+				"request": "launch",
+				"type": "autohotkey",
+				"runtime_v1": "AutoHotkey.exe",
+				"runtime_v2": "v2/AutoHotkey.exe",
+				"program": "${file}",
+				"args": ["-findall", "asteroid"],
+				"stopOnEntry": false,
+				"maxChildren": 10000
+			},
+		
+			{
+				"name": "eip (-find ast)",
+				"request": "launch",
+				"type": "autohotkey",
+				"runtime_v1": "AutoHotkey.exe",
+				"runtime_v2": "v2/AutoHotkey.exe",
+				"program": "${file}",
+				"args": ["-find", "ast"],
+				"stopOnEntry": false,
+				"maxChildren": 10000
+			},
+		
+			{
+				"name": "eip -log",
+				"request": "launch",
+				"type": "autohotkey",
+				"runtime_v1": "AutoHotkey.exe",
+				"runtime_v2": "v2/AutoHotkey.exe",
+				"program": "${file}",
+				"args": ["-log"],
+				"stopOnEntry": false,
+				"maxChildren": 10000
+			},
+			{
+				"name": "eip -sound",
+				"request": "launch",
+				"type": "autohotkey",
+				"runtime_v1": "AutoHotkey.exe",
+				"runtime_v2": "v2/AutoHotkey.exe",
+				"program": "${file}",
+				"args": ["-sound"],
+				"stopOnEntry": false,
+				"maxChildren": 10000
+			},
+			{
+				"name": "eip -systems",
+				"request": "launch",
+				"type": "autohotkey",
+				"runtime_v1": "AutoHotkey.exe",
+				"runtime_v2": "v2/AutoHotkey.exe",
+				"program": "${file}",
+				"args": ["-systems"],
+				"stopOnEntry": false,
+				"maxChildren": 10000
+			},
+		
+			{
+				"name": "ColecoVision centipede",
+				"request": "launch",
+				"type": "autohotkey",
+				"runtime_v1": "AutoHotkey.exe",
+				"runtime_v2": "v2/AutoHotkey.exe",
+				"program": "${file}",
+				"args": ["coleco", "centipede", "-video", "gdi"],
+				"stopOnEntry": false,
+				"maxChildren": 10000
+			},
+		]
+	}
+}

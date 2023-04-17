@@ -1,0 +1,232 @@
+; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
+; © 2023 David G. Dahlstrom
+; File: eipFunctions_Utility.ahk2
+
+;THIS FILE IS FOR UTILITY FUNCTIONS THAT ARE RELATIVELY GENERIC
+;AND WHICH ARE TRUE LOCAL FUNCTIONS REQUIRING NO GLOBAL PROJECT VARIABLES
+;MAKING IT POSSIBLE TO SHARE WITH OTHER PROJECTS WITH NO DEPENDENCIES
+
+;Strips a string of all text in () or [], unless the enclosures
+;are doubled, such as ((test)) or [[test]].
+;mode==-1      - clean turned off completely. Just returns the string.
+;mode==0       - clean off, but will still normalize any doubled parenthesis or brackets
+;mode==1 or 2  - clean on. Distinction (favs/list only or all lists) is made
+;                at the class level so this function doesn't care which it is.
+StripEnclosures(val, mode)
+{
+	;disable feature completely
+	if (mode == -1)
+		return val
+	
+	;if normalizing, then just replace any double
+	;parenthesis or brackets with single
+	if (mode == 0)
+	{
+		val := StrReplace(val, "((", "(")
+		val := StrReplace(val, "))", ")")
+		val := StrReplace(val, "[[", "[")
+		val := StrReplace(val, "]]", "]")
+		
+		return val
+	}
+	
+	;If cleaning (i.e. mode > 0)...
+	
+	;tokenize double parenthesis and/or brackets so 
+	;RegExReplace() won't touch them
+	val := StrReplace(val, "((", "{{")
+	val := StrReplace(val, "))", "}}")
+	val := StrReplace(val, "[[", "%%")
+	val := StrReplace(val, "]]", "$$")
+
+	;remove all parenthetical or bracketed text
+	val := RegExReplace(val, "\((.+?)\)|\[(.+?)]", "")
+
+	;de-tokenize double parenthesis and/or brackets down to single
+	val := StrReplace(val, "{{", "(")
+	val := StrReplace(val, "}}", ")")
+	val := StrReplace(val, "%%", "[")
+	val := StrReplace(val, "$$", "]")
+
+	;remove any extra spaces
+	Loop
+	{
+		val := StrReplace(val, A_Space . A_Space, A_Space,, &replacementsMade)
+		if (replacementsMade == 0)
+			break
+	}
+	
+	return Trim(val)
+}
+
+;Converts an array of commandline arguments to a
+;space delimited string.  Arguments having spaces are
+;placed in double-quotes.
+ArgArrayToParamString(oArgs)
+{
+	sParams := ""
+	for n, arg in oArgs
+	{
+		if (InStr(arg, A_Space))
+			arg := "`"" . arg . "`""
+		
+		sParams := Trim(sParams . " " . arg)
+	}
+	
+	return sParams
+}
+
+RepeatValue(val, length)
+{
+	result := ""
+	Loop length
+		result := result . val
+	return result
+}
+
+ReverseArray(&a)
+{
+    ;Reverse the array
+    b := Array()
+    len := a.Length
+    for n, val in a 	
+	  b.InsertAt(1, a[n])		
+
+    a := b	
+}
+
+ReindexArray(&a)
+{
+	b := Array()
+	for n, item in a
+	{
+		if (item)
+			b.Push(item)
+	}
+
+	a := b
+}
+
+GetMaxLen(a, b)
+{
+	if (a.length() > b.length())
+		return a.length()
+	else
+		return b.length()
+}
+
+PadString(a, b)
+{	
+	padLen := b - a.length()
+	if (padLen < 0)
+		return SubStr(a, 1, a.length()-padLen)
+	else
+	{
+		padding := RepeatValue(%A_Space%, padLen)
+		result := a . padding
+	}
+	return result
+}
+
+;values is a comma separated value list that should
+;include all values in column starting with the header.
+;valueIdx is the index of the value in the list to be padded and returned
+GetColValue(valueIdx, values, colSep, &rowSep:="")
+{
+	longest := 0
+    for n, thisValue in values
+    {
+        if (n = valueIdx)
+          value := thisValue
+        len := StrLen(thisValue)
+        if (len > longest)
+          longest := StrLen(thisValue)
+    }
+    rowSep := RepeatValue("=", longest)
+    rowPad := RepeatValue(A_Space, colSep)
+    rowSep := rowSep . rowPad
+    
+    padLen := longest + colSep - StrLen(value)
+    padding := RepeatValue(A_Space, padLen)
+    result := value . padding
+    return result
+}
+
+ShuffleArray(&arr)
+{
+	;Based on Knuth shuffle algorithm (1 based)
+	;https://en.wikipedia.org/wiki/Fisher%E2%80%93Yates_shuffle
+
+	size := arr.Length
+	Loop size-1  ;for index from 1 to n-1
+	{   
+	   j := Random(A_Index, size)
+
+	   ;exchange a[index] and a[j]
+	   temp := arr[j]
+	   arr[j] := arr[A_Index]
+	   arr[A_Index] := temp      
+	}
+	return
+}
+
+OddEven(val)
+{
+	return ((val & 1) != 0) ? "Odd" : "Even"
+}
+
+DoBeep()
+{
+    SoundBeep
+}
+
+FormatErrorMessage(e)
+{
+    ;DoBeep() ;beep on all critical errors
+    
+    ;if making changes to this function, also update the function in cf_add_param.ahk
+    ;(i.e. the custom function example)
+    
+    e_file := e.file ? e.file : ""
+    e_line := e.line ? ", Line: " . e.line : ""
+    e_what := e.what ? ", " . e.what : ""
+    e_message := e.message ? ", Message: " . e.message : ""
+    e_extra := e.extra ? ", Extra: " . e.extra : ""
+    
+    retValue := e_file . e_line . e_what . e_message . e_extra
+    
+	return retValue
+}
+
+Suspend(bAction, pid)
+{
+    hnd := DllCall("OpenProcess", "uInt", 0x1F0FFF, "Int", 0, "Int", pid)
+    if (!hnd)
+        return
+    
+    if (bAction)
+        DllCall("ntdll.dll\NtSuspendProcess", "Int", hnd)
+    else
+        DllCall("ntdll.dll\NtResumeProcess", "Int", hnd)
+    
+    DllCall("CloseHandle", "Int", hnd)
+}
+
+;Splits a vector (such as "mame galaga") into its two components and returns an array.
+SplitVector(vector)
+{
+    pVector := Map()
+
+    pVector["sys_key"] := Trim(SubStr(vector, 1, InStr(vector, A_Space)-1))
+    pVector["rom_value"] := Trim(SubStr(vector, InStr(vector, A_Space)+1, StrLen(vector)-StrLen(pVector["sys_key"])))
+
+    return pVector
+}
+
+IsWindowValid(oTestWindow)
+{
+	bIsWindowValid := false
+	try bIsWindowValid := WinExist(oTestWindow)
+    
+	return bIsWindowValid
+}

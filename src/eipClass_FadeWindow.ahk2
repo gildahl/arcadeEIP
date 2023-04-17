@@ -1,0 +1,125 @@
+; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
+; © 2023 David G. Dahlstrom
+; File: eipClass_FadeWindow.ahk2
+
+
+;Class supporting fading/unfading a window identified by a hwnd (non-blocking)
+;Can pass in a callback function that gets called when fade effect is complete.
+;oFadeOL := fade_window_class(guiSelect.Hwnd) or Fade_Class(guiSelect.Hwnd,fDoSomething)
+;oFadeOL.Start(255,150,10) - fade
+;oFadeOL.Start(150,255,10) - unfade
+;oFadeOL.Start(150,150)    - instant
+class fade_window_class
+{
+	_count := 0
+	_active := 0
+	_callback := ""
+	
+	;callback is optional. If supplied, it is a function that
+	;will get called when the each fade effect initiated with Start()
+	;is complete. For example, could pass in fDoSomething if
+	;fDoSomething := Func("DoSomething").Bind()
+	__New(hwnd, callback:="")
+	{
+		this._count := 0
+		this._active := 0
+		
+		this._hwnd := hwnd
+		if (callback)
+			this._callback := callback
+	}
+	
+	;start and stop are 0-255 (transparent to opaque). speed is in ms
+	;For instant transition make start=stop with speed=0 (or blank)
+	;Start() returns 0 if it can't be called due to a still operating fade effect.
+	Start(start, stop, speed:=0, step:=1)
+	{
+		hwnd := this._hwnd
+
+		if (start < stop)	
+			this._count++ ;fade request made
+		if (start > stop)
+			this._count-- ;unfade request made
+		if (start < stop && this._count > 1)
+			return
+		if (start > stop && this._count > 0)
+			return
+		
+		this._step := step
+
+		if (this._active == 1)
+		{
+			fFade := this._fFade
+			SetTimer fFade, 0
+			
+			this._stop := start
+			this._start := this._amt
+			
+			this._direction := -this._direction
+			;SetTimer, % fFade, On
+		}
+
+		this._active := 1
+
+		this._start := start
+		this._amt := start
+		this._stop := stop
+		
+		if (start > stop)
+			this._direction := "-1"
+		else if (start < stop)
+			this._direction := "1"
+		else
+			this._direction := "0"
+		
+		;attach fade method to a timer
+		this._fFade := fFade := ObjBindMethod(this, "_fade", hwnd)
+		SetTimer fFade, speed
+		
+		return 1 ;fade request was successfull
+	}
+	
+	;called by the timer
+	_fade(hwnd)
+	{
+		hwnd := this._hwnd
+		fFade := this._fFade		
+		step := this._step
+
+		;increments/decrements this._amt by ones till it either reaches
+		;the step or the stop.
+		Loop step
+		{
+			if (this._amt == this._stop)
+				break
+			else
+				this._amt += this._direction
+		}		
+
+		amt := this._amt
+		
+        WinSetTransparent amt, "ahk_id " . hwnd
+
+        Sleep 0
+
+		if (amt == this._stop)
+		{
+			SetTimer fFade, 0
+			
+			if (this._callback)
+				this._callback.Call()
+			
+			;reset so we know we're done
+			this._active := 0
+		}
+		
+		return
+	}
+
+	Active
+	{
+		get {
+			return this._active
+		}
+	}
+}

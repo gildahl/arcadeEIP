@@ -1,0 +1,188 @@
+========================================
+arcadeEIP Emulator-Integration Player
+========================================
+Update Log
+========================================
+
+0.3.3.3 Small feature update
+* Added discrete quit_key= option to [Key Map]. Same as exit_key except it is
+  independent of the magic_key function. Use this if you want to be able to exit
+  using, say, a magic_key on your control panel and an independent hotkey, such
+  as on a Stream Deck.
+
+0.3.3.2 Small feature and bug fix update
+* Added new sort_prefix= option to system and custom list sections. This can be
+  used to override the sort order of systems and custom lists in the menu. 
+* Fixed state bug that could cause deletion of the wrong item in custom lists.
+
+0.3.3.1 Hotfix
+* Fixed the discrete menu toggle keys to show "=" and hide "-" the menu. 
+
+0.3.3.0 Major Update
+* IMPORTANT: A clean install is required with this new version due to new features
+  and substantial changes to many configuration items. 
+
+* Added sound effects for various menu actions. Note that this feature requires
+  the third-party library bass.dll (see sound.txt in root folder for more info). 
+  This is library is free for non-commercial use. 
+
+* Additional metadata is now displayed when available, including genre, year, 
+  publisher, developer, and number of players. Most of this information
+  is obtained through arcadeEIP's improved integration with LaunchBox (see "Quick
+  Start 1 - MAME.txt", step 6b, and LaunchBox.txt in "\Docs\[Front_End] examples").
+
+* Favorites and star Ratings have been added as native game-specific attributes. With
+  the ability to use these properties and other metadata properties to create custom 
+  pick lists. The following list management hot keys have been added in support of
+  this (default key assignments provided here):
+
+  Game Marking:
+  =============
+  * M   : [M]arks/unmarks a game as a favorite (adds/removes heart icon)
+  * S   : Sets a game's [s]tar rating from 0 to 5 stars
+
+  List Management:
+  ================
+  * a   : Copy or remove all games in list
+  * f   : Copy or remove all games with same [f]avorite marking as the selected game
+  * r   : Copy or remove all games with same star [r]ating as the selected game
+  * g   : Copy or remove all games with same [g]enre as the selected game
+  * u   : Copy or remove all games with same p[u]blisher as the selected game
+  * d   : Copy or remove all games with same [d]eveloper as the selected game
+  * y   : Copy or remove all games with same [y]year as the selected game
+  * n   : Copy or remove all games with same [n]umber of players as the selected game
+
+* Added support for a file called omit.txt in the \hi2txt folder that may be used to 
+  list any roms to be excluded from hi2txt processing (for example, if a particular 
+  game is getting corrupted by hi2txt processing). See Configuration Reference Guide.pdf
+  for more information.
+
+* Changed the default for mouse/trackball/spinner support (mouse_vert and mouse_horiz) 
+  to "off" by default to avoid problems with initial experience under certain hardware
+  configurations. Set these to "all" to turn mouse support on, and report any problems if
+  found.
+
+* Added visual gradients to game picker menu screen backgrounds.
+* Initialization progress bar now provides descriptive loading information.
+* Made exiting while still initializing much more responsive.
+* Added a C64 template (WinVICE) example to [System] examples.
+* Many other documentation updates and small bug fixes.
+
+0.3.2.1
+* Added hotstring_prefix setting to [General] section of arcade.ini
+* Now require an ENTER command after a hotstring.
+* Added:
+ 
+    select_show_key==
+    select_hide_key=- 
+    select_toggle_key=' (updated: was /)
+
+  hot keys to the [Key_Map] section of arcade.ini to provide discrete
+  menu control independent of the "magic" key over menu display.
+* Added mark_picks (was mark_favorites) setting to [Picker_Preferences] 
+  section of arcadeEIP.ini to alter whether to show a star when a list is
+  in its favorites (picks) mode or in its master mode.
+* Fixed a long-standing state issue when switching games externally while
+  the game select list is displayed.
+* Re-coded the "previous game" function to go to the last game actually
+  played rather than the previous game in the auto-switch list.
+* Made "q" and "w" keys the now recommended key mappings for previous_key
+  and next_key due for compatibility reasons with Stella. "[" and "]" 
+  remain mapped, but may be removed from the default mapping in the 
+  future. 
+* Display a "Please Wait..." message if next_key is pressed before 
+  startup initialization is complete.
+* Updated documentation. In particular, regarding use of direct-switch
+  hotstring files and Stream Deck use case documentation.
+
+0.3.2.0
+* show_on_pause feature now supports multiple image types,  
+  including the ability to add custom types. See the show_on_pause=
+  option in the Configuration Reference Guide for details.
+* Also added support to display game info extracted from history.xml 
+  and/or mameinfo.data on pause if those files are available. See both 
+  the show_on_pause= and mameinfo_folder= setting in the Configuration 
+  Reference Guide for details.
+* Direct switching now supports hotstrings in addition to hotkeys. See
+  the readme.txt file in the \Direct folder. This is to make it easier
+  to configure appliance front-ends like the Stream Deck for large game
+  lists (see StreamDeck.txt in the \Docs\[Front_End] examples folder).
+* Now allow the kiosk_mode and magic_delay settings to be overridden
+  in the [Front_End] sections if desired. For example, kiosk_mode=1
+  tends to make more sense in standalone, whereas kiosk_mode=0
+  tends to make more sense when launched from conventional front ends.
+  So if you use arcadeEIP both ways, you can configure for both.
+* Fixed pause button state issues that were causing side effects.
+* Will no longer buffer next/previous game key presses while paused
+  or in the game select screen.
+* Fixed a small bug in attract list initialization. 
+* Fixed an issue with taskbar hiding/unhiding.
+* Fixed a fairly major bug causing the game selection list to scroll 
+  incorrectly when set to certain font sizes.
+* The game selection menu now auto-computes the proper number of rows to
+  be displayed. Consequently, removed top_rows= and bottom_rows= from 
+  [Picker_Preference] since these are no longer needed as user settings.
+* Increased the default font size in the game selection menu from 10
+  to 14 for better default visibility (user can still change this).
+* Icon color for Favorites and Add/Remove in selection menu is now 
+  yellow to match the color of the Master Favorites list.
+* New bookend screen and marquee alpha-fade effect when switching games.
+  See alpha_effect= setting in the Configuration Reference Guide.
+* Some additional minor bug fixes, and updates to documentation.
+
+0.3.1.2
+* Added support for the display of control panel map image files (or
+  other specified image type) when pause is activated.
+* \Resources folder was missing from install resulting in missing icons
+  in the quick pick menu.
+* [smart_name] profile template now searches subfolders, providing
+  option to organize profiles in subfolders with no added configuration.
+* Some minor bug fixes, and updates to documentation.
+
+0.3.1.1
+* Added stage to high score text (if available)
+* Improved BigBox asset search (some image files could be missed).
+* Some documentation errors were corrected.
+
+0.3.1.0
+* arcadeEIP now supports BigBox integration, including use of
+  its managed image assets. Tips for integrating with BigBox have been
+  added to the \[Front_End] examples folder, and configuration document.
+* The default was changed such that a short press of the magic key (the
+  period (.) by default) exits, and a long press (2 sec) invokes the
+  quick-pick game menu. Change kiosk_mode to 1 to invert this.
+* Structure of the \Assets folder has been refactored. Please ensure
+  that if you use these folders, that your paths may need to change.
+  See readme.txt in the \Assets folder for specific infomation.
+* winset_* routines were improved significantly in support of
+  Demul (Naomi), Altirra (Atari 8-bit) and Supermodel (Sega Model 3).
+  See updates to these systems in the "\[System] examples" folder.
+* Made fuzzy rom search case insensitive, along with other improvements.
+* Fixed sizing issue with large logos on bookend screens. Also, games 
+  without logos will now display the name of the game.
+* The nohide option now removes/restores the windows task bar.
+* The -findall command line option now supports multi-word search terms,
+  and no longer returns duplicate entries.
+* Previous high score didn't always clear from the marquee.
+* Prevented multiple instances from running (issue in BigBox).
+* Fixed some bugs in the Quick menu.
+* Fixed formatting of high scores without names/initials.
+* Created "MAME Quick Start.txt" and "MARQUEE Quick Start.txt"
+  tutorial files. Also many other documentation updates and improvements.
+
+0.3.0.2
+* Added support for hi2txt (game high score displays in marquee)
+
+0.3.0.1 
+* Added support for dynamic marquees
+* Changed doc format to pdf
+* Removed separate system_logo setting from [Global_Assets]
+  (Use a file called <asset_name>.png in logo_folder instead.)
+
+0.3.0  
+* Initial public release
+
+
+
+
+

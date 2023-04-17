@@ -1,0 +1,258 @@
+; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
+; © 2023 David G. Dahlstrom
+; File: eipClass_Schedule.ahk2
+
+;This is a one-second resolution timer class that can accept a number
+;of differently formatted timer definitions. It supplements the DetectInactivity_Class
+;by providing a scheduler that runs independent of the inactivity detection timer.
+class Schedule_Class
+{
+	_active := false
+	_cycle := 0
+	_halt := false
+	_start_time := ""
+	_timer := ""
+	_wait_time := ""
+	_lead_time := ""
+	_fSchedule := Object()
+	_fired := false
+	
+	;timer: is a wait timer in an acceptible format.
+	;lead_time: will fire alarm x seconds early (usually equal to the inactivity delay time).
+	;callback: is the method that the alarm will call.
+	__New(timer, lead_time, callback)
+	{	
+		this._active := false
+		this._cycle := 0
+		this._halt := false
+		this._fired := false
+		this._lead_time := lead_time
+		this._timer := timer
+		this._fSchedule := ObjBindMethod(this, "_Schedule", callback)
+		this._fPoker := ObjBindMethod(this, "_Poker")
+	}
+	
+	;starts the timer
+	Start()
+	{		
+		;global
+
+		;Set wait time to the next alarm based on the timer
+		this._SetWaitTime()
+		
+		fSchedule := this._fSchedule
+		SetTimer fSchedule, cSchedule_Period ;1000 ms second timer
+
+		this._active := true
+
+		fPoker := this._fPoker
+		SetTimer fPoker, cPoker_Period ;1000 ms
+	}
+	
+	;This method is called once a second by the fPoker timer
+	;and while active, keeps the detect inactivity class fed with
+	;simulated activity nudges to keep it from timing out and 
+	;launching a game while the schedule timer is running.
+	_Poker()
+	{
+		oDetectInactivity.Poke()
+	}
+
+	;When called this simply resumes the poker, which feeds
+	;activity nudges to the inactivity timer once a second
+	;to prvent it from timing-out and going to the next game.
+	;Called by the AttractSwitch() function after game launch
+	Resume()
+	{
+		fPoker := this._fPoker
+		SetTimer fPoker, cPoker_Period
+
+		return
+	}
+
+	;Resume alarms (not currently used)
+	ResumeAlarms()
+	{
+		this._halt := false
+	}
+
+	Active()
+	{
+		if (this._active)
+			return true
+		else
+			return false
+	}
+	
+	;Halt alarms (not currently used)
+	;(timer still runs, but suppresses callback function from being called)
+	Halt()
+	{
+		this._halt := true
+	}
+	
+	;Parse the timer and set wait_time till next alarm based on the timer
+	;This is the method where all timers types are defined.
+	;Note that each of these methods must set this._start_time and this._wait_time
+	;to function.
+	_SetWaitTime()
+	{
+		;global
+
+		;local n, timer, interval, st, wt, bt, lt, tm, td, tr, tt
+		;local date_portion, wait_time, tval
+
+		timer := IsInteger(this._timer) ? Integer(this._timer) : this._timer
+		
+		;if timer is just a number, then it is simply a number of minutes
+		;with each future interval relative to the start time
+		if IsInteger(timer)
+		{
+			this._wait_time := timer * 60 ;convert to seconds internally
+
+			if (this._start_time)
+			{
+				;add wait_time to start_time to create a
+				;new start_time for the next cycle
+				st := this._start_time
+				wt := this._wait_time
+
+				st := DateAdd(st, wt, "Seconds")
+				this._start_time := st
+			}
+			else
+				this._start_time := A_Now ;the first time only
+		}		
+		;if the number of minutes timer is postfixed with a "C" it is a number of minutes
+		;with each future interval relative to an even clock interval. For example, 60C would
+		;mean every hour, on the hour.
+		else if (InStr(timer, "C"))
+		{
+			interval := SubStr(timer, 1, StrLen(timer)-1)
+			if IsInteger(interval)
+				this._wait_time := interval * 60
+			else
+				OutputDebug "error`n"
+			
+			if (!this._start_time)
+				this._start_time := A_Now
+			
+			st := this._start_time
+			wt := this._wait_time
+			date_portion := SubStr(st, 1, 8)
+			base_time := "000000"  ;midnight
+			bt := date_portion . base_time ;midnight for current date
+			
+			Loop
+			{
+				st := DateAdd(bt, wt, "Seconds")  ;advance base_time in wait_time intervals from midnight
+				st := DateDiff(st, bt, "Seconds")  ;subtract start_time from revised base_time
+
+				if (st < 0) ;find the first even clock cycle in the future
+				{
+					;this test permits the timer to start in the very
+					;first cycle rather than being postponed to the next.
+					if (this._cycle == 0 && Abs(st) > this._lead_time)
+						bt := DateAdd(bt, -wt, "Seconds")
+					
+					this._start_time := bt
+					
+					break
+				}
+				else
+					st := this._start_time
+			}
+		}
+
+		else if (InStr(timer, ":"))
+		{
+			;must be today, so don't rely on an old (pre-midnight) value
+			this._start_time := st := A_Now 
+
+			lt := this._lead_time
+			
+			td := tr:= SubStr(st, 1, 8)  ;today's date			
+			tr := DateAdd(tr, 1, "Days")			
+			tr := SubStr(tr, 1, 8)       ;tomorrow's date
+			
+			wt := 86400  ;24 hours - max possible
+			
+			;Determine which time is the most near in the future.
+			oTimes := StrSplit(timer, ",", " ")
+			for n, tm in oTimes
+			{		
+				;time setting with colon (:) removed
+				tt := SubStr(StrReplace(tm, ":"), 1, 4)
+			
+				;pad this time with a leading zero if necessary
+				if (StrLen(tt) == 3)
+					tt := "0" . tt
+				
+				;evaluate wait if the time were today
+				tval := td . tt . "00" 				
+				tval := DateDiff(tval, st, "Seconds")
+				if (tval - lt > 0 && tval < wt)
+					wt := tval
+				
+				;if the wait was negative (in the past), then
+				;evaluate the time if it were tomorrow
+				if (tval < 0) ;also subtract lead time
+				{
+					tval := tr . tt . "00"
+					tval := DateDiff(tval, st, "Seconds")
+					if (tval > 0 && tval < wt)
+						wt := tval
+				}
+			}
+			
+			this._wait_time := wt
+		}
+	}
+
+	_Schedule(callback)
+	{		
+		;global
+
+		fPoker := this._fPoker
+
+		time_now := A_Now 
+		start_time := this._start_time
+		wait_time := this._wait_time
+
+		if (start_time == "")
+			return
+		
+		time_delta := time_now
+		time_delta := DateDiff(time_delta, start_time, "Seconds")
+
+		if (wait_time )
+		
+		;Call the callback function lead_time seconds early
+		if (time_delta >= wait_time - this._lead_time && !this._fired)
+		{
+			if (!this._halt)
+			{
+				this._fired := true
+				;callback.Call() ;not used
+			}
+
+			;stop the poker here so that user interactions will be
+			;able to delay the launch of a new game being played during
+			;the time leading up to when the scheduler planned to switch games.
+			SetTimer fPoker, 0
+		}
+		
+		;Reset timer after every full period to start a new cycle
+		if (time_delta >= wait_time)
+		{
+			this._cycle++
+			this._SetWaitTime()   ;set wait time for next cycle
+			this._fired := false
+			
+			;FormatTime, tn, A_Now, HH:mm:ss
+			;OutputDebug Cycle Completed: %tn%`n
+		}
+		
+		return
+	}
+}

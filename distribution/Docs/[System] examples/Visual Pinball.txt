@@ -1,0 +1,47 @@
+[System_vpinball]
+sys_key=vpinball
+asset_name=Visual_Pinball
+proper_name=Visual Pinball
+exe_full_path=D:\Emulators\VisualPinball\VPinballX.exe,nohide,winset_D
+search_path=D:\Emulators\VisualPinball\Tables\*.vpx,vpt
+param_list=-play -"[rom]"
+run_apps=winipac
+map_exit=!{F4 2}
+rule_1=<vector_to> vpinball9 <if_extension_in_list> vpt
+meta_names=C:\GameEx\DATA\EMU_11.map
+
+[System_vpinball9]
+sys_key=vpinball9
+asset_name=Visual_Pinball
+proper_name=Visual Pinball 9
+exe_full_path=D:\Emulators\VisualPinball\VPinball992.exe,nohide,winset_D
+;search_path=D:\Emulators\VisualPinball\Tables\*.vpt
+param_list=-play -"[rom]"
+run_apps=winipac
+map_exit=!{F4 2}
+;map_exit={WinClose}Visual Pinball Player,Visual Pinball
+
+Note: Use of window_name (such as window_name=Visual Pinball Player) is not recommended for 
+      Visual Pinball if you use tables in which the VPinMAME DMD overlays the table. 
+
+Note: VPX works a bit different than VP9 (different file extensions, different executable,
+      for example).  However, because it is preferrable to have all tables in one "system",
+      the above example achieves this by setting up a master [System_vpinball] section with a 
+      search_path to all the "roms" (i.e. vpx and vpt files), but with a <vector_to> rule that
+      points to a different configuration (System_vpinball9) to run the VP9 (*.vpt) files in.
+
+Note: This example assumes an [Application] section for winipac exists.
+
+Note: For reference, an commented (;) map_exit example is provided showing how we can also use WinClose
+      to close the windows directly. 
+
+Note: Because the [System_vpinball9] section's search_path is commented out, it is automatically 
+      excluded from being displayed in the Quick-Switch game picker. This is what we want since the
+      [System_vpinball] system's search_path includes all the roms (i.e. vpt & vpx files). 
+      Consequently, all tables are displayed in one list (similar to what is done with Demul).
+
+Note: Unless you use joysticks for tilt control, it is recommended that you disable joysticks in
+      Visual Pinball's settings to avoid possible side-effects while in the arcadeEIP game selection
+      menu.
+
+       

@@ -1,0 +1,29 @@
+[Application_joytokey]
+app_key=joytokey
+proper_name=JoyToKey
+exe_full_path=D:\Utilities\JoyToKey\JoyToKey.exe,nowait
+profile=D:\Utilities\JoyToKey\[asset_name]_[smart_name].cfg
+param_list=[profile]
+
+
+Note: Use of ,nowait needed since utility remains running.
+
+Note: Use of [asset_name]_[smart_name] pattern is documented in "Configuration Reference.pdf".
+      It allows profiles dropped into \JoyToKey folder to be automatically recognized when given
+      names that are either just the asset name, such as...
+
+	GCE_Vectrex.cfg
+	Nintendo_NES.cfg
+
+      Or named with a combination of asset name and an optional rom (or game) name, like
+        
+	Sega_Dreamcast_Ikaruga v1.002 (2002)(ESP)(NTSC)(JP)[!].cfg
+	Sega_Dreamcast_Zero Gunner 2 v1.000 (2001)(Psikyo)(NTSC)(JP)(en)[!].cfg
+
+	Steam_70300.cfg
+	Steam_214570.cfg
+
+	Microsoft_Windows_Refender.cfg
+	Microsoft_DOS_Novastorm.cfg
+
+	etc.

@@ -1,0 +1,139 @@
+; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
+; © 2023 David G. Dahlstrom
+; File: eipFunction_GetHighScores.ahk2
+
+;This function provides support for hi2txt.exe
+;It relies on the 3rd party hi2txt project being in the arcadeEIP\hi2txt folder
+;use_hi2txt=1 should also be present in the mame system configuration for this to work. 
+;hiFile is the name of the high score file, e.g. "berzerk.hi" 
+GetHighScores(hiFile)
+{
+    global 
+
+    local stdout, stderr, rawscores, hi2txt_cmd, headers, nScoreCount
+    local nHeaderCount, headerLoop, thisScore, com_pid, WshShell, exec
+    local hi_name := "", hi_stage := ""
+
+    ;init globals
+    top_score := "" ;current top score string
+    highscores := Map()  ;current highscore list array
+
+    if (!gCfg.use_hi2txt)
+    {
+        LogEntry("ERROR: Assert! GetHighScores() called with use_hi2txt set to false.`n")
+        return
+    }
+
+    ;skip any hiFile requests in the omit file.
+    if (FileExist(hi2txt_omit))
+    {
+        Loop Read hi2txt_omit
+        {
+            omitFileRoot := A_LoopReadLine
+            if (InStr(A_LoopReadLine, "."))
+                omitFileRoot := SubStr(A_LoopReadLine, 1, InStr(A_LoopReadLine, ".")-1)
+
+            hiFileRoot := hiFile
+            if (InStr(hiFile, "."))
+                hiFileRoot := SubStr(hiFile, 1, InStr(hiFile, ".")-1)
+            
+            if (omitFileRoot == hiFileRoot)
+                return        
+        }
+    }
+
+    ;Find the highscore folders
+    hiscore_folder := gCfg.root_folder . "\hi" ;this is the older location (prior to .237 I believe)
+    if (!FileExist(hiscore_folder))
+    {
+        hiscore_folder := gCfg.root_folder . "\hiscore" ;this is the newest location (.237+)
+        if (!FileExist(hiscore_folder))
+        {
+            LogEntry("INFO: The highscore folder, " . hiscore_folder . " (or \hi) could not be found.`n")
+            return
+        }
+    }
+
+    hiscoredat_folder := gCfg.root_folder . "\plugins\hiscore"
+    if (!FileExist(hiscoredat_folder))
+    {
+        LogEntry("INFO: The highscore.dat location, " . hiscoredat_folder . " could not be found.`n")
+        return
+    }
+
+    hi2txt_cmd := "-hiscoredat " . hiscoredat_folder . "\hiscore.dat -r " . hiscore_folder . "\" . hiFile
+    DetectHiddenWindows True
+
+    ;These first three lines (and the later FreeConsole and ProcessClose)
+    ;are needed to hide the console. Without this, a console window will
+    ;flash briefly on screen during startup.
+    Run A_ComSpec,, "Hide", &com_pid
+    WinWait "ahk_pid " com_pid
+    DllCall("AttachConsole", "UInt", com_pid)
+   
+    WshShell := ComObject("WScript.Shell")
+
+    try ;added try block after an occurrence of an invalid memory read/write error crash on the WshShell.Exec line
+    {
+        exec := WshShell.Exec(hi2txt_exe  " "  hi2txt_cmd)
+        stdout := exec.StdOut.ReadAll()
+        stderr := exec.StdErr.ReadAll()
+        if (stderr)
+        {
+            stderr := StrReplace(stderr, "Error" , "Message") ;don't want this to trigger an arcadeEIP error
+            stderr := StrReplace(stderr, "`r`n", "") ;don't need the extra linefeed data
+            LogEntry("INFO: Failed to read high score file `"" . hifile . "`": " . stderr . ".`n")
+        }
+        else
+        { 
+            rawscores := StrSplit(stdout, "`r`n", A_Space)
+            headers := StrSplit(rawscores[1], "|")
+            nScoreCount := rawscores.Length
+            nHeaderCount := headers.Length
+
+            ;Push high score data into the global hiscores array.
+            Loop nHeaderCount
+            {
+                headerLoop := A_Index
+                highscores[headers[headerLoop]] := Array() ;note highscores is global
+                
+                Loop nScoreCount
+                {
+                    if (A_Index == 1)
+                        continue
+                    thisScore := StrSplit(rawscores[A_Index],"|")                       
+                    if (thisScore.Length >= headerLoop)
+                        highscores[headers[headerLoop]].Push(thisScore[headerLoop])
+                }
+            }
+
+            ;set the top score global for the current game if one exists
+            if (highscores.Has("SCORE"))
+            {
+                if (highscores["SCORE"][1] && highscores["SCORE"][1] != 0)
+                {
+                    if (highscores.Has("NAME"))
+                        if (Trim(highscores["NAME"][1]))
+                            hi_name := " by " . Trim(highscores["NAME"][1])
+
+                    if (highscores.Has("STAGE"))
+                        if (Trim(highscores["STAGE"][1]))
+                            hi_stage := " (Stage " . Trim(highscores["STAGE"][1]) . ")"
+
+                    top_score := "Top Score: " . ThouSep(Trim(highscores["SCORE"][1])) . hi_name . hi_stage
+
+                    LogEntry("INFO: Successfully read high score: " top_score "`n")
+                }
+            }
+        }
+    }
+    catch as e
+    {		
+        LogEntry("WARNING: Processing high scores: " . FormatErrorMessage(e) . "`n")
+    }
+
+    DllCall("FreeConsole")
+    ProcessClose com_pid 
+
+    return
+}

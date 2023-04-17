@@ -1,0 +1,32 @@
+[Front_End_gameex]
+fe_key=gameex
+proper_name=GameEx
+asset_name=GameEx
+exe_full_path=C:\GameEx\GameEx.exe
+start_screen=1
+exit_screen=1
+hide_cursor=1
+run_apps=ultramap,winipac
+
+
+* Note: This example assumes [Application] sections for ultramap and winipac exist.
+
+GameEx Integration tips (standard version)
+==========================================
+
+1. To launch games using arcadeEIP, in "Emulator Setup", just set the emulator path to the folder arcadeEIP is in and the executable to eip.exe <sys_key> "[ROMPATH]\[ROMFILE]"
+
+2. If you would like to use arcadeEIP to launch MAME games from the core MAME engine in GameEx (configured in "MAME Settings"), you should first ensure that your gamelist in GameEx is updated as you like it. After that, set the Mame Path to the folder that arcadeEIP is in, and the MAME EXE to eip.exe.  Lastly, in the Advanced MAME Settings, set MAME Options to "-use_args=mame,1" (without the quotes). See the Command-Line Reference Guide.pdf document for more about this option.
+
+Note: If you need to update your MAME gamelist in GameEx in the future, you will need to temporarily set the Mame Path and MAME.EXE back to the former values so that GameEx can call the real Mame executable to get the list.
+
+3. If any of the emulators you use utilize the "nohide" setting in arcadeEIP, these will not be visible if EIP had been initially lauched from a GameEx system having the "Show Desktop" setting set to No (which includes the integrated MAME engine). This is due to GameEx's HideOS screen. A workaround for this is to include these items in the emulator's run_apps line,
+
+runapps=hidewin(GameExHideOS),-showwin(GameExHideOS)
+
+ which will cause arcadeEIP to hide the GameExHideOS window when it launches, and restore it when returning to GameEx. If you only use MAME or emulators that don't require the "nohide" setting, then this workaround will not be needed.
+
+4. As documented in the Configuration Reference Guide.pdf document, the meta_names setting in [Global_Assets] and/or [System] sections is compatible with the GameEx *.map file format; consequently, if you would like your game lists in arcadeEIP to use these, you may set meta_names to the appropriate path to those files.
+
+5. See the \gameex_toolbox folder for a script that will recreate your mame favorites list from GameEx in arcadeEIP.  See instructions in the script file. 
+

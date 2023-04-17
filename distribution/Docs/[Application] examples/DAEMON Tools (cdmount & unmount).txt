@@ -1,0 +1,11 @@
+[Application_cdmount]
+app_key=cdmount
+proper_name=CD Mount
+exe_full_path=C:\Program Files\DAEMON Tools Lite\DTCommandLine.exe,nowait
+param_list=--mount --ro --letter "F" --path "[rom_full_path]"
+
+[Application_cdunmount]
+app_key=cdunmount
+proper_name=CD Unmount
+exe_full_path=C:\Program Files\DAEMON Tools Lite\DTCommandLine.exe,nowait
+param_list=--remove_all

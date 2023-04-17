@@ -1,0 +1,23 @@
+[System_genesis]
+sys_key=genesis
+asset_name=Sega_Genesis
+proper_name=Sega Genesis
+exe_full_path=D:\Emulators\MAME\mame.exe,min
+;window_name=[genesis]
+search_path=[root_folder]_*\software\genesis\*.zip
+param_list=genesis -cart "[rom]" -joy -now -skip_gameinfo -keyboardprovider dinput <-video,1>
+run_apps=ultramap,winipac
+rule_1=<change_root> [root_folder]_* <if_rom_in_subfolder> \software\genesis
+rule_2=<use_proxy> [rom_name].txt <if_in_folder> [root_folder]\software\genesis
+map_pause={toggle}p
+map_exit={Event}{Esc}
+
+
+Note: Commented lines are examples of optional variations.
+
+Note: This example assumes [Application] sections for ultramap and winipac exist.
+
+Note: See the MAME example for more information on the search_path setting.
+
+Note: Test first, before uncommenting window_name for enhanced focus control.
+

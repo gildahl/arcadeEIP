@@ -1,0 +1,20 @@
+[System_segamodel3]
+sys_key=segamodel3
+asset_name=Sega_Model_3
+proper_name=Sega Model 3
+exe_full_path=D:\Emulators\Supermodel\Supermodel.exe,min,nohide,winset_B
+;window_name=Supermodel -
+search_path=D:\Emulators\Supermodel\*.zip
+param_list=[rom_file] -res=1600,1200
+run_apps=ultramap,winipac
+map_pause={PauseProc}
+map_exit={Event}{Esc}
+
+
+Note: This example assumes [Application] sections for ultramap and winipac exist.
+
+Note: * The use of "nohide" option is needed for Supermodel, otherwise window will not be visible.
+      * The use of the "winset_B" option is recommended to eliminate the window title bar and 
+	normalize the window position.
+      * window_name= is optional, but recommended for more aggressive focus control. Try without it 
+        first to ensure the emulator is working, then add the line as shown in the sample above.

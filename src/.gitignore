@@ -1,0 +1,15 @@
+marquee.txt
+.state
+.history
+*.ini
+*.lic
+*.log
+license-generator/
+Assets/
+Direct/
+Favorites/
+Picks/
+Lists/
+Resources/
+Unused/
+hi2txt

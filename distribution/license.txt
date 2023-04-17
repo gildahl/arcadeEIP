@@ -1,0 +1,24 @@
+arcadeEIP Emulator-Integration Player
+Free Software License Information
+======================================
+
+arcadeEIP beta is free for personal/hobbyist use and may be redistributed freely to other such users, providing it
+is not distributed/packaged with any other product, whether commercial, free, or open-source, without permission.
+
+Although arcadeEIP beta is free for hobbyist users, it is is not free for commercial use, nor is the source code
+open-source or freely distributable at this time. It is conventionally licensed software, having all rights reserved, 
+by David G. Dahlstrom. Contact me to report bugs, make suggestions, request new features, request source code for
+your own personal customization, or inquire about usage beyond the terms of use described here.
+
+DISCLAIMER: The user of arcadeEIP acknowledges that he or she is receiving this software "as is" and is not
+relying on the functionality or stability of the software for any purpose. The user further acknowledges that any
+use of this software is at his or her own risk and the copyright owner accepts no responsibility whatsoever 
+arising from the use or application of this software.
+
+REGISTRATION: Free private-use registration that will enable the show_license=0 setting in arcadeEIP.ini (to
+turn off the license text) is available by contacting me with your name at arcadeeip@gmail.com. For usage beyond
+private/hobbyist use, please contact me.
+
+arcadeEIP 0.3.3.3 beta
+Copyright (c) 2023 by David G. Dahlstrom
+arcadeeip@gmail.com

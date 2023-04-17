@@ -1,0 +1,398 @@
+; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
+; © 2023 David G. Dahlstrom
+; File: eipClass_PauseControl.ahk2
+
+;This class supports the display of images and information on pause.
+class pause_control_class
+{
+	__New()
+	{
+		this._currentPage := 1
+		this._totalPages := 0
+		this._pages := Map()
+	}
+
+	;Types are "image" and "info"
+	;"image" requires one reference to the Picture control
+	;"info" requires one or two references to Edit controls 
+	AddPage(pageType, control1, control2:="")
+	{
+		;global
+
+		pages := this._pages
+
+		this._totalPages++
+
+		if (pageType == "image") ;adds an image type page (like a control panel map)
+		{
+			page := Map()
+			page["type"] := "image"
+			page["control1"] := control1 ;the image control
+
+			idx := this._totalPages
+			pages[idx] := page
+		}
+		else if (pageType == "info") ;adds a page of mame.xml/mameinfo.dat text
+		{
+			page := Map()
+			page["type"] := "info"
+			page["control1"] := control1 ;the left column edit control
+			page["control2"] := control2 ;the right column edit control
+
+			idx := this._totalPages
+			pages[idx] := page
+		}		
+
+		this._pages := pages
+	}
+
+	;Get the next logical page number
+	GetPageNext()
+	{
+		pageNext := ++this._currentPage
+		if (pageNext > this._totalPages)
+			pageNext := 1
+
+		return pageNext
+	}
+
+	;Get the previous logical page number
+	GetPagePrevious()
+	{
+		pagePrev := --this._currentPage
+		if (pagePrev < 1)
+			pagePrev := this._totalPages
+
+		return pagePrev
+	}
+
+	;directives here may be 
+	;"start" - Go to page 1 (for the first time - skips hide operation)
+	;"r"     - go one page to the right
+	;"l"     - go one page to the left
+	;"hide"  - hide the currently displayed page
+	GoPage(directive)
+	{
+		;global
+
+		pages := this._pages ;the page collection
+
+		;don't need to flip pages if one page (or no pages)
+		if ((directive == "r" || directive == "l") && pages.Count < 2)
+			return
+
+		;Hide the current page
+		if (directive != "start") ;page is already blank for "start" so skip
+		{
+			thisPage := this._currentPage			
+			pageType := pages[thisPage]["type"]
+
+			if (pageType == "image")
+			{
+				guiAlpha.BackColor := "Black"
+			
+				try
+					(gGui.%pages[thisPage]["control1"]%).Visible := false
+			}
+			else if (pageType == "info")
+			{
+				guiAlpha.BackColor := "White"
+				
+				(gGui.%pages[thisPage]["control1"]%).Visible := true
+				(gGui.%pages[thisPage]["control2"]%).Visible := true
+	
+			}
+		}
+
+		Switch directive 
+		{
+			case "hide":
+				;make sure Alpha is returned to black so select screen fades correctly
+				guiAlpha.BackColor := "Black" 
+				return
+			case "start":
+				newPage := 1
+			case "r":
+				try (gGui.%pages[thisPage]["control1"]%).Visible := false
+				try (gGui.%pages[thisPage]["control2"]%).Visible := false
+				newPage := this.GetPageNext()
+			case "l":
+				try (gGui.%pages[thisPage]["control1"]%).Visible := false
+				try (gGui.%pages[thisPage]["control2"]%).Visible := false
+				newPage := this.GetPagePrevious()
+		}
+	 
+		pageType := pages[newPage]["type"]
+
+		;Show the new page
+		if (pageType == "image")
+		{
+			guiAlpha.BackColor := "Black"
+			(gGui.%pages[newPage]["control1"]%).Visible := true
+		}
+		else if (pageType == "info")
+		{
+			guiAlpha.BackColor := "White"	
+		
+			(gGui.%pages[newPage]["control1"]%).Visible := true			
+			(gGui.%pages[newPage]["control2"]%).Visible := true
+		}
+
+		this._currentPage := newPage
+	}
+
+	;Call this between each game
+	Clear()
+	{
+		this._currentPage := 1
+		this._totalPages := 0
+		this._pages := Map()
+
+		guiAlpha.Destroy()
+	}
+
+	;Creates the actual image and info pages for each asset type
+	CreatePausePage(assetType)
+	{
+		global oMameData
+
+		info_text := ""
+		;local image_xpos, image_ypos, image_width, image_height
+		;local image_x, image_y, assetFolder, systemAsset, mame_history_text, mame_info_text
+		;local srcIdx, destIdx, x_pos, hwndSrc, hwndDest, delta, total_lines, success, offset
+
+		if (assetType == "info")
+		{
+			;*********************************
+			; Info display
+			;*********************************
+
+			;Set GuiAlpha as default since we're in a different thread than it
+			;was created in.
+			edit_width := nScreenWidth // 2
+			edit_height := nScreenHeight			
+
+			;These two "test" controls are used to discover the height of a single row in the edit control
+			;-E0x200 hides border (corresponds to WS_EX_CLIENTEDGE)
+			;-Hdr removes column header
+			guiAlpha.SetFont("s12", "Tahoma")
+			gGui.guiAlpha_PauseTest1 := guiAlpha.AddEdit("x0 y0 -VScroll -HScroll -E0x200 vPauseTest1 R1")
+			Tst1 := gGui.guiAlpha_PauseTest1.Hwnd
+
+			;GuiControlGet, sz1, Pos, PauseTest1
+			gGui.guiAlpha_PauseTest1.GetPos(&sz1X, &sz1Y, &sz1sW, &sz1H)
+			gGui.guiAlpha_PauseTest2 := guiAlpha.AddEdit("x0 y0 -VScroll -HScroll -E0x200 vPauseTest2 R2")
+			Tst2 := gGui.guiAlpha_PauseTest2.Hwnd
+
+			gGui.guiAlpha_PauseTest2.GetPos(&sz2X, &sz2Y, &sz2sW, &sz2H)
+			ht := sz2H - sz1H
+
+			;I don't think ahk has a way of destroying these controls, so let's just hide them
+			gGui.guiAlpha_PauseTest1.Visible := false
+			gGui.guiAlpha_PauseTest2.Visible := false
+
+			screen_lines := nScreenHeight // ht ;number of lines available on the screen
+
+			;get the history for the current game
+			if (gCfg.mameinfo_folder)
+			{
+				if (!IsObject(oMameData))
+					oMameData := mame_data_class(gCfg.mameinfo_folder)
+
+				  ;startTimeTest := A_TickCount
+				mame_history_text := oMameData.GetHistory(gCfg.rom_name)
+				  ;doneHistoryTime := A_TickCount
+				mame_info_text := oMameData.GetInfo(gCfg.rom_name)
+				  ;doneInfoTime := A_TickCount
+
+				  ;historyTime := doneHistoryTime - startTimeTest
+				  ;infoTime := doneInfoTime - doneHistoryTime
+
+			      ;OutputDebug Rom: %rom_name%, History Time: %historyTime%, Info Time: %infoTime%`n
+
+				info_text := mame_history_text . mame_info_text
+
+				;Replace "En Dash" characters with "Hyphen-Minus" to avoid display issues.
+				info_text := StrReplace(info_text, "–", "-")
+			}
+
+			if (info_text)
+			{  
+				ClipSaved := ClipboardAll() ; Save the entire clipboard to a variable.		
+				if !ClipWait(5)
+					LogEntry("WARNING: Could not save clipboard in CreatePausePage().`n")
+				
+				;ClipWait 5
+				;if (ErrorLevel == 1)		
+				;	LogEntry("WARNING: Could not save clipboard in CreatePausePage().`n")
+
+				;Add the first control
+				gGui.guiAlpha_PauseInfo1 := guiAlpha.AddEdit("x0 y0 h" . edit_height . " w" . edit_width . " -VScroll -HScroll -E0x200 vPauseInfo1")
+				hwndInfo1 := gGui.guiAlpha_PauseInfo1.Hwnd
+				
+				gGui.guiAlpha_PauseInfo1.Visible := false
+
+				;These pages are just strings that will be double-deref'ed when called. 
+				this.AddPage("info", "guiAlpha_PauseInfo1", "guiAlpha_PauseInfo2")
+
+				;add history to first edit control. The number of lines can't be determined until
+				;after this text is added due to word wrapping.
+				gGui.guiAlpha_PauseInfo1.Text := info_text
+
+				;Each loop populates a single edit control; every two edit controls form a page.
+				;(basically, each edit control is one column of a two column text display)
+				Loop
+				{
+					;As long as an edit control's text exceeds the on-screen capacity, copy
+					;the overflow from that "src" control to the next "dest" control.
+					srcIdx := A_Index
+					destIdx := A_Index + 1
+
+					;This is an odd/even check
+					;if odd, margin is 0; if even, margin is at the middle (edit_width)
+					x_pos := ((A_Index & 1) != 0) ? edit_width : 0
+
+					;Add page to oPauseControl manager every time we create a new odd (left) edit control
+					if (x_pos == 0)
+						this.AddPage("info", "guiAlpha_PauseInfo" . destIdx, "guiAlpha_PauseInfo" . destIdx+1)
+
+					;Create new dest control to accept the overflow
+					gGui.guiAlpha_PauseInfo%destIdx% := guiAlpha.AddEdit("x" . x_pos . " y0 h" . edit_height . " w" edit_width . " -VScroll -HScroll -E0x200 vPauseInfo%" . destIdx . "%")
+					gGui.hwndInfo%destIdx% := gGui.guiAlpha_PauseInfo%destIdx%.Hwnd
+					gGui.guiAlpha_PauseInfo%destIdx%.Visible := false
+
+					;SendMessage commands need the hwnd
+					try {
+						hwndSrc := gGui.guiAlpha_PauseInfo%srcIdx%.Hwnd
+					}
+					catch {
+						hwndSrc := ""
+					}
+
+					try {
+						hwndDest := gGui.guiAlpha_PauseInfo%destIdx%.Hwnd
+					}
+					catch {
+						hwndDest := ""
+					}
+					
+					;Get the full line count from the src control. Select all text that overflows the 
+					;screen and cut/paste it into the new dest edit control.
+					ErrorLevel := 0
+					try {
+						ErrorLevel := SendMessage(0xBA,0,0,,"ahk_id " . hwndSrc) ;EM_GETLINECOUNT
+					}
+					catch {
+						LogEntry("WARNING: SendMessage EM_GETLINECOUNT failed in CreatePausePage().`n")
+					}
+					total_lines := ErrorLevel  ;This is the total line count (including the overflow)
+
+					delta := total_lines - screen_lines ;this is the number of lines of overflow
+	
+					;Cut/Paste the overflow text from src to dest edit control
+					if (delta > 0)
+					{
+						ErrorLevel := SendMessage(0xBB, screen_lines-1, 0,,"ahk_id " . hwndSrc)  ; EM_LINEINDEX
+						if (ErrorLevel == "FAIL")
+							LogEntry("WARNING: SendMessage EM_LINEINDEX failed in CreatePausePage().`n")	
+						offset := ErrorLevel ;this is the character # that starts the last displayable line
+
+						ErrorLevel := SendMessage(0xB1, offset, -1,,"ahk_id " . hwndSrc)  ; EM_SETSEL  Note, the -1 selects to the end of the text
+						if (ErrorLevel == "FAIL")
+							LogEntry("WARNING: SendMessage EM_SETSEL failed in CreatePausePage().`n")
+						success := ErrorLevel ;now select all the overflow text
+
+						ErrorLevel := SendMessage(0x300,0,0,,"ahk_id " . hwndSrc)   ; WM_CUT    ;Cut overflow text from src edit control
+						if (ErrorLevel == "FAIL")
+							LogEntry("WARNING: SendMessage EM_CUT failed in CreatePausePage().`n")
+						if !ClipWait(5) 
+							LogEntry("WARNING: Could not save to clipboard in CreatePausePage().`n")
+						
+						;ClipWait 5
+						;	if (ErrorLevel == 1)		
+						;		LogEntry("WARNING: Could not save to clipboard in CreatePausePage().`n")
+
+						ErrorLevel := SendMessage(0x302,0,0,,"ahk_id " . hwndDest)  ; WM_PASTE  ;Paste this text into the dest edit control
+						if (ErrorLevel == "FAIL")
+							LogEntry("WARNING: SendMessage EM_PASTE failed in CreatePausePage().`n")
+						Sleep 100 ;give paste a little extra time (leaving this out can cause partial or no paste issues)
+						clipboard := "" ;clear the clipboard
+
+						;Now get the full line count from the control we just pasted into, then get the delta 
+						;to see if we need to continue.
+						ErrorLevel := SendMessage(0xBA,0,0,,"ahk_id " . hwndDest) ;EM_GETLINECOUNT
+						if (ErrorLevel == "FAIL")
+							LogEntry("WARNING: SendMessage EM_GETLINECOUNT failed in CreatePausePage().`n")
+						total_lines := ErrorLevel  ;This is the total line count (including any new overflow)
+
+						delta := total_lines - screen_lines ;this is the number of lines of overflow text
+
+						;if there's no more overflow text left, then we're done.
+						;otherwise, we continue the loop to create more edit controls.
+						if (delta <= 0)
+						{
+							;make sure there are two edit controls on the screen
+							if (x_pos == 0) ;last control created was on the left side, so create empty one on the right.
+							{
+								destIdx++
+
+								gGui.guiAlpha_PauseInfo%destIdx% := guiAlpha.AddEdit("x" . edit_width . " y0 h" . edit_height . " w" . edit_width . " -VScroll -HScroll -E0x200 vPauseInfo%" . destIdx . "%")
+								gGui.hwndInfo%destIdx% := gGui.guiAlpha_PauseInfo%destIdx%.Hwnd
+								gGui.guiAlpha_PauseInfo%destIdx%.Visible := false
+							}
+							
+							break
+						}
+					}
+					else
+						break
+				}
+
+				Clipboard := ClipSaved 	; Restore the original clipboard.
+				Sleep 100
+			}
+		}
+		else ;must be an "image" type
+		{
+			assetFolder := systemAsset := ""
+			try assetFolder := gCfg.%assetType "_folder"%
+			try systemAsset := gCfg.%"system_" assetType% 
+		
+			controls_full_path := SetAssetFullPath(assetType, gCfg.rom_name, assetFolder, systemAsset, gCfg.global_asset_name)
+			if (FileExist(controls_full_path))
+			{
+				gGui.guiAlpha_PauseImage%assetType% := guiAlpha.AddPicture("BackgroundTrans vPauseImage%" . assetType . "%", controls_full_path)
+				gGui.guiAlpha_PauseImage%assetType%.GetPos(&pause_image_posX, &pause_image_posY, &pause_image_posW, &pause_image_posH)
+		
+				;Resize the image to fit on the screen while preserving aspect ratio
+				image_width := nScreenWidth
+				image_height := image_width * pause_image_posH / pause_image_posW
+		
+				if (image_height > nScreenHeight)
+				{
+					image_height := nScreenHeight
+					image_width := image_height * pause_image_posW / pause_image_posH
+				}
+				
+				;center image
+				image_x := Floor(nScreenWidth / 2 - image_width / 2)
+				image_y := Floor(nScreenHeight / 2 - image_height / 2)
+		
+				gGui.guiAlpha_PauseImage%assetType%.Move(image_x, image_y, image_width, image_height)
+				gGui.guiAlpha_PauseImage%assetType%.Visible := false ;hide this for now (PauseKey function will show/hide)
+		
+				;Add this control to the oPauseControl collection manager
+				this.AddPage("image", "guiAlpha_PauseImage" . assetType)
+			}
+		}
+	}
+
+	HasContent()
+	{
+		tp := this._totalPages
+		if (tp > 0)
+			return true
+		
+		return false
+	}
+}

@@ -1,0 +1,23 @@
+[System_coleco]
+sys_key=coleco
+asset_name=Coleco_Vision
+proper_name=Colecovision
+exe_full_path=D:\Emulators\MAME\mame.exe,min
+;window_name=[coleco]
+search_path=[root_folder]_*\software\coleco\*.rom
+;search_path=D:\Emulators\MAME\software\coleco\*.rom
+param_list=coleco -cart "[rom]" -joy -now -skip_gameinfo -keyboardprovider dinput <-video,1>
+run_apps=ultramap,winipac
+rule_1=<change_root> [root_folder]_* <if_rom_in_subfolder> \software\coleco
+map_pause={toggle}p
+map_exit={Event}{Esc}
+;meta_names=C:\GameEx\DATA\EMU_6.map
+
+
+Note: Commented lines are examples of optional variations.
+
+Note: This example assumes [Application] sections for ultramap and winipac exist.
+
+Note: See the MAME example for more information on the search_path setting.
+
+Note: Test first, before uncommenting window_name for enhanced focus control.

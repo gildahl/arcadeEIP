@@ -1,0 +1,107 @@
+Integrating with LaunchBox
+==========================
+
+*********************************************************************************
+IMPORTANT: Before integrating with LaunchBox, make sure arcadeEIP is fully 
+configured, tested, and working outside of LaunchBox for every system that you 
+will use it with first.
+**********************************************************************************
+
+arcadeEIP doesn't have any built-in capability for downloading images or any UI 
+support for curating rom collections and their metadata.  However, arcadeEIP does 
+integrate nicely and quite easily with LaunchBox (which does these things very
+well), making it simple to use that product as a content manager for arcadeEIP.
+in fact, you could regard arcadeEIP as being as a kind of "loose" plug-in for that
+product.
+
+At the most basic level, if you already have LaunchBox and want arcadeEIP to use 
+LB's media files and metadata for a particular platform in arcadeEIP, you may just 
+add these lines to the appropriate (and already configured/working) [System] section
+in arcadeEIP.ini (with the paths adjusted to your machine, of course), to have 
+arcadeEIP begin to use LB's assets.
+
+    logo_folder=D:\LaunchBox\Images\Arcade\Clear Logo
+    marquee_folder=D:\LaunchBox\Images\Arcade\Arcade - Marquee
+    system_logo=D:\LaunchBox\Images\Platforms\Arcade\Clear Logo\Arcade.png
+
+From these paths, arcadeEIP will not only be able to use LB's images, but it will
+also be able to find the metadata for these games, so that the game list in arcadeEIP
+will be synchronized with LaunchBox and data such as publisher, developer, year, 
+genre, etc., will be visible in arcadeEIP's menu screen. 
+
+Note that star ratings and favorites from LaunchBox are not synchronized with arcadeEIP
+since arcadeEIP maintains its own independent database to store and manage that 
+information.
+
+Configuring arcadeEIP as a launcher within LaunchBox
+====================================================
+arcadeEIP does NOT use LaunchBox's emulator/launch configurations.  Therefore, you
+must still setup your emulators in arcadeEIP.ini.  However, once you have done this
+arcadeEIP CAN be (optionally) be used as a launcher within LaunchBox. This is the 
+preferred way to set things up if you are an arcadeEIP user, but is not strictly
+required.
+
+See the first part of my BigBox video at https://youtu.be/dLsFjxceT0I to see how
+this can be done. You may also follow the instructions shown here:
+
+Within LaunchBox tools, you can setup a single emulator in LaunchBox capable of 
+supporting all arcadeEIP systems.  To do this, create an "Emulator" having these 
+properties:
+   
+   * Emulator Name: ArcadeEIP
+   * Application Path: ..\arcadeEIP\eip.exe (i.e select from wherever you put it).
+   * Leave Default Command-Line Parameters empty
+   * Check only the option to "Remove file extension and folder path"
+     (This is not mandatory, but recommended so that if you move rom files in the 
+     future, you don't have to also move them in LaunchBox's configuration).
+
+   Then, under "Associated Platforms", create a Platform for each arcadeEIP System you 
+   want to run under LaunchBox. In each, specify the sys_key from arcadeEIP.ini as the
+   Default Command-Line parameter.  
+
+   Finally, import roms into each of these platforms using arcadeEIP as the emulator,
+   and each configured platform as the Platform. 
+
+   As mentioned above, if you wish to use LaunchBox's managed image assets (logos and 
+   marquees), then add marquee_folder, logo_folder, and system_logo settings to each 
+   System that will use these assets, for example, if you would like your MAME system
+   to use the LaunchBox Arcade assets, set these values to appropriate paths within
+   [System_mame].  For example,
+
+       [System_mame]
+       sys_key=mame
+       ...
+       marquee_folder=D:\LaunchBox\Images\Arcade\Arcade - Marquee
+       logo_folder=D:\LaunchBox\Images\Arcade\Clear Logo 
+       system_logo=D:\LaunchBox\Images\Platforms\Arcade\Clear Logo\Arcade.png
+
+    If your asset_name is configured to use the platform names used by LaunchBox, you
+    may use the [asset_name] tag to make this configuration easier. For example, 
+
+       [System_mame]
+       sys_key=mame
+       asset_name=Arcade
+       ...
+       marquee_folder=D:\LaunchBox\Images\[asset_name]\Arcade - Marquee
+       logo_folder=D:\LaunchBox\Images\[asset_name]\Clear Logo 
+       system_logo=D:\LaunchBox\Images\Platforms\[asset_name]\Clear Logo\Arcade.png
+
+    And, of course, if all of your systems will be using the LB assets, you could just
+    specify something like this in [Global_Assets] rather than adding to each section.
+    Experiment to see what works best for you.
+
+       [Global_Assets]
+       ...
+       marquee_folder=D:\LaunchBox\Images\[global_asset_name]\Arcade - Marquee
+       logo_folder=D:\LaunchBox\Images\[global_asset_name]\Clear Logo 
+       system_logo=D:\LaunchBox\Images\Platforms\[global_asset_name]\Clear Logo\Arcade.png
+
+    Note that there is no need to create .meta files when using LaunchBox since arcadeEIP
+    creates them virtually using information pulled directly from LB's configuration files. 
+
+Integration with BigBox
+=======================
+arcadeEIP may be used with LaunchBox as either an alternative to BigBox, or as a supplement
+to BigBox.  If you have setup arcadeEIP as a launcher inside of LaunchBox and want to also
+integrate BigBox, then view the second part of https://youtu.be/dLsFjxceT0I, and also see
+the file BigBox.txt in the "\Docs\[Front_End]examples" folder for written instructions.

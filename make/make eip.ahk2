@@ -1,0 +1,1 @@
+Run '"C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe" /base "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe" /in "D:\Development\Repository\arcadeEIP\src\eip.ahk2" /out "D:\Development\Repository\arcadeEIP\make\eip.exe" /icon "D:\Development\Repository\arcadeEIP\make\EIP.ico" /mpress 1'

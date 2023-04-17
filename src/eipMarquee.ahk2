@@ -1,0 +1,377 @@
+;Compiler directives
+;***********************************************************
+global CodeVersion := "0.4.0.0"
+;@Ahk2Exe-Let version = %A_PriorLine~U)^(.+"){1}(.+)".*$~$2%
+;@Ahk2Exe-SetCopyright (c) 2023 David G. Dahlstrom
+;@Ahk2Exe-SetProductName arcadeEIP Marquee Player
+;@Ahk2Exe-SetDescription arcadeEIP Marquee Player
+;@Ahk2Exe-SetProductVersion %U_version% beta
+;@Ahk2Exe-SetFileVersion %U_version%
+;***********************************************************
+
+;#Warn All, Off
+#SingleInstance ignore
+#Requires AutoHotkey v2.0
+DetectHiddenWindows True
+Persistent
+SendMode "Input"
+SetWorkingDir A_ScriptDir
+
+#include eipClass_Gdip.ahk2
+#include eipClass_FadeWindow.ahk2
+#include eipFunctions_Utility.ahk2
+
+OnExit(ExitFunction)
+
+global debug := false ;set to true to prevent deletion of marquee.txt pipe file
+
+;global g_current_game := "galaga" ;just for testing
+global g_last_image, gui_id, hwnd := ""
+global g_pipe_filename := A_ScriptDir . "\marquee.txt"
+global nScreenHeight, nScreenWidth, bounds
+global marquee_monitor, marquee_exit_key, marquee_interpolation
+global window_W, window_H, window_L, window_T
+global image_W, image_H, image_L, image_T ;these are currently kept undocumented
+global gGui := {}
+
+cProductName := "arcadeEIP"
+cConfigFileName := cProductName . ".ini"
+config_file := A_ScriptDir "\" cConfigFileName
+
+;read configuration
+;[General]
+alpha_effect := IniRead(config_file, "General", "alpha_effect", "1")
+
+;[Marquee]
+marquee_active := IniRead(config_file, "Marquee", "active", "0")
+alpha_effect := IniRead(config_file, "Marquee", "alpha_effect", alpha_effect) ;override of alpha_effect in [General]
+marquee_monitor := IniRead(config_file, "Marquee", "monitor", "2")
+marquee_exit_key := IniRead(config_file, "Marquee", "exit_key", "^!x")
+marquee_interpolation := IniRead(config_file, "Marquee", "interpolation", "2")
+win_W := IniRead(config_file, "Marquee", "window_width", "0")
+win_H := IniRead(config_file, "Marquee", "window_height", "0")
+win_L := IniRead(config_file, "Marquee", "window_left", "0")
+win_T := IniRead(config_file, "Marquee", "window_top", "0")
+image_W := IniRead(config_file, "Marquee", "image_width", "0")
+image_H := IniRead(config_file, "Marquee", "image_height", "0")
+image_L := IniRead(config_file, "Marquee", "image_left", "0")
+image_T := IniRead(config_file, "Marquee", "image_top", "0")
+
+fExit := ExitApplication.Bind()
+Hotkey marquee_exit_key, fExit
+
+pipeFile := {}
+
+if (FileExist(g_pipe_filename))
+{
+    if (!debug)
+        FileDelete(g_pipe_filename)    
+}
+
+;Get the relative bounds of the monitor we will be using for the marquee
+try
+    MonitorGet(marquee_monitor, &boundsLeft, &boundsTop, &boundsRight, &boundsBottom)
+catch
+{
+    ;Exit if chosen monitor is invalid
+    MsgBox("The monitor number specified in " cConfigFileName ": monitor=" marquee_monitor ", is invalid on this system. Please specify a monitor number that exists on this machine.", "arcadeEIP Marquee Player - Error", 16)
+    ExitApp
+}
+
+nScreenWidth := boundsRight - boundsLeft      
+nScreenHeight := boundsBottom - boundsTop  
+
+monitorCount := MonitorGetCount()
+
+if (marquee_active != 1)
+{
+    MsgBox("The Marquee Player is specified as inactive in " cConfigFileName ": active=" marquee_active ". Please set this value to 1 to use this feature.", "arcadeEIP Marquee Player - Error", 16)
+    ExitApp
+}
+
+If !pToken := Gdip_Startup()
+{
+    MsgBox("Gdiplus failed to start. Please ensure you have gdiplus on your system.", "arcadeEIP Marquee Player - Error", 16) 
+    ExitApp
+}
+
+;Don't show informational prompts if launched with the -quiet parameter
+clParam := ""
+try clParam := A_Args[1]
+
+;Quiet mode runs without any information dialogs
+if (clParam != "-quiet")
+{
+    msg := "The Marquee Player will display marquees on this monitor (monitor=" marquee_monitor ").`n`nPress Ok to continue or Cancel to change monitor specifications in " cConfigFileName " and try again."
+    if (MsgBox_XY(65, msg, 0, 0, nScreenWidth, nScreenHeight, boundsLeft, boundsTop) == "Cancel")
+         ExitApp
+
+    msg := "To exit the Marquee Player at any time, press the hotkey, '" marquee_exit_key "'"
+    MsgBox_XY(64, msg, 0, 0, nScreenWidth, nScreenHeight, boundsLeft, boundsTop)
+}
+
+ScreenCreate()
+
+guiBackground.Opt("+AlwaysOnTop")
+guiBackground.Show("W" . nScreenWidth . " H" . nScreenHeight . " X" . boundsLeft . " Y" . boundsTop)
+
+;guiMarqueeAlpha used for fade-in effect
+guiMarqueeAlpha.Show("W" . nScreenWidth . " H" . nScreenHeight . " X" . boundsLeft . " Y" . boundsTop)
+
+WinSetTransColor "Black", "ahk_id " HwndMarqueeAlpha  
+WinSetTransparent 0, "ahk_id " HwndMarqueeAlpha
+oFadeMarqueeAlpha := fade_window_class(HwndMarqueeAlpha)
+
+;Start timer that checks for a game switch every second
+SetTimer CheckSwitchTimer, 1000
+
+ScreenCreate()
+{
+    CreateBackgroundScreen()
+    CreateMarqueeAlphaScreen()
+}
+
+CreateBackgroundScreen()
+{
+    global 
+
+    guiBackground := Gui("-Caption")
+    guiBackground.BackColor := "Black"
+
+    ;handle DPI modes
+    dpiHeight := nScreenHeight * 96/A_ScreenDPI
+    dpiWidth := nScreenWidth * 96/A_ScreenDPI
+
+    ;Create text banner (to report, for example, high scores)
+    guiBackground.SetFont("s12")
+    guiBackground_MarqueeBanner := guiBackground.AddText("cWhite w" dpiWidth " Center vMarqueeBanner")
+    guiBackground_MarqueeBanner.GetPos(&banner_posX, &banner_posY, &banner_posW, &banner_posH)
+    banner_ypos := dpiHeight - banner_posH * 1.5
+    banner_xpos := 0
+    guiBackground_MarqueeBanner.Move(banner_xpos, banner_ypos)
+    
+    return
+}
+
+;The Alpha screen is used to support fading
+CreateMarqueeAlphaScreen()
+{   
+    global
+
+    guiMarqueeAlpha := Gui("+LastFound -Caption")
+    guiMarqueeAlpha.BackColor := "Black"
+    HwndMarqueeAlpha := guiMarqueeAlpha.Hwnd
+        
+    return
+}
+
+HideMarquee()
+{
+    global
+
+    oFadeMarqueeAlpha.Start(0,255,20,16)
+
+    if (WinExist("ahk_id " . hwnd))
+    {
+        ;Distroy the Gui to prevent side effects during fade-in effects  
+        gGui.%gui_id%.Destroy()
+    } 
+}
+
+;Main function to display the marquee image
+ShowMarquee(image_file, system, top_score) 
+{
+    global
+
+    SplitPath image_file, &OutFileName, &OutDir, &OutExtension, &OutNameNoExt, &OutDrive
+
+    gui_id := system ;gui_id is global
+
+    bGuiExists := false
+    try bGuiExists := IsObject(%gui_id%)
+
+    if (!bGuiExists) ;only create a new window if we haven't previously created it
+    {
+        gGui.%gui_id% := Gui("-Caption +E0x80000 +LastFound +AlwaysOnTop +ToolWindow +OwnDialogs")
+        gGui.Gui%gui_id% := gGui.%gui_id%.Hwnd
+    }
+
+    gGui.%gui_id%.Show("NA") 
+    
+    ;start the fade-in
+    if (alpha_effect)
+    {
+        ;oFadeMarqueeAlpha.Start(0,0)
+        guiMarqueeAlpha.Opt("+AlwaysOnTop")
+        oFadeMarqueeAlpha.Start(255,0,20,16)
+    }
+
+    ;Get a handle to this window we have created in order to update it later
+    hwnd := gGui.%gui_id%.Hwnd
+
+    pBitmap := Gdip_CreateBitmapFromFile(image_file)
+    Width :=   Gdip_GetImageWidth(pBitmap)
+    Height :=  Gdip_GetImageHeight(pBitmap)
+
+    ;set virtual bounds based on adjustments in .ini file
+    vScreenHeight := nScreenHeight + win_H
+    if (top_score != "NULL")
+        vScreenHeight -= banner_posH * 2
+    vScreenWidth := nScreenWidth + win_W
+    vboundsLeft := boundsLeft + win_L
+    vboundsTop := boundsTop + win_T
+
+    ar := Width/Height
+    pic_h := vScreenHeight
+    pic_w := pic_h * ar 
+    
+    if (pic_w > vScreenWidth)
+    {
+        ar := Height/Width
+        pic_w := vScreenWidth
+        pic_h := pic_w * ar 
+    }
+ 
+    pic_x := (vScreenWidth / 2) - (pic_w / 2) + vboundsLeft 
+    pic_y := (vScreenHeight / 2) - (pic_h / 2) + vboundsTop
+
+    ; Create a canvas bitmap large enough for the image.
+    hbm := CreateDIBSection(pic_w, pic_h)
+    hdc := CreateCompatibleDC()
+    obm := SelectObject(hdc, hbm)
+    G := Gdip_GraphicsFromHDC(hdc)
+
+    Gdip_SetInterpolationMode(G, marquee_interpolation)
+
+    ;Gdip_DrawImage(pGraphics, pBitmap, dx, dy, dw, dh, sx, sy, sw, sh, Matrix)
+    Gdip_DrawImage(G, pBitmap, 0 + image_L, 0 + image_T, pic_w + image_W, pic_h + image_H, 0, 0, Width, Height)
+    Gdip_DeleteGraphics(G)
+    
+    ;Update the specified window we have created (hwnd1) with a handle to our 
+    ;bitmap (hdc), specifying the x,y,w,h we want it positioned on our screen	
+    UpdateLayeredWindow(hwnd, hdc, pic_x, pic_y, pic_w, pic_h)
+    SelectObject(hdc, obm)
+    DeleteObject(hbm)
+    DeleteDC(hdc)
+    Gdip_DisposeImage(pBitmap)
+
+    ;Update the MarqueeBanner text
+    banner_text := top_score == "NULL" ? "" : top_score
+    guiBackground_MarqueeBanner.Text := banner_text
+
+    return gui_id
+}
+
+;called by exit hotkey
+ExitApplication(theHotkey := "")
+{
+    ExitApp
+}
+
+;destructor
+ExitFunction(ExitReason, ExitCode)
+{
+    if (FileExist(g_pipe_filename) && !debug)
+        FileDelete(g_pipe_filename)
+}
+
+;method adapted from https://www.autohotkey.com/boards/viewtopic.php?p=73307#p73307
+Move_MsgBox(wParam, lParam, msg, hwnd)
+{ 
+    global Window_W, Window_H
+    global Window_L, Window_T
+    
+	if (wParam == 1027) 					; Make sure it is a AHK dialog
+	{
+		;Get the Process PID
+        ThisProcessPID := ProcessExist()
+
+        ;Make sure dialog still exists (32770 is class id for a Windows standard dialog)
+        ;Note that we need DetectHiddenWindows turned on for this
+        if WinExist("ahk_class #32770 ahk_pid " ThisProcessPID)	
+        {
+            WinGetPos ,,&mW, &mH
+	        WinMove (Window_W-mW)/2 + Window_L, (Window_H-mH)/2 + Window_T
+        }
+	}
+}
+
+MsgBox_XY(Opt, Message, X, Y, W, H, L, T)
+{
+    global Window_W := W, Window_H := H
+    global Window_L := L, Window_T := T
+
+	OnMessage(0x44, Move_MsgBox)	;When a dialog appears run Move_MsgBox
+    mbResult := MsgBox(Message, "arcade EIP Marquee Player", Opt)
+    OnMessage(0x44, Move_MsgBox, 0) ;Cancel previous callback
+
+    return mbResult
+}
+
+CheckSwitchTimer()
+{
+    global
+
+    syskey := ""
+    romfile := ""
+
+    ;file created by arcadeEIP
+    if (!FileExist(g_pipe_filename))
+        return
+    
+    try
+    {
+        pipeFile := FileOpen(g_pipe_filename, "r")
+        syskey := Trim(pipeFile.ReadLine(), OmitChars := " `n`r")	
+
+        if (syskey == "!Clear!") ;eip.exe exited, clear screen or show default.png
+        {
+            pipeFile.Close
+            Sleep 100
+            if (!debug)
+                FileDelete(g_pipe_filename)
+
+            image_file := A_ScriptDir ".\Assets\Default\Marquee\default.png"
+            if (FileExist(image_file))
+            {
+                HideMarquee()
+                ShowMarquee(image_file, "default", "NULL")
+            }
+            else
+                HideMarquee()
+            return
+        }
+        else if (syskey == "!Exit!") ;eip.exe exited in autoexit mode, so exitapp
+        {
+            pipeFile.Close
+            Sleep 100
+            if (!debug)
+                FileDelete(g_pipe_filename)
+            Sleep 500
+
+            ExitApplication()
+        }
+
+        marqueeFullPath := Trim(pipeFile.ReadLine(), OmitChars := " `n`r")
+        topscore := Trim(pipeFile.ReadLine(), OmitChars := " `n`r")
+
+        pipeFile.Close	
+
+        Sleep 100
+
+        if (!debug)
+            FileDelete(g_pipe_filename)
+    }
+    catch as e
+	{		
+		errorText := FormatErrorMessage(e)		
+        MsgBox("ERROR: in: " errorText, "arcadeEIP Marquee Player - Error", 16)	
+		ExitApp
+	}
+
+    HideMarquee()
+
+    ShowMarquee(marqueeFullPath, syskey, topscore)
+
+    return
+}

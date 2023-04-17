@@ -1,0 +1,185 @@
+; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
+; © 2023 David G. Dahlstrom
+; File: eipClass_LaunchBox.ahk2
+
+;arcadeEIP supports the use of LaunchBox as a content manager,
+;meaning that arcadeEIP can mine the LaunchBox games database for game
+;metadata and images.  This class provides support for these functions.
+class launchbox_frontend_class
+{
+	__New()
+	{
+		this._current_asset_path := ""
+		this._region_priorities := Array()
+	}	
+
+	;Set this first in order to then extract...
+	;1. RootFolder
+	;2. ClearLogoFolder
+	;3. MarqueeFolder
+	;4. CurrentPlatformFolder
+	;5. PlatformXMLFileName
+	;Returns true if root folder passes validation (contains LaunchBox.exe)
+	;Can accept one or two folders (typically the logo_folder and marquee_folder)
+	SetAssetPath(asset_path, asset_path2:="")
+	{
+		;global ;fe_exe_full_path
+		this._current_asset_path := asset_path
+
+		root := this.GetRootFolder()
+		if (FileExist(root . "\LaunchBox.exe"))	
+			return true
+		
+		if (asset_path2)
+		{
+			this._current_asset_path := asset_path2
+
+			root := this.GetRootFolder()
+			if (FileExist(root . "\LaunchBox.exe"))	
+				return true
+		}
+
+		this._current_asset_path := ""
+		return false
+	}
+
+	GetLogoFolderOrFile(romName:="")
+	{
+		;global
+
+		root := this.GetRootFolder()
+		platform := this.GetCurrentPlatform()
+
+		if (!root || !platform)
+			return ""
+
+		if (romName)
+			return root . "\Images\" . platform . "\Clear Logo\" . romName . ".png"
+		else
+			return root . "\Images\" . platform . "\Clear Logo"
+	}
+
+	GetMarqueeFolderOrFile(romName:="")
+	{
+		root := this.GetRootFolder()
+		platform := this.GetCurrentPlatform()
+
+		if (!root || !platform)
+			return ""
+
+		if (romName)
+			return root . "\Images\" . platform . "\Arcade - Marquee\" . romName . ".png"
+		else
+			return root . "\Images\" . platform . "\Arcade - Marquee"
+	}
+
+	GetCurrentPlatformXMLFile()
+	{
+		root := this.GetRootFolder()
+		platform := this.GetCurrentPlatform()
+
+		if (!root || !platform)
+			return ""
+
+		platform_xml_file := root . "\Data\Platforms\" . platform . ".xml"
+
+		return platform_xml_file
+	}
+
+	GetRegionPriorities(asset_path)
+	{
+		;global
+
+		;return cached region priorities if exists.
+		;We assume if this is populated even once in a session, 
+		;that it is always good.
+		if (this._region_priorities.Length > 0)
+			return this._region_priorities 
+		
+		;otherwise try to retrieve using the given asset path
+		this.SetAssetPath(asset_path)
+		region_priorites := ""
+		settings_xml := this.GetSettingsXMLFile()
+		if (!settings_xml)
+			return Array()
+
+		try
+		{
+			oDOM := ComObject("MSXML2.DOMDocument.6.0")
+		}
+		catch as err
+		{
+			try
+			{
+				oDOM := ComObject("MSXML2.DOMDocument.3.0")
+			}
+			catch as err
+			{
+
+				LogEntry("ERROR: XML Processing Error (MSXML2.DOMDocument.3.0): " . FormatErrorMessage(err) . "`n")
+			}				
+		}
+		oDOM.async := false
+
+		xml_data := FileRead(settings_xml)
+		oDOM.loadXML(xml_data)			
+		
+		objNodeList := oDOM.getElementsByTagName("Settings")
+		element := objNodeList.item(0).getElementsByTagName("RegionPriorities")
+		region_priorities := element.item(0).text
+		
+		if (region_priorities)
+			this._region_priorities := StrSplit(region_priorities, ",")
+
+		return this._region_priorities
+	}
+
+	GetSettingsXMLFile()
+	{
+		root := this.GetRootFolder()
+
+		if (!root)
+			return ""
+
+		settings_xml_file := root . "\Data\Settings.xml"
+
+		return settings_xml_file
+	}
+
+	GetCurrentPlatformLogoFile()
+	{
+		root := this.GetRootFolder()
+		platform := this.GetCurrentPlatform()
+
+		if (!root || !platform)
+			return ""
+
+		platform_xml_file := root . "\Images\Platforms\" . platform . "\Clear Logo\" . platform . ".png"
+
+		return platform_xml_file
+	}
+
+	GetRootFolder()
+	{
+		path := this._current_asset_path
+		root := SubStr(path,1,InStr(path, "\" ,,, -3)-1)
+
+		if (!root || !path)
+			return ""
+
+		return root
+	}
+
+	GetCurrentPlatform()
+	{
+		path := this._current_asset_path
+
+		a := InStr(path, "\",,, -2)
+		platform := SubStr(path, a+1, InStr(path, "\",,, -1)-a-1)
+
+		if (!path || !platform)
+			return ""
+
+		return platform
+	}
+}
