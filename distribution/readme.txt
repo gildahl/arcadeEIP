@@ -1,7 +1,8 @@
 ========================================
-arcadeEIP Emulator-Integration Player
+arcadeEIP 
+Arcade Emulator Integration Player
 ========================================
-Readme.txt for version, 0.3.3.3 beta
+Readme.txt for version, 0.4.0.0 beta
 ========================================
 
 QUICK START GUIDES
@@ -12,32 +13,40 @@ See, \Docs folder for comprehensive documentation and examples.
 
 SUMMARY
 =======
-arcadeEIP is a "game first" back-end for emulator-based multi-game arcade machines which enables these  
-machines to operate in an always playable walk-up mode as opposed to the kiosk style operation of most 
-front-ends. It achieves this by running games in their native attract modes and auto-switching them 
-periodically. Thus a machine using it may always be played immediately/spontaneously by simply dropping in 
-a token or pressing the start button just like a real arcade machine. Manual game selection is also supported 
-via a simple back-end overlay menu that allows selection and launch of any game without needing to manually
-exit the running game, or by easy return to a conventional front-end if desired with a single button press.
+arcadeEIP is a custom front-end and launch tool I wrote for my arcade machine over a period of 
+several years due to nothing else like it being available. The main reason for writing it was to
+allow my arcade machine to always operate in a walk-up-and-play mode as opposed to the menu-first 
+operation of most front-ends. It achieves this by always having a live game running while in standby,
+and auto-switching games periodically.  The key feature is that the game you see on the screen is
+always playable by just dropping in a token and/or pressing the start button, just like a real 
+arcade machine. Manual game selection is supported too, of course, but via a minimalistic overlay
+menu allowing fast selection and launch of any game without needing to exit the currently running
+game first--something I don't believe any other launcher or front-end supports. arcadeEIP's hotkey
+game switching ability also makes it an ideal companion to the Elgato Stream Deck, which can provide
+your arcade machine with one of the most unobtrusive front-ends possible.
 
-arcadeEIP can be used stand-alone. However, it can also integrate with LaunchBox, enabling you to use LB
-as a content manager for arcadeEIP's game lists, images, and metadata. When used in this way, arcadeEIP 
-can be used as either an alternative or supplement to BigBox as your arcade machine software. Integration
-with GameEx and other front-ends is also supported, though not as tightly.
+arcadeEIP can be used stand-alone; however, it also has integrated support for LaunchBox, enabling
+you to use LB as a content manager for its game lists, images, and metadata. When used in this way,
+arcadeEIP can also be used as either an alternative or supplement to BigBox as your arcade machine's
+front-end. Integration with other front-ends is also supported, though not as tightly.
 
-A short overview of general capabilities include live attract mode with auto-switching, an overlay style game
-selection menu with access to every game in your collection on just one game selection screen. Extensive custom 
-list/favorites/star-rating support; direct game switching via hotstring buttons with excellent support for 
-button panels like the Elgato Stream Deck; display of images (such as control panel maps) and mame 
-history/mameinfo text on pause; bookend screens; native support for parallel versions of emulators such as MAME;
-dynamic marquee with display of high scores; a custom rules engine; sidecar rom re-directs transparent to 
-front-ends; and a means of testing/launching fully configured games from the keyboard using simple command line
-instructions. 
-
-arcadeEIP does not strive to compete with front-ends.
-
-Finally, while not technically open source; the software is free and source code is available on request for
-personal hobbyist usage.  Please see license.txt for more detail.
+A short overview of arcadeEIP's fuller list of features includes:
+* Live attract mode with auto (and manual) game-switching;
+* Game list browsing and selection without exiting the currently running game first;
+* Direct game switching using hotkeys/hotstrings making it work well with virtual button panels like
+  the Elgato Stream Deck;
+* Ability to function as a full-feature launching engine for all your games;
+* Many conventional front end features including run before/after apps, support for loading custom
+  control panel profiles, etc.
+* Support for custom lists,metadata, favorites, and star-ratings;
+* Display of images such as control panel maps and mame history/mameinfo text on pause;
+* "Bookend" (i.e. startup and exit) screens;
+* Native support for multiple parallel versions of emulators such as MAME;
+* Dynamic marquee monitor support with display of high scores on the marquee;
+* A custom rules engine;
+* Sidecar rom re-directs transparent to front-ends;
+* And even a unique command-line front-end tool using simple <system> <title> vectors to run any
+  game from any system.
 
 INSTALLATION
 ============
@@ -121,5 +130,5 @@ runlast_native.bat: batch file that will run last emulator command line
 runlast_eip.bat: batch file that will re-launch last run game
 
 ========================================
-arcadeEIP 0.3.3.3 beta
+arcadeEIP 0.4.0.0 beta
 Copyright (c) 2023 by David G. Dahlstrom
