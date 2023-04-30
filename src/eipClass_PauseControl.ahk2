@@ -17,8 +17,6 @@ class pause_control_class
 	;"info" requires one or two references to Edit controls 
 	AddPage(pageType, control1, control2:="")
 	{
-		;global
-
 		pages := this._pages
 
 		this._totalPages++
@@ -73,8 +71,6 @@ class pause_control_class
 	;"hide"  - hide the currently displayed page
 	GoPage(directive)
 	{
-		;global
-
 		pages := this._pages ;the page collection
 
 		;don't need to flip pages if one page (or no pages)

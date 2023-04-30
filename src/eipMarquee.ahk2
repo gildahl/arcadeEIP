@@ -40,22 +40,22 @@ config_file := A_ScriptDir "\" cConfigFileName
 
 ;read configuration
 ;[General]
-alpha_effect := IniRead(config_file, "General", "alpha_effect", "1")
+alpha_effect := Integer(IniRead(config_file, "General", "alpha_effect", 1))
 
 ;[Marquee]
-marquee_active := IniRead(config_file, "Marquee", "active", "0")
-alpha_effect := IniRead(config_file, "Marquee", "alpha_effect", alpha_effect) ;override of alpha_effect in [General]
-marquee_monitor := IniRead(config_file, "Marquee", "monitor", "2")
+marquee_active := Integer(IniRead(config_file, "Marquee", "active", 0))
+alpha_effect := Integer(IniRead(config_file, "Marquee", "alpha_effect", alpha_effect)) ;override of alpha_effect in [General]
+marquee_monitor := Integer(IniRead(config_file, "Marquee", "monitor", 2))
 marquee_exit_key := IniRead(config_file, "Marquee", "exit_key", "^!x")
-marquee_interpolation := IniRead(config_file, "Marquee", "interpolation", "2")
-win_W := IniRead(config_file, "Marquee", "window_width", "0")
-win_H := IniRead(config_file, "Marquee", "window_height", "0")
-win_L := IniRead(config_file, "Marquee", "window_left", "0")
-win_T := IniRead(config_file, "Marquee", "window_top", "0")
-image_W := IniRead(config_file, "Marquee", "image_width", "0")
-image_H := IniRead(config_file, "Marquee", "image_height", "0")
-image_L := IniRead(config_file, "Marquee", "image_left", "0")
-image_T := IniRead(config_file, "Marquee", "image_top", "0")
+marquee_interpolation := Integer(IniRead(config_file, "Marquee", "interpolation", 2))
+win_W := Integer(IniRead(config_file, "Marquee", "window_width", 0))
+win_H := Integer(IniRead(config_file, "Marquee", "window_height", 0))
+win_L := Integer(IniRead(config_file, "Marquee", "window_left", 0))
+win_T := Integer(IniRead(config_file, "Marquee", "window_top", 0))
+image_W := Integer(IniRead(config_file, "Marquee", "image_width", 0))
+image_H := Integer(IniRead(config_file, "Marquee", "image_height", 0))
+image_L := Integer(IniRead(config_file, "Marquee", "image_left", 0))
+image_T := Integer(IniRead(config_file, "Marquee", "image_top", 0))
 
 fExit := ExitApplication.Bind()
 Hotkey marquee_exit_key, fExit
@@ -135,7 +135,7 @@ CreateBackgroundScreen()
 {
     global 
 
-    guiBackground := Gui("-Caption")
+    guiBackground := Gui("-Caption", "marqueeGui - guiBackground")
     guiBackground.BackColor := "Black"
 
     ;handle DPI modes
@@ -158,7 +158,7 @@ CreateMarqueeAlphaScreen()
 {   
     global
 
-    guiMarqueeAlpha := Gui("+LastFound -Caption")
+    guiMarqueeAlpha := Gui("+LastFound -Caption", "marqueeGui - guiMarqueeAlpha")
     guiMarqueeAlpha.BackColor := "Black"
     HwndMarqueeAlpha := guiMarqueeAlpha.Hwnd
         
@@ -192,7 +192,7 @@ ShowMarquee(image_file, system, top_score)
 
     if (!bGuiExists) ;only create a new window if we haven't previously created it
     {
-        gGui.%gui_id% := Gui("-Caption +E0x80000 +LastFound +AlwaysOnTop +ToolWindow +OwnDialogs")
+        gGui.%gui_id% := Gui("-Caption +E0x80000 +LastFound +AlwaysOnTop +ToolWindow +OwnDialogs", "marqueeGui - " gui_id)
         gGui.Gui%gui_id% := gGui.%gui_id%.Hwnd
     }
 

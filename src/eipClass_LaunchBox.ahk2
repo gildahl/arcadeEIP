@@ -27,7 +27,7 @@ class launchbox_frontend_class
 		this._current_asset_path := asset_path
 
 		root := this.GetRootFolder()
-		if (FileExist(root . "\LaunchBox.exe"))	
+		if (FileExist(root "\LaunchBox.exe"))	
 			return true
 		
 		if (asset_path2)
@@ -35,7 +35,7 @@ class launchbox_frontend_class
 			this._current_asset_path := asset_path2
 
 			root := this.GetRootFolder()
-			if (FileExist(root . "\LaunchBox.exe"))	
+			if (FileExist(root "\LaunchBox.exe"))	
 				return true
 		}
 
@@ -45,8 +45,6 @@ class launchbox_frontend_class
 
 	GetLogoFolderOrFile(romName:="")
 	{
-		;global
-
 		root := this.GetRootFolder()
 		platform := this.GetCurrentPlatform()
 
@@ -54,9 +52,9 @@ class launchbox_frontend_class
 			return ""
 
 		if (romName)
-			return root . "\Images\" . platform . "\Clear Logo\" . romName . ".png"
+			return root "\Images\" platform "\Clear Logo\" romName ".png"
 		else
-			return root . "\Images\" . platform . "\Clear Logo"
+			return root "\Images\" platform "\Clear Logo"
 	}
 
 	GetMarqueeFolderOrFile(romName:="")
@@ -68,9 +66,9 @@ class launchbox_frontend_class
 			return ""
 
 		if (romName)
-			return root . "\Images\" . platform . "\Arcade - Marquee\" . romName . ".png"
+			return root "\Images\" platform "\Arcade - Marquee\" romName ".png"
 		else
-			return root . "\Images\" . platform . "\Arcade - Marquee"
+			return root "\Images\" platform "\Arcade - Marquee"
 	}
 
 	GetCurrentPlatformXMLFile()
@@ -81,15 +79,13 @@ class launchbox_frontend_class
 		if (!root || !platform)
 			return ""
 
-		platform_xml_file := root . "\Data\Platforms\" . platform . ".xml"
+		platform_xml_file := root "\Data\Platforms\" platform ".xml"
 
 		return platform_xml_file
 	}
 
 	GetRegionPriorities(asset_path)
 	{
-		;global
-
 		;return cached region priorities if exists.
 		;We assume if this is populated even once in a session, 
 		;that it is always good.
@@ -116,7 +112,7 @@ class launchbox_frontend_class
 			catch as err
 			{
 
-				LogEntry("ERROR: XML Processing Error (MSXML2.DOMDocument.3.0): " . FormatErrorMessage(err) . "`n")
+				LogEntry("ERROR: XML Processing Error (MSXML2.DOMDocument.3.0): " FormatErrorMessage(err) "`n")
 			}				
 		}
 		oDOM.async := false
@@ -141,7 +137,7 @@ class launchbox_frontend_class
 		if (!root)
 			return ""
 
-		settings_xml_file := root . "\Data\Settings.xml"
+		settings_xml_file := root "\Data\Settings.xml"
 
 		return settings_xml_file
 	}
@@ -154,7 +150,7 @@ class launchbox_frontend_class
 		if (!root || !platform)
 			return ""
 
-		platform_xml_file := root . "\Images\Platforms\" . platform . "\Clear Logo\" . platform . ".png"
+		platform_xml_file := root "\Images\Platforms\" platform "\Clear Logo\" platform ".png"
 
 		return platform_xml_file
 	}

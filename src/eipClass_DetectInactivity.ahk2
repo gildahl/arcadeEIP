@@ -46,7 +46,6 @@ class DetectInactivity_Class
 		local id, joylist, state, fInactivityTest, numButtons
 
 		joylist := Map()
-		state := Map()
 
 		;delay must be >= 20 seconds, otherwise delay
 		;is considered set to infinity
@@ -59,7 +58,7 @@ class DetectInactivity_Class
 			{	
 				id := A_Index
 				
-				;state := new state
+				state := Map()
 				state["id"] := id
 				state["X"] := GetKeyState(id "JoyX")
 				state["Y"] := GetKeyState(id "JoyY")
@@ -88,8 +87,6 @@ class DetectInactivity_Class
 
 	Resume()
 	{
-		;c:=this._count
-		;OutputDebug resume: %c%`n
 		;only resume if all other suspensions have been resumed
 		this._count--
 		if (this._count > 0)
@@ -131,12 +128,7 @@ class DetectInactivity_Class
 
 	ForceAction()
 	{
-		;this._last_idle_time := A_TimeIdlePhysical - this._delay * 1000 * 2
 		this._force_action := true
-
-		;indicate we will be manually exiting to prevent autoswitch sequence
-		;from continuing if the user subsequently performs a manual exit.
-		;g_exit_code := 1
 	}
 
 	;Obtain joystick state
@@ -157,14 +149,9 @@ class DetectInactivity_Class
 		for n, state in joylist
 		{
 			id := state["id"]
-			;%id%JoyX := GetKeyState(id "JoyX")
-			;%id%JoyY := GetKeyState(id "JoyY")
 
 			JoyX[id] := GetKeyState(id "JoyX")
 			JoyY[id] := GetKeyState(id "JoyY")
-
-			;OutputDebug "JoyX: " JoyX[id] " state[X]: " state["X"] "`n"
-			;OutputDebug "JoyY: " JoyY[id] " state[Y]: " state["Y"] "`n`n"
 
 			if (JoyX[id] - state["X"] > 20 && horiz)
 				return "r"
@@ -195,18 +182,15 @@ class DetectInactivity_Class
 		;by the press of a keyboard or mouse button.
 		if (A_TimeIdlePhysical < 1000)
 		{
-			;SoundBeep
 			this._last_idle_time := A_TimeIdlePhysical
 
-			;SoundBeep
 			;used to monitor activity by external frequency monitor
 			this._action_count++ 
-			;lastIdleTime := A_TimeIdlePhysical
 
 			if (this._unmute)
 				oMasterSound.On() ;force sound unmute
 
-			if (idle_log)
+			if (gCfg.idle_log)
 			{
 				t := FormatTime(A_Now, "hh:mm:ss")
 				logEntry := "IdleInterrupted (key/mouse): [" . t . "]"			
@@ -217,15 +201,11 @@ class DetectInactivity_Class
 		{
 			id := state["id"]
 
-			;x := %id%JoyX := GetKeyState(id "JoyX")
-			;y := %id%JoyY := GetKeyState(id "JoyY")
 			x := JoyX[id] := GetKeyState(id "JoyX")
 			y := JoyY[id] := GetKeyState(id "JoyY")
 		
-			;if ((Abs(%id%JoyX - state["X"]) > 20) || Abs(%id%JoyY - state["Y"]) > 20)
 			if ((Abs(JoyX[id] - state["X"]) > 20) || Abs(JoyY[id] - state["Y"]) > 20)
 			{
-				;SoundBeep
 				this._action_count++
 				this._last_idle_time := A_TimeIdlePhysical
 
@@ -235,50 +215,30 @@ class DetectInactivity_Class
 					oMasterSound.On() ;force sound unmute
 				}
 				
-				if (idle_log)
+				if (gCfg.idle_log)
 				{
 					joy_test := "X:" . x .  "  Y:" . y 
 					
 					t := FormatTime(A_Now, "hh:mm:ss")
-					logEntry := "IdleInterrupted (joy): [" . t . "] JoyTest: " . joy_test
+					logEntry := "IdleInterrupted (joy): [" t "] JoyTest: " joy_test
 				}
 				break
 			}
 		}
 
-		if (idle_log && logEntry)
+		if (gCfg.idle_log && logEntry)
 		{
 			IdleLogEntry(logEntry)
 			logEntry := ""
 		}
 
-		;If there was keyboard/mouse activity since the last check, reset the last idle time
-		;if (A_TimeIdlePhysical < this._last_idle_time)
-		;{	
-		;	this._last_idle_time := A_TimeIdlePhysical
-
-			;if (this._unmute)
-			;	oMasterSound.On() ;force sound unmute
-
-			;if (idle_log)
-			;{
-			;	FormatTime, t , A_Now, hh:mm:ss
-			;	logEntry := "IdleInterrupted (key/mouse): [" . t . "]"			
-			;}
-		;}
-
-		if (idle_log && logEntry)
+		if (gCfg.idle_log && logEntry)
 			IdleLogEntry(logEntry)
 
 		;The delay time has been reached, so perform the action to be done
 		timeIdlePhysical := A_TimeIdlePhysical
 		if (timeIdlePhysical - this._last_idle_time > this._delay * 1000 || this._force_action) 
 		{
-			;fa := this._force_action
-			;OutputDebug fa: %fa%`n
-			;SoundBeep
-			;OutputDebug idle: %A_TimeIdlePhysical% 
-			
 			this._force_action := false
 			this._inactivity_action()
 		}
@@ -294,9 +254,10 @@ class DetectInactivity_Class
 	_inactivity_action()
 	{
 		this._last_idle_time := A_TimeIdlePhysical 
-		;SoundBeep
-		;oSchedule.Continue()
+
+		Critical "On"
 		this._callback.Call()	;normally, the AttractSwitch() function
+		Critical "Off"
 
 		return
 	}

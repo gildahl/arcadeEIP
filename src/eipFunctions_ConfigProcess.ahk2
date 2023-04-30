@@ -13,17 +13,17 @@ ReadConfig()
         return false
 
     ;[General]
-    gCfg.show_license := IniRead(config_file, "General", "show_license", "1")
-    gCfg.idle_log := IniRead(config_file, "General", "idle_log", "0")
+    gCfg.show_license := Integer(IniRead(config_file, "General", "show_license", 1))
+    gCfg.idle_log := Integer(IniRead(config_file, "General", "idle_log", 0))
     gCfg.seed_rom := IniRead(config_file, "General", "seed_rom", "mame galaga.zip")
-    gCfg.alpha_effect := IniRead(config_file, "General", "alpha_effect", "1")
+    gCfg.alpha_effect := Integer(IniRead(config_file, "General", "alpha_effect", 1))
     gCfg.hotstring_prefix := IniRead(config_file, "General", "hotstring_prefix", "@!@")
-    gCfg.sound_device := IniRead(config_file, "General", "sound_device", "1")
-    gCfg.sync_volume := IniRead(config_file, "General", "sync_volume", "0")
+    gCfg.sound_device := Integer(IniRead(config_file, "General", "sound_device", 1))
+    gCfg.sync_volume := Integer(IniRead(config_file, "General", "sync_volume", 0))
     
     ;Fast delays using/caching meta names on startup
     ;Best if only or primaily using from a front end that supplies rom names
-    gCfg.fast_load := IniRead(config_file, "General", "fast_load", "0")
+    gCfg.fast_load := Integer(IniRead(config_file, "General", "fast_load", 0))
 
     ;debug_mode is turned on by setting debug= to a particular front end key (fe_key)
     ;this ensures debugging is done with a particular front-end in context.
@@ -33,28 +33,28 @@ ReadConfig()
     
     if (gCfg.debug_mode)
     {
-        use_log := gCfg.status_beeps := true
+        use_log := gCfg.status_beeps := 1
     }
     else
     {
-        gCfg.status_beeps := IniRead(config_file, "General", "status_beeps", "0")
-        use_log := IniRead(config_file, "General", "use_log", "1")
+        gCfg.status_beeps := Integer(IniRead(config_file, "General", "status_beeps", 0))
+        use_log := Integer(IniRead(config_file, "General", "use_log", 1))
     }
 
     ;[Marquee]
-    gCfg.marquee_active := IniRead(config_file, "Marquee", "active", "0")
-    gCfg.marquee_autostart := IniRead(config_file, "Marquee", "autostart", "0")
-    gCfg.marquee_autoexit := IniRead(config_file, "Marquee", "autoexit", "0")
+    gCfg.marquee_active := Integer(IniRead(config_file, "Marquee", "active", 0))
+    gCfg.marquee_autostart := Integer(IniRead(config_file, "Marquee", "autostart", 0))
+    gCfg.marquee_autoexit := Integer(IniRead(config_file, "Marquee", "autoexit", 0))
 
     ;[Key_Map]
     ;All [Key_Map] values now get read in bulk immediately after each Vector: since
     ;values can change depending on the system that is running.
    
     ;[Picker_Preferences]
-    gCfg.magic_delay := IniRead(config_file, "Picker_Preferences", "magic_delay", "2000") ;can be overridden in [Front_End] section
-    gCfg.kiosk_mode := IniRead(config_file, "Picker_Preferences", "kiosk_mode", "0") ;can be overridden in [Front_End] section
+    gCfg.magic_delay := Integer(IniRead(config_file, "Picker_Preferences", "magic_delay", 2000)) ;can be overridden in [Front_End] section
+    gCfg.kiosk_mode := Integer(IniRead(config_file, "Picker_Preferences", "kiosk_mode", 0)) ;can be overridden in [Front_End] section
 
-    gCfg.mark_picks := IniRead(config_file, "Picker_Preferences", "mark_picks", "1")
+    gCfg.mark_picks := Integer(IniRead(config_file, "Picker_Preferences", "mark_picks", 1))
     gCfg.joy_vert := IniRead(config_file, "Picker_Preferences", "joy_vert", "all")
     gCfg.joy_horiz := IniRead(config_file, "Picker_Preferences", "joy_horiz", "all")
     gCfg.mouse_vert := IniRead(config_file, "Picker_Preferences", "mouse_vert", "off")
@@ -68,22 +68,22 @@ ReadConfig()
     gCfg.lst_max_rows := 100   ;IniRead, lst_max_rows, %config_file%, Picker_Preferences, top_rows, 12 ;minimum value 5
     gCfg.lst_max_rowsb := 100  ;IniRead, lst_max_rowsb, %config_file%, Picker_Preferences, bottom_rows, 20 ;minimum value 5
     gCfg.lst_font_type := IniRead(config_file, "Picker_Preferences", "font_type", "Tahoma")
-    gCfg.lst_font_size := IniRead(config_file, "Picker_Preferences", "list_font_size", "14")
-    gCfg.lst_list_margin := IniRead(config_file, "Picker_Preferences", "list_margin", "0")
-    gCfg.lst_game_font_size := IniRead(config_file, "Picker_Preferences", "game_font_size", "40")
-    gCfg.lst_sys_font_size := IniRead(config_file, "Picker_Preferences", "system_font_size", "30")
-    gCfg.lst_game_name_ratio := IniRead(config_file, "Picker_Preferences", "game_name_ratio", "0.4")
+    gCfg.lst_font_size := Integer(IniRead(config_file, "Picker_Preferences", "list_font_size", 14))
+    gCfg.lst_list_margin := Integer(IniRead(config_file, "Picker_Preferences", "list_margin", 0))
+    gCfg.lst_game_font_size := Integer(IniRead(config_file, "Picker_Preferences", "game_font_size", 40))
+    gCfg.lst_sys_font_size := Integer(IniRead(config_file, "Picker_Preferences", "system_font_size", 30))
+    gCfg.lst_game_name_ratio := Float(IniRead(config_file, "Picker_Preferences", "game_name_ratio", 0.4))
     gCfg.lst_default_list := IniRead(config_file, "Picker_Preferences", "default_list", "picks")
     gCfg.lst_hide_systems := IniRead(config_file, "Picker_Preferences", "hide_systems", A_Space)
-    gCfg.clean_lists := IniRead(config_file, "Picker_Preferences", "clean_lists", "0")
+    gCfg.clean_lists := Integer(IniRead(config_file, "Picker_Preferences", "clean_lists", 0))
 
     ;[Auto_Switch]
     gCfg.attract_folder := IniRead(config_file, "Auto_Switch", "folder", "Lists\autoswitch")  ;name of folder
-    gCfg.attract_delay := IniRead(config_file, "Auto_Switch", "delay", "180")        ;seconds of inactivity
-    gCfg.attract_random := IniRead(config_file, "Auto_Switch", "random", "0")        ;1 or 0 (random/sequential)
-    gCfg.attract_mute := IniRead(config_file, "Auto_Switch", "mute", "0") ;0 off, 1 on, >1 unmute delay after game start
-    gCfg.attract_auto := IniRead(config_file, "Auto_Switch", "auto", "1")
-    gCfg.attract_timer := IniRead(config_file, "Auto_Switch", "timer", "5")
+    gCfg.attract_delay := Integer(IniRead(config_file, "Auto_Switch", "delay", 180))        ;seconds of inactivity
+    gCfg.attract_random := Integer(IniRead(config_file, "Auto_Switch", "random", 0))        ;1 or 0 (random/sequential)
+    gCfg.attract_mute := Integer(IniRead(config_file, "Auto_Switch", "mute", 0)) ;0 off, 1 on, >1 unmute delay after game start
+    gCfg.attract_auto := Integer(IniRead(config_file, "Auto_Switch", "auto", 1))
+    gCfg.attract_timer := IniRead(config_file, "Auto_Switch", "timer", "5") ;This may be a text value
 
     ;[Global_Assets]
     gCfg.logo_folder := IniRead(config_file, "GlobalAssets", "logo_folder", ".\Assets\[global_asset_name]\Logo\Rom")
@@ -214,13 +214,13 @@ ProcessIni()
     ;IniRead, fe_exe_full_path, %config_file%, %config_section%, exe_full_path, %A_Space%
     gCfg.start_screen := IniRead(config_file, config_section, "start_screen", "0,Black")
     gCfg.exit_screen := IniRead(config_file, config_section, "exit_screen", "0,Black")
-    gCfg.hide_cursor := IniRead(config_file, config_section, "hide_cursor", "0")
+    gCfg.hide_cursor := Integer(IniRead(config_file, config_section, "hide_cursor", 0))
     gCfg.fe_run_apps := IniRead(config_file, config_section, "run_apps", A_Space)
     gCfg.show_on_pause := IniRead(config_file, config_section, "show_on_pause", A_Space)
 
     ;Overrides
-    gCfg.magic_delay := IniRead(config_file, config_section, "magic_delay",  gCfg.magic_delay) ;overrides setting in [Picker_Preferences]
-    gCfg.kiosk_mode := IniRead(config_file, config_section, "kiosk_mode",  gCfg.kiosk_mode) ;overrides setting in [Picker_Preferences]
+    gCfg.magic_delay := Integer(IniRead(config_file, config_section, "magic_delay",  gCfg.magic_delay)) ;overrides setting in [Picker_Preferences]
+    gCfg.kiosk_mode := Integer(IniRead(config_file, config_section, "kiosk_mode",  gCfg.kiosk_mode)) ;overrides setting in [Picker_Preferences]
 
     ;These overrides are not yet tested...
     gCfg.pause_key := IniRead(config_file, config_section, "pause_key",  gCfg.pause_key) ;overrides setting in [Key_Map]
@@ -258,13 +258,13 @@ ProcessIni()
             gCfg.fe_exe_full_path := IniRead(config_file, config_section, "exe_full_path", A_Space)
             gCfg.start_screen := IniRead(config_file, config_section, "start_screen", "-1,Black")
             gCfg.exit_screen := IniRead(config_file, config_section, "exit_screen", "-1,Black")
-            gCfg.hide_curson := IniRead(config_file, config_section, "hide_cursor", A_Space)
+            gCfg.hide_cursor := Integer(IniRead(config_file, config_section, "hide_cursor", 0))
             gCfg.fe_run_apps := IniRead(config_file, config_section, "run_apps", A_Space)
             gCfg.show_on_pause := IniRead(config_file, config_section, "show_on_pause", A_Space)
 
             ;Overrides
-            gCfg.magic_delay := IniRead(config_file, config_section, "magic_delay", gCfg.magic_delay) ;overrides setting in [Picker_Preferences]
-            gCfg.kiosk_mode := IniRead(config_file, config_section, "kiosk_mode", gCfg.kiosk_mode) ;overrides setting in [Picker_Preferences]
+            gCfg.magic_delay := Integer(IniRead(config_file, config_section, "magic_delay", gCfg.magic_delay)) ;overrides setting in [Picker_Preferences]
+            gCfg.kiosk_mode := Integer(IniRead(config_file, config_section, "kiosk_mode", gCfg.kiosk_mode)) ;overrides setting in [Picker_Preferences]
             
             ;These overrides are not yet tested...
             gCfg.pause_key := IniRead(config_file, config_section, "pause_key", gCfg.pause_key) ;overrides setting in [Key_Map]

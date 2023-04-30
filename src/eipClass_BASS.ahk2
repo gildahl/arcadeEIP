@@ -6,7 +6,6 @@
 ;Some documentation can be found here:
 ;https://www.autohotkey.com/boards/viewtopic.php?t=38734
 ;API:  http://www.un4seen.com/doc/
-
 class BASS_class
 {
 	_lib     := A_ScriptDir . "\bass.dll"
@@ -132,12 +131,30 @@ class BASS_class
 		hMedia                 := DLLCall(this._samp, "Int", 0, "AStr", fSoundFile, "Int64", 0, "Uint", 0, "Uint", 1, "Uint", 0)
 		mederr                 := DllCall(this._err)
 		this._channel_edit_off := DLLCall(this._chan, "Int", hMedia, "Uint", 0)
+
+		fSoundFile:= A_ScriptDir . "\Resources\Sound\error.wav"
+		hMedia                 := DLLCall(this._samp, "Int", 0, "AStr", fSoundFile, "Int64", 0, "Uint", 0, "Uint", 1, "Uint", 0)
+		mederr                 := DllCall(this._err)
+		this._channel_error    := DLLCall(this._chan, "Int", hMedia, "Uint", 0)
+
+		fSoundFile:= A_ScriptDir . "\Resources\Sound\menu.wav"
+		hMedia                 := DLLCall(this._samp, "Int", 0, "AStr", fSoundFile, "Int64", 0, "Uint", 0, "Uint", 1, "Uint", 0)
+		mederr                 := DllCall(this._err)
+		this._channel_menu    := DLLCall(this._chan, "Int", hMedia, "Uint", 0)
 		
 		;OutputDebug initerr:%initerr%, mederr:%mederr%, start:%BASS_start%, hMedia:%hMedia%, channel:%channel%, samp:%samp%`n
 	}
 
 	Play(soundToPlay)
 	{
+		Switch soundToPlay
+		{
+			case "error":
+				BASS_ChannelPlay := DllCall(this._play, "UInt", this._channel_error, "Int", 1)
+			case "menu":
+				BASS_ChannelPlay := DllCall(this._play, "UInt", this._channel_menu, "Int", 1)
+		}
+
 		if (this._active == 0 || !g_guiselect_loaded || !g_guiselect_visible)
 			return
 

@@ -7,10 +7,10 @@ Update Log
 
 0.4.0.0 Major refactor and port to AHK 2.
 * Ported arcadeEIP from AHK 1.1 to 2.0, while also performing some major
-  refactoring, regression testing, and bug fixing. No new features, nor
-  any changes made to configuration, so this should work as a drop in 
-  update.
-* Released source code to github. 
+  refactoring, regression testing, and bug fixing. Should remain fully
+  compatible with prior version, so this should work as a drop in update.
+* Released source code to GitHub (https://github.com/gildahl/arcadeEIP).
+* Removed "change_root" rule from default MAME configuration.
 
 0.3.3.3 Small feature update
 * Added discrete quit_key= option to [Key Map]. Same as exit_key except it is

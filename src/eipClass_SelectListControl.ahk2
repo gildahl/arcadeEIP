@@ -2,7 +2,6 @@
 ; © 2023 David G. Dahlstrom
 ; File: eipClass_SelectListControl.ahk2
 
-;Class implementing the game selection screen in arcadeEIP.
 ;Some general notes:
 ;1. Three windows listView controls are used. Two for the verticaly scrolling game list
 ;   (one above the central game name bar and one below), and one for the horizontally
@@ -31,6 +30,32 @@
 ;   to the top left of the selected game name, and a rating icon to the top right of the 
 ;   selected game name.
 
+;---------------------------------------------------------------------------------
+; ;Important list state, current state, and LV list item settings
+;---------------------------------------------------------------------------------
+;this._state[base_pl]["sublist"]   ;which sublist is currently selected (0=base or 1=picks)
+;this._state[pl]["selectedItem"]   ;== this._current_game == column 2 in LV list
+;this._state[pl]["selectedObject"] ;== this._current_object == column 3 in LV list
+
+;this._state[pl]["selectedRow"]    ;== this._current_row)
+;this._state[pl]["count"]          ;== this._current_count)		
+
+;this._state[pl]["maxRows"]
+;this._state[pl]["maxRowsB"]
+
+;this._current_playlist ;current playlist selected (could be base or pick)
+
+;LV_GetText(selectedText, selectedRow, 1)    ;proper name of the item
+;LV_GetText(selectedItem, selectedRow, 2)    ;not currently used
+;LV_GetText(selectedObject, selectedRow, 3)  ;ref to object containing extended game info
+
+;Fields in ;this._current_object[] and this._playlists[pl]["playlist"][gm][]
+;["parent"], ["vector"], ["rom_category"], ["rom_release"], ["rom_players"]
+;["rom_year"], ["rom_publisher"], ["rom_developer"], ["rom_favorite"], ["favorite_icon_file"]
+;["sys_key"], ["rom_spec"], ["proper_name"], ["logo_file"], ["system_logo_file"], ["parent"]
+;---------------------------------------------------------------------------------	
+
+;Class implementing the game selection screen in arcadeEIP.
 class select_list_control_class
 {	
 	_current_object := Map()
@@ -85,10 +110,6 @@ class select_list_control_class
 
 		this._CreatePolygonOverlay()
 		this._CreateBaseControl()
-		;this._AddEmulatorItems()
-
-		;if (!g_guiselect_visible)
-		;	this.Hide()
 
 		this._editMode := 0
 	}
@@ -104,6 +125,7 @@ class select_list_control_class
 		this._AddEmulatorItems()
 	}
 
+	;Read in prior states from state file
 	_deserializeState()
 	{
 		global
@@ -201,7 +223,7 @@ class select_list_control_class
 				break
 		}
 
-		LogEntry("INFO: Deserialized " . idx . " states from .state file.`n")
+		LogEntry("INFO: Deserialized " idx " states from .state file.`n")
 	}
 
 	_serializeState()
@@ -256,20 +278,20 @@ class select_list_control_class
 
 		fState.Close()
 
-		LogEntry("INFO: Serialized " . nVal . " states to .state file.`n")
+		LogEntry("INFO: Serialized " nVal " states to .state file.`n")
 	}
 
-	Init(pl)
+	Init(this_pl)
 	{
 		global
-		local orig_object, orig_pl, romFile
+		local orig_object, orig_pl
 
 		;This line is for cases where the function is called
 		;from outside the default gui process (like RefreshAttractList())
 		orig_object := this._current_object
 
 		orig_pl := this._current_playlist 
-		this._current_playlist := pl	
+		this._current_playlist := this_pl	
 		this._initializing := true	
 
 		oBASS.Active := 0 ;suppress scroll sound effects
@@ -282,7 +304,7 @@ class select_list_control_class
 		this._current_playlist := orig_pl
 		this._current_object := orig_object
 
-		this.UpdateMetaTags(pl)
+		this.UpdateMetaTags(this_pl)
 
 		return
 	}
@@ -336,9 +358,6 @@ class select_list_control_class
 
 	_SwitchPlaylist(last_playlist)
 	{ 
-		;global
-		;local cpl
-		
 		this.HidePlaylist(last_playlist)
 		this.ShowPlaylist(this._current_playlist)
 
@@ -470,6 +489,7 @@ class select_list_control_class
 	_ShowMeta()
 	{
 		global
+
 		gGui.guiSelect_RomNameLabel.Visible := true
 		gGui.guiSelect_MetaLabelRight.Visible := true
 		gGui.guiSelect_MetaLabelLeft.Visible := true
@@ -481,6 +501,7 @@ class select_list_control_class
 	_HideMeta()
 	{
 		global
+
 		gGui.guiSelect_RomNameLabel.Visible := false
 		gGui.guiSelect_MetaLabelRight.Visible := false
 		gGui.guiSelect_MetaLabelLeft.Visible := false
@@ -495,7 +516,7 @@ class select_list_control_class
 
 		if (g_guiselect_loaded)
 		{
-			try	gGui.guiSelect_GameName%pl%.Visible := false
+			try gGui.guiSelect_GameName%pl%.Visible := false
 			try	gGui.guiSelect_ListViewPlaylist.Visible := false
 			try	gGui.guiSelect_ListViewTop%pl%.Visible := false
 			try	gGui.guiSelect_ListViewBottom%pl%.Visible := false
@@ -680,7 +701,7 @@ class select_list_control_class
 
 			if (oEmulators.Emulators[emulator.sys_key].use_catver == "1")
 			{
-				catver_file := oEmulators.Emulators[emulator.sys_key].mameinfo_folder . "\catver.ini"
+				catver_file := oEmulators.Emulators[emulator.sys_key].mameinfo_folder "\catver.ini"
 
 				if (SubStr(catver_file, 1, 1) == ".")
 					catver_file := A_ScriptDir . SubStr(catver_file, 2)
@@ -698,7 +719,7 @@ class select_list_control_class
 					searchPath := romPath . "\" . searchRomName . "." . romExt					
 					sep := RepeatValue("=", StrLen(searchPath))
 
-					gGui.guiSelect_ProgText.Text := "Reading games for system: " . initSysText . " (" . initSysText2 . ") from [" . searchPath . "]"
+					gGui.guiSelect_ProgText.Text := "Reading games for system: " initSysText " (" initSysText2 ") from [" searchPath "]"
 					
 					Loop Files searchPath
 					{
@@ -789,8 +810,8 @@ class select_list_control_class
 								this._playlists[pl_idx]["playlist"][gm_idx]["favorite_icon"] := favorite_off_icon_file
 							}
 
-							ratingsPath := A_ScriptDir . "\Assets\" . assetspec . "\Settings"
-							ratingsFile := ratingsPath . "\ratings.ini"
+							ratingsPath := A_ScriptDir "\Assets\" assetspec "\Settings"
+							ratingsFile := ratingsPath "\ratings.ini"
 					
 							if (FileExist(ratingsFile))
 							{
@@ -844,7 +865,7 @@ class select_list_control_class
 
 							for n, customList in oLists
 							{
-								filename := lists_folder . "\" . customList.list_key . "\" . emulator.sys_key . " " . romFile . ".txt"	
+								filename := lists_folder "\" customList.list_key "\" emulator.sys_key " " romFile ".txt"	
 								
 								if (FileExist(filename))
 								{
@@ -857,14 +878,14 @@ class select_list_control_class
 									cl_idx_map.%lk%++
 
 									;While we're here, check if this is a favorite in this list's local favorites folder
-									filename := favorites_folder . "\" . customList.list_key . "\" . emulator.sys_key . " " . romFile . ".txt"
+									filename := favorites_folder "\" customList.list_key "\" emulator.sys_key " " romFile ".txt"
 									if (FileExist(filename))
 										isFav := true							
 								}
 							}
 
 							;Add a playlist stub to Master Favorites list if it is a favorite
-							filename := favorites_folder . "\" . emulator.sys_key . "\" . emulator.sys_key . " " . romFile . ".txt"
+							filename := favorites_folder "\" emulator.sys_key "\" emulator.sys_key " " romFile ".txt"
 							if (FileExist(filename) || isFav)
 							{
 								this._playlists[fav_idx]["playlist"][fv_idx] := this._playlists[pl_idx]["playlist"][gm_idx]
@@ -943,9 +964,9 @@ class select_list_control_class
 				gGui.guiSelect_ListViewBottom%n%.Add(, cleanedProperName, , ObjPtrAddRef(s_item))
 
 				if (n != fav_idx)
-					filename := favorites_folder . "\" . sysKey . "\" . vector . ".txt"
+					filename := favorites_folder "\" sysKey "\" vector ".txt"
 				else
-					filename := favorites_folder . "\" . favorites_listname . "\" . vector . ".txt"
+					filename := favorites_folder "\" favorites_listname "\" vector ".txt"
 					
 				;use [system] clean_lists setting if available, otherwise use global
 				if (FileExist(filename))
@@ -1062,11 +1083,16 @@ class select_list_control_class
 		g_guiselect_loaded := true
 
 		picker_load_timer := (A_TickCount - picker_load_timer)//1000
-		LogEntry("INFO: Completed loading picker menu (" . picker_load_timer . " seconds).`n")
+		LogEntry("INFO: Completed loading picker menu (" picker_load_timer " seconds).`n")
 
-		this.Show() ;Just changes which controls are visible from progress bar to interactive
 		if (g_guiselect_visible)
-			EnableControls("guiSelect")
+		{
+			this.Show() ;Just changes which controls are visible from progress bar to interactive
+			ControlActivationState.EnableSelectControls()
+		}
+		else
+			HideControls("guiSelect")
+			;EnableControls("guiSelect")
 
 		return
 	}
@@ -1111,15 +1137,15 @@ class select_list_control_class
 		;Default (1) places the star on the "picks" sublists.
 		if (gCfg.mark_picks == 1)
 		{
-			IL_Add(ImageListID, A_ScriptDir . "\Resources\Icons\empty.ico")
-			IL_Add(ImageListID, A_ScriptDir . "\Resources\Icons\star.ico")
+			IL_Add(ImageListID, A_ScriptDir "\Resources\Icons\empty.ico")
+			IL_Add(ImageListID, A_ScriptDir "\Resources\Icons\star.ico")
 		}
 		else 
 		{
-			IL_Add(ImageListID, A_ScriptDir . "\Resources\Icons\star.ico")
-			IL_Add(ImageListID, A_ScriptDir . "\Resources\Icons\empty.ico")
+			IL_Add(ImageListID, A_ScriptDir "\Resources\Icons\star.ico")
+			IL_Add(ImageListID, A_ScriptDir "\Resources\Icons\empty.ico")
 		}
-		IL_Add(ImageListID, A_ScriptDir . "\Resources\Icons\edit.ico")
+		IL_Add(ImageListID, A_ScriptDir "\Resources\Icons\edit.ico")
 
 		c := this._playlists.Count
         
@@ -1134,6 +1160,7 @@ class select_list_control_class
 	_CreatePolygonOverlay()
 	{		
 		global
+
 		leftMargin := this._systemLabelWidth
 		verticalCenter := this._bottombar_ypos + this._barHeight + this._barHeight/4
 		barTop := this._bottombar_ypos + this._barHeight
@@ -1481,7 +1508,7 @@ class select_list_control_class
     		y := nScreenHeight - label_posH * 3
 
 			gGui.guiSelect_PickerLicenseBanner := guiSelect.AddText("Hidden BackgroundTrans x0 y" . y . " w" . nScreenWidth . " h" . label_posH . " cWhite Center +0x200 vPickerLicenseBanner")
-			gGui.guiSelect_PickerLicenseBanner.Text := g_license_Text
+			gGui.guiSelect_PickerLicenseBanner.Text := license_Text
 		}
 			
 		;Create bottom bar playlist scroller
@@ -1629,6 +1656,7 @@ class select_list_control_class
 	UpdateAttractListView()
 	{
 		global
+
 		;confirm that we're in auto mode, otherwise exit
 		if (gCfg.attract_auto < 1)
 			return
@@ -1672,7 +1700,7 @@ class select_list_control_class
 			vector := item["vector"] 
 
 			;skip if the rom is in the ..\suppress folder
-			test_filename := gCfg.attract_folder . "\suppress\" . vector . ".txt"
+			test_filename := gCfg.attract_folder "\suppress\" vector ".txt"
 			if (FileExist(test_filename))
 				continue
 
@@ -1719,7 +1747,7 @@ class select_list_control_class
 	SetEmptyListLabel(ct)
 	{
 		global
-		;Gui, guiSelect:Default			
+			
 		fsz := this._gameNameFontSize
 		fnt := this._font
 		lbl := "Empty"
@@ -1762,7 +1790,7 @@ class select_list_control_class
 				;Delete from a custom list
 				if (this._current_target && this._current_target == pl)
 				{
-					DisableControls("guiSelect")
+					ControlActivationState.DisableSelectControls()
 
 					gGui.guiSelect_ActionProgress.Value := 0
 					gGui.guiSelect_ActionProgress.Visible := true
@@ -1783,7 +1811,7 @@ class select_list_control_class
 						;to compare with
 						if (!sourceValue)
 						{
-							EnableControls("guiSelect")
+							ControlActivationState.EnableSelectControls()
 							return
 						}
 					}				
@@ -1819,7 +1847,7 @@ class select_list_control_class
 								continue
 						}
 
-						filename := lists_folder . "\" . listName . "\" . vector . ".txt"				
+						filename := lists_folder "\" listName "\" vector ".txt"				
 
 						;if this is the attract playlist, perform special behavior
 						al := this._getAttractPlaylistID()
@@ -1832,8 +1860,8 @@ class select_list_control_class
 								if (cmd == "tog")
 								{
 									;move vector file to the suppress folder
-									DirCreate lists_folder . "\" . listName . "\suppress"  ;in case it doesn't exist
-									filedest := lists_folder . "\" . listName . "\suppress\" . vector . ".txt"
+									DirCreate lists_folder "\" listName "\suppress"  ;in case it doesn't exist
+									filedest := lists_folder "\" listName "\suppress\" vector ".txt"
 									FileMove filename, filedest
 								}
 								Else
@@ -1850,7 +1878,7 @@ class select_list_control_class
 
 						;delete any corresponding files from favorites folder associated with this list
 						sysKey := this._playlists[ct]["name"]
-						filename := favorites_folder . "\" . sysKey . "\" . vector . ".txt"
+						filename := favorites_folder "\" sysKey "\" vector ".txt"
 						try
 							FileDelete filename
 
@@ -1914,7 +1942,7 @@ class select_list_control_class
 					Sleep 250
 					gGui.guiSelect_ActionProgress.Visible := false
 
-					EnableControls("guiSelect")
+					ControlActivationState.EnableSelectControls()
 
 					return
 				}
@@ -1922,7 +1950,14 @@ class select_list_control_class
 				;Add games from a source to a custom list
 				If (this._current_target && this._current_target != pl)
 				{
-					DisableControls("guiSelect")
+					
+					try guiBackground.Opt("-AlwaysOnTop")
+					try guiSelect.Opt("-AlwaysOnTop")
+					try guiAlpha.Opt("-AlwaysOnTop")
+					try guiExit.Opt("-AlwaysOnTop")
+					try guiStart.Opt("-AlwaysOnTop")
+					
+					ControlActivationState.DisableSelectControls()
 
 					oBASS.Play("add")
 
@@ -1966,7 +2001,7 @@ class select_list_control_class
 					Sleep 250
 					gGui.guiSelect_ActionProgress.Visible := false
 
-					EnableControls("guiSelect")
+					ControlActivationState.EnableSelectControls()
 
 					return
 				}
@@ -1974,7 +2009,7 @@ class select_list_control_class
 				;Delete from favorites
 				else if (pl > this._maxSystems)
 				{
-					DisableControls("guiSelect")
+					ControlActivationState.DisableSelectControls()
 
 					gGui.guiSelect_FavoritesProgress.Value := 0
 					gGui.guiSelect_FavoritesProgress.Visible := true
@@ -1994,7 +2029,7 @@ class select_list_control_class
 						;to compare with
 						if (!sourceValue)
 						{
-							EnableControls("guiSelect")
+							ControlActivationState.EnableSelectControls()
 							return
 						}
 					}		
@@ -2034,7 +2069,7 @@ class select_list_control_class
 								continue
 						}
 
-						filename := favorites_folder . "\" . sysKey . "\" . vector . ".txt"
+						filename := favorites_folder "\" sysKey "\" vector ".txt"
 						FileDelete filename
 
 						if (sysKey != favorites_listname)		
@@ -2088,13 +2123,14 @@ class select_list_control_class
 					Sleep 250
 					gGui.guiSelect_FavoritesProgress.Visible := false
 
-					EnableControls("guiSelect")
+					ControlActivationState.EnableSelectControls()
 				}		
 
 				;add to favorites
 				if (pl <= this._maxSystems)
 				{
-					DisableControls("guiSelect")
+					;Block interruptions by other hotkey actions
+					ControlActivationState.DisableSelectControls()
 
 					oBASS.Play("add")
 
@@ -2138,7 +2174,7 @@ class select_list_control_class
 					Sleep 250
 					gGui.guiSelect_FavoritesProgress.Visible := false
 
-					EnableControls("guiSelect")
+					ControlActivationState.EnableSelectControls()
 				}	
 			
 			Case "targ":
@@ -2271,8 +2307,8 @@ class select_list_control_class
 				sysspec := SplitVector(v)["sys_key"]
 				assetspec := oEmulators.Emulators[sysspec].asset_name
 
-				favoritesPath := A_ScriptDir . "\Assets\" . assetspec . "\Settings"
-				favoritesFile := favoritesPath . "\favorites.ini"
+				favoritesPath := A_ScriptDir "\Assets\" assetspec "\Settings"
+				favoritesFile := favoritesPath "\favorites.ini"
 		
 				if (!FileExist(favoritesFile))
 					DirCreate(favoritesPath)
@@ -2319,8 +2355,8 @@ class select_list_control_class
 				sysspec := SplitVector(v)["sys_key"]
 				assetspec := oEmulators.Emulators[sysspec].asset_name
 
-				ratingsPath := A_ScriptDir . "\Assets\" . assetspec . "\Settings"
-				ratingsFile := ratingsPath . "\ratings.ini"
+				ratingsPath := A_ScriptDir "\Assets\" assetspec "\Settings"
+				ratingsFile := ratingsPath "\ratings.ini"
 		
 				if (!FileExist(ratingsFile))
 					DirCreate(ratingsPath)
@@ -2362,7 +2398,6 @@ class select_list_control_class
 		gGui.guiPlusLeft.Hide()
 		gGui.guiPlusRight.Hide()
 
-		;GuiControl,,ModeName,
 		gGui.guiSelect_ModeName.Text := ""
 	}
 
@@ -2421,16 +2456,16 @@ class select_list_control_class
 		}
 
 		if (targType == "favoritesList")
-			filedir := favorites_folder . "\" . sysKey ;systemKey
+			filedir := favorites_folder "\" sysKey ;systemKey
 		else if (targType == "customList") ;target is a custom list	
 		{
 			listName := this._playlists[ct]["name"]
-			filedir := lists_folder . "\" . listName
+			filedir := lists_folder "\" listName
 		}
 
 		;create proxy file
 		DirCreate filedir
-		filename := filedir . "\" . vector . ".txt"
+		filename := filedir "\" vector ".txt"
 		FileAppend vector, filename
 
 		if (targType == "customList")
@@ -2447,8 +2482,8 @@ class select_list_control_class
 					oHistory.Update(vector, "manual")
 
 					;Also delete from \suppress folder if it exists there
-					filedest := filedir . "\suppress\" . vector . ".txt"
-					FileDelete(filedest)
+					filedest := filedir . "\suppress\" vector ".txt"
+					try FileDelete(filedest)
 				}
 
 				;true parameter doesn't switch, but updates live attract mode with the changes
@@ -2649,8 +2684,6 @@ class select_list_control_class
 
 	_deleteFromFavorites(vector, base_pl)
 	{
-		;assume local function
-
 		fl := this._maxSystems + base_pl ;favorites list is offset by maxSystems from base list
 		Loop gGui.guiSelect_ListViewBottom%fl%.GetCount()
 		{
@@ -2665,12 +2698,12 @@ class select_list_control_class
 				if (!vector)
 				{
 					OutputDebug "assert_1"
-					LogEntry("ASSERT 1 ERROR:  Vector is empty.`n")
+					LogEntry("ASSERT 1 ERROR: Vector is empty.`n")
 					ExitApp
 				}
 
 				sysKey := this._playlists[base_pl]["name"]
-				filename := favorites_folder . "\" . sysKey . "\" . vector . ".txt"
+				filename := favorites_folder "\" sysKey "\" vector ".txt"
 				try
 					FileDelete(filename)
 
@@ -2715,7 +2748,7 @@ class select_list_control_class
 							ExitApp
 						}
 
-						filename := favorites_folder . "\" . list_name . "\" . vector . ".txt"
+						filename := favorites_folder "\" list_name "\" vector ".txt"
 						
 						if (FileExist(filename))
 							return
@@ -2863,8 +2896,9 @@ class select_list_control_class
 	;Any changes in here should be followed by EXTENSIVE regression testing!!!
 	;Spot checking IS NOT ADEQUATE.
 	ScrollVertical(direction,idx:=0, suppressNameUpdate:=false)
-	{		
+	{
 		global
+
 		pl := this._current_playlist
 
 		maxRows := this._state[pl]["maxRows"]
@@ -2875,13 +2909,13 @@ class select_list_control_class
 		{
 			this._current_object := this._state[pl]["selectedObject"] := Map()
 			fnt := this._gameNameFontSize
-			guiSelect.SetFont("s" . fnt)
+			guiSelect.SetFont("s" fnt)
 
 			val := gGui.guiSelect_GameName%pl%.Text
 			if (val != "Empty")
 			{
 				fnt := this._gameNameFontSize
-				guiSelect.SetFont("s" . fnt)
+				guiSelect.SetFont("s" fnt)
 				gGui.guiSelect_GameName%pl%.Text := "Empty"
 			}
 
@@ -2955,7 +2989,7 @@ class select_list_control_class
 			if (selectedRow != gGui.guiSelect_ListViewTop%pl%.GetCount())
 				oBASS.Play("browse")
 
-			row := selectedRow < gGui.guiSelect_ListViewTop%pl%.GetCount() - maxRowsB ? selectedRow + maxRowsB : guiSelect_ListViewTop%pl%.GetCount()
+			row := selectedRow < gGui.guiSelect_ListViewTop%pl%.GetCount() - maxRowsB ? selectedRow + maxRowsB : gGui.guiSelect_ListViewTop%pl%.GetCount()
 			this.ScrollVertical("index", row)
             return
 		}
@@ -2980,7 +3014,8 @@ class select_list_control_class
             return
         }
 
-		selectedText := gGui.guiSelect_ListViewBottom%pl%.GetText(selectedRow, 1)    ;proper name of the item
+		selectedText := ""
+		try selectedText := gGui.guiSelect_ListViewBottom%pl%.GetText(selectedRow, 1)    ;proper name of the item
 		
 		if (!selectedText or selectedText == "Empty")
 		{
@@ -3005,7 +3040,7 @@ class select_list_control_class
 				fsz--
 		}
 
-		guiSelect.SetFont("s" . fsz . " cWhite", fnt)
+		guiSelect.SetFont("s" fsz " cWhite", fnt)
 		gGui.guiSelect_GameName%pl%.SetFont()
 
 		;Replace & with && otherwise they won't be visible in the GUI GameName control.
@@ -3033,37 +3068,29 @@ class select_list_control_class
 	;Used to refresh initial view of the menu graphic images
 	ShowGraphics()
 	{
-		;global
 		pl := p_pl := gm := ""
 
-		;try
-		;{
-			;images originate from the base playlist item
-			pl := this._current_playlist
-			try p_pl := this._current_object["parent"]["list"]
-			try gm := this._current_object["parent"]["game"]
+		;images originate from the base playlist item
+		pl := this._current_playlist
+		try p_pl := this._current_object["parent"]["list"]
+		try gm := this._current_object["parent"]["game"]
 
-			if (!pl || !gm)
-				return ;nothing to show
+		if (!pl || !gm)
+			return ;nothing to show
 
-			logo_file := this._current_object["logo_file"]
-			logo_file := GetRegionalAsset(logo_file, this._current_object["sys_key"])
-			system_logo_file := this._current_object["system_logo"]
-			favorite_icon_file := this._current_object["favorite_icon"] ;use icon from the parent playlist
-			nRating := this._current_object["rom_rating"] ;get rating (0-5) of this rom
-			
-			if (!FileExist(logo_file))
-				logo_file := system_logo_file
+		logo_file := this._current_object["logo_file"]
+		logo_file := GetRegionalAsset(logo_file, this._current_object["sys_key"])
+		system_logo_file := this._current_object["system_logo"]
+		favorite_icon_file := this._current_object["favorite_icon"] ;use icon from the parent playlist
+		nRating := this._current_object["rom_rating"] ;get rating (0-5) of this rom
+		
+		if (!FileExist(logo_file))
+			logo_file := system_logo_file
 
-			this._oGraphicsOverlay.ShowGraphic(pl, gm, 1, logo_file)
-			this._oGraphicsOverlay.ShowGraphic(pl, gm, 2, system_logo_file)
-			this._oGraphicsOverlay.ShowGraphic(pl, gm, 3, favorite_icon_file)
-			this._oGraphicsOverlay.ShowGraphic(pl, gm, 4, rating_icon_file,,nRating)
-		;}
-		;catch as e
-		;{
-		;	LogEntry("ERROR: In ShowGraphics(): " . FormatErrorMessage(e) . "`n")
-		;}
+		this._oGraphicsOverlay.ShowGraphic(pl, gm, 1, logo_file)
+		this._oGraphicsOverlay.ShowGraphic(pl, gm, 2, system_logo_file)
+		this._oGraphicsOverlay.ShowGraphic(pl, gm, 3, favorite_icon_file)
+		this._oGraphicsOverlay.ShowGraphic(pl, gm, 4, rating_icon_file,,nRating)
 
 		;useful diagnostic information to be displayed on screen in test_mode
 		if (test_mode) 
@@ -3071,7 +3098,7 @@ class select_list_control_class
 	        bl := this._current_playlist
 			if (pl > this._maxSystems) 
 				bl := this._current_playlist - this._maxSystems
-			gGui.guiSelect_TestMsg.Text := "This base list: " . bl . ", This effective list: " . pl . " | Parent list: " . p_pl . ", Game ID: " . gm		
+			gGui.guiSelect_TestMsg.Text := "This base list: " bl ", This effective list: " pl " | Parent list: " p_pl ", Game ID: " gm		
 		}	
 	}
 
@@ -3197,7 +3224,7 @@ class select_list_control_class
 
 			;Create a layered window (+E0x80000 : must be used for UpdateLayeredWindow to work!) 
 			;that is always on top (+AlwaysOnTop), and has no taskbar entry or caption
-			gui_id := playlist . "_" selection . "_" . image_type ;Graphic 1 is the game logo image
+			gui_id := playlist "_" selection "_" image_type ;Graphic 1 is the game logo image
 
 			try
 				gExist := IsObject(gGui.%gui_id%)

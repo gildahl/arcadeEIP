@@ -21,9 +21,9 @@ class mame_data_class
 		this._oDom := ""		
 		this._mame_info := ""
 
-		mameinfo_file := mameInfoFolder . "\mameinfo.dat"
-		mamehistory_file := mameInfoFolder . "\history.xml"
-		mamelistxml_file := mameInfoFolder . "\listxml.xml"
+		mameinfo_file := mameInfoFolder "\mameinfo.dat"
+		mamehistory_file := mameInfoFolder "\history.xml"
+		mamelistxml_file := mameInfoFolder "\listxml.xml"
 
 		if (FileExist(mamehistory_file))
 		{
@@ -45,7 +45,7 @@ class mame_data_class
 					}
 					catch as e
 					{
-						LogEntry("ERROR: XML Processing Error (MSXML2.DOMDocument.3.0): " . FormatErrorMessage(e) . "`n")
+						LogEntry("ERROR: XML Processing Error (MSXML2.DOMDocument.3.0): " FormatErrorMessage(e) "`n")
 					}				
 				}
 
@@ -61,61 +61,6 @@ class mame_data_class
 			}
 		}
 
-/*
-		if (FileExist(mamelistxml_file))
-		{
-			this._mamelistxml_file := mamelistxml_file
-
-			;DOM documentation found here
-			;https://docs.microsoft.com/en-us/previous-versions/windows/desktop/ms757828(v=vs.85)?redirectedfrom=MSDN
-			if (FileExist(mamelistxml_file) && !oDOMListXML)
-			{
-				try
-				{
-					this._oDOMListXML := ComObjCreate("MSXML2.DOMDocument.6.0")
-					;this._oDOMListXML := ComObjCreate("MSXML2.DOMDocument.3.0")
-				}
-				catch e
-				{
-					try
-					{
-						this._oDOMListXML := ComObjCreate("MSXML2.DOMDocument.3.0")
-					}
-					catch e
-					{
-						LogEntry("ERROR: XML Processing Error (MSXML2.DOMDocument.3.0): " . FormatErrorMessage(e) . "`n")
-					}				
-				}
-
-				this._oDOMListXML.async := false
-				FileRead, xml_data, %mamelistxml_file%
-					
-				this._oDOMListXML.validateOnParse := 0
-				;this._oDOMListXML.ProhibitDtd := 1
-				this._oDOMListXML.setProperty("ProhibitDTD", 0)
-				;this._oDOMListXML.setProperty("DtdProcessing", 1)
-				this._oDOMListXML.loadXML(xml_data)	
-				;this._oDOMListXML.dtdProcessing := 1
-
-				;entryNodeList := this._oDOMListXML.getElementsByTagName("//machine")
-				;entryCount := entryNodeList.length
-
-				try 
-				{
-					rootNode := this._oDOMListXML.selectSingleNode("//mame")
-				}
-				catch e
-				{
-					a:=e
-				}
-				nodeId := rootNode.getAttributeNode("build")
-				this._listxml_build := nodeId.value
-				a=1
-			}
-		}
-*/
-
-
 		if (FileExist(mameinfo_file))
 		{
 			this._mameinfo_file := mameinfo_file
@@ -123,75 +68,13 @@ class mame_data_class
 			mameinfo := FileRead(mameinfo_file)
 			this._mame_info := mameinfo
 		}
-
-/*
-		if (FileExist(mamelistxml_file))
-		{		
-			FileRead, mamelistxml, %mamelistxml_file%
-			this._mamelistxml_file := mamelistxml
-			
-
-			this.GetListXMLInfo("galaxian", yr, mn)
-			a=1
-		}
-*/
-
 	}
-
-/*
-	GetListXMLInfo(rom, ByRef year, ByRef manuf, sysList:="mame")
-	{
-		mamelistxml := this._mamelistxml_file
-		oMameListXML := StrSplit(mamelistxml, "`r`n")
-	}
-*/
-
-	/*
-	_XCreateInfoIndexes()
-	{
-		mameInfo := this._mame_info
-		oMameInfo := StrSplit(mameInfo, "`r`n")
-		this._oMameInfo := oMameInfo
-		oIndexes := []
-
-		recs := oMameInfo.Count()
-		iter := recs // 1000 ;index approx every 1000 lines
-
-		Loop, %iter%
-		{
-			index := subIndex := A_Index * 1000 - 1000 + 1
-			key := A_Index
-
-			Loop
-			{
-				if (SubStr(oMameInfo[subIndex],1,6)) == "$info="
-				{
-					foundRom := StrReplace(oMameInfo[subIndex], "$info=", "")
-					entry := []
-					entry["index"] := subIndex
-					entry["rom"] := foundRom 
-					oIndexes[key] := entry
-
-					break
-				}
-				
-				subIndex++
-				if (subIndex > index + 1000) ;nothing in this range
-					break
-			}
-		}
-
-		return oIndexes
-	}
-	*/
 
 	;Create a simple index of all $info= entries.  The cost to create this is
 	;low enough and speed benefit high enough for subsequent roms, that we shouldn't
 	;need to do anything fancier than this to keep performance reasonable.
 	CreateInfoIndexes()
 	{
-		;global
-
 		mameInfo := this._mame_info
 		oMameInfo := StrSplit(mameInfo, "`r`n")
 		this._oMameInfo := oMameInfo
@@ -212,11 +95,6 @@ class mame_data_class
 	;Retrieve the text for this rom from mameinfo.dat text file
 	GetInfo(rom, sysList:="mame")
 	{
-		;global
-
-		;local infoText, foundMame, oInfoIndexes, szIndex, oMameInfo, szMameInfo
-		;local index, line
-
 		infoText := ""
 		foundMame := false
 
@@ -267,8 +145,6 @@ class mame_data_class
 	;Read from history.xml
 	GetHistory(rom, sysList:="")
 	{
-		;global
-
 		if (!this._oDOM)
 			return ""
 

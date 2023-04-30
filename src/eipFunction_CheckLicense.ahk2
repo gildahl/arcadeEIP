@@ -21,21 +21,21 @@ ValidateLicense()
 	if (bLicenseValid)
 	{
 		if (sLicenseType == "public") 
-			g_license_text := cProductName . ", Rev. " . CodeVersion . ". License: Public. Free for non-commercial use."
+			license_text := cProductName . ", Rev. " . CodeVersion . ". License: Public. Free for non-commercial use."
 		else if (sLicenseType = "registered")
-			g_license_text := cProductName . ", Rev. " . CodeVersion . ". License: Registered to " . sCustomerName . " for non-commercial use. No expiration."
+			license_text := cProductName . ", Rev. " . CodeVersion . ". License: Registered to " . sCustomerName . " for non-commercial use. No expiration."
 		else if (sLicenseType = "subscription")
-			g_license_text := cProductName . ", Rev. " . CodeVersion . ". License: Registered to " . sCustomerName . " for non-commercial use. Expires in " . sDaysToExpire . " days."
+			license_text := cProductName . ", Rev. " . CodeVersion . ". License: Registered to " . sCustomerName . " for non-commercial use. Expires in " . sDaysToExpire . " days."
 		
-		startupMsg := "STARTUP: " . g_license_text . "`n"
+		startupMsg := "STARTUP: " . license_text . "`n"
 	}
 	else
 	{
 		;revert to public license
 		if (sLicenseType == "subscription") 
 		{
-			g_license_text := cProductName . ", Rev. " . CodeVersion . ". License: Subscription expired. Reverted to public non-commercial license."
-			startupMsg := "STARTUP: " . g_license_text . "`n"
+			license_text := cProductName . ", Rev. " . CodeVersion . ". License: Subscription expired. Reverted to public non-commercial license."
+			startupMsg := "STARTUP: " . license_text . "`n"
 		}
 		else
 		{
@@ -47,7 +47,6 @@ ValidateLicense()
 		}
 	}
 }
-
 
 ;Check if license returns true (pass) or false (fail)
 ;sets sName & sEmail to values from the license file

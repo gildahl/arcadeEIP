@@ -212,9 +212,9 @@ GetTaskbarState()
 
     APPBARDATA := Buffer(A_PtrSize=8?48:36)
     vState := DllCall("shell32\SHAppBarMessage", "UInt",0x4, "Ptr", APPBARDATA, "UPtr")
-    state := vState & 0x1 ? true : false
+    ;state := vState & 0x1 ? true : false
 
-    return state
+    return vState
 }
 
 ;MD5 crypto functions for license processing

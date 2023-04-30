@@ -35,8 +35,6 @@ class Schedule_Class
 	;starts the timer
 	Start()
 	{		
-		;global
-
 		;Set wait time to the next alarm based on the timer
 		this._SetWaitTime()
 		
@@ -97,11 +95,6 @@ class Schedule_Class
 	;to function.
 	_SetWaitTime()
 	{
-		;global
-
-		;local n, timer, interval, st, wt, bt, lt, tm, td, tr, tt
-		;local date_portion, wait_time, tval
-
 		timer := IsInteger(this._timer) ? Integer(this._timer) : this._timer
 		
 		;if timer is just a number, then it is simply a number of minutes
@@ -145,7 +138,7 @@ class Schedule_Class
 			
 			Loop
 			{
-				st := DateAdd(bt, wt, "Seconds")  ;advance base_time in wait_time intervals from midnight
+				bt := DateAdd(bt, wt, "Seconds")  ;advance base_time in wait_time intervals from midnight
 				st := DateDiff(st, bt, "Seconds")  ;subtract start_time from revised base_time
 
 				if (st < 0) ;find the first even clock cycle in the future
@@ -211,8 +204,6 @@ class Schedule_Class
 
 	_Schedule(callback)
 	{		
-		;global
-
 		fPoker := this._fPoker
 
 		time_now := A_Now 

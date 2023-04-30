@@ -15,7 +15,7 @@ DirectSwitch(vector, caller:="")
     global g_directswitch_args
 
     ;return if the currently playing game is chosen
-    current_vector := gCfg.sys_key . " " . gCfg.rom_file
+    current_vector := gCfg.sys_key " " gCfg.rom_file
     if (vector == current_vector)
         return
  
@@ -33,7 +33,7 @@ DirectSwitch(vector, caller:="")
     else
     {
         SoundBeep
-        LogEntry("WARNING: Direct switching requires map_exit to be defined in " . cConfigFileName . ".`n")
+        LogEntry("WARNING: Direct switching requires map_exit to be defined in " cConfigFileName ".`n")
     } 
 
     return
@@ -74,7 +74,7 @@ UpdateAutoAttractList()
                     break
 
                 vector := item["vector"]
-                filename := gCfg.attract_folder . "\" . vector . ".txt"
+                filename := gCfg.attract_folder "\" vector ".txt"
 
                 ;If an attract list vector file is no longer valid because, say,
                 ;the rom is no longer available, then skip that rom when rebuilding
@@ -86,7 +86,7 @@ UpdateAutoAttractList()
                     continue
 
                 ;Don't add suppressed vector files
-                test_filename := gCfg.attract_folder . "\suppress\" . vector . ".txt"
+                test_filename := gCfg.attract_folder "\suppress\" vector ".txt"
                 if (!FileExist(test_filename))
                 {
                     FileAppend vector, filename
@@ -112,28 +112,6 @@ AttractSwitch(update:=false, add_vector:="")
     local size, sysKey, mapExit, vector_array, vector
     size := attractList.Length
 
-    ;add_vector is called by VectorNow() and is intended to add arbitrarily played games to the
-    ;attractList so that the previous_key hotkey will be able to return to it regardless of whether
-    ;it is part of the auto-switch sequence.
-    /*
-    if (add_vector)
-    {
-        ;SoundBeep
-
-        ;if in vector_now, this works but can produce duplicates
-        if (attractList[idx] != add_vector && attractList[idx+1] != add_vector)
-        {
-            ;SoundBeep
-            attractList.InsertAt(++idx, add_vector)
-        }
-
-        OutputDebug inserted: %add_vector% at %idx%`n
-
-
-        return
-    }
-    */
-
     ;This forces a re-read/rebuild of originalList so that any games added/removed
     ;while live are reflected in the future state of the attract mode.
     ;(originalList is the list that continually gets added to the end of attractList
@@ -142,23 +120,6 @@ AttractSwitch(update:=false, add_vector:="")
     {
         if (attractList.Length == 0)
             return
-
-        ;this can happen if add_vector was done (see above), and then the game was played such that
-        ;it got added to the the attractList. So let's delete the extra one.
-        /*
-        if (attractList[idx] == attractList[idx-1] && attractList[idx] != "")
-        {
-            SoundBeep
-            i1 := attractList[idx]
-            i2 := attractList[idx-1]
-            OutputDebug  Assert Q: Not debugged: al[idx]: %i1%  al[idx-1]: %i2%`n
-
-            attractList.RemoveAt(idx)
-            ;if (tempIdx == size) ;not sure this is needed
-                idx--
-            size--
-        }
-        */
         
         originalList := Array()
         Loop Files attract_pattern
@@ -181,7 +142,7 @@ AttractSwitch(update:=false, add_vector:="")
         ;if 1 or no vectors defined, nothing to switch
         if (originalSize <= 1)
         {
-            LogEntry("NOTICE: Autoswitch mode refreshed with nothing to switch. " . originalSize . " vector files found.`n")
+            LogEntry("NOTICE: Autoswitch mode refreshed with nothing to switch. " originalSize " vector files found.`n")
             return 
         }
 
@@ -257,7 +218,7 @@ AttractSwitch(update:=false, add_vector:="")
                     ;same as one playing
                     ;same functionality as above, but keeping separate for now until sure handling
                     ;really is the same.
-                    if (g_directswitch_args == gCfg.sys_key . " " . gCfg.rom_file)
+                    if (g_directswitch_args == gCfg.sys_key " " gCfg.rom_file)
                     {
                         ;OutputDebug Assert S: next same as playing--have not tested this scenario yet!`n
                         attractList.RemoveAt(tempIdx)                        
@@ -293,7 +254,7 @@ AttractSwitch(update:=false, add_vector:="")
             }
         }
        
-        LogEntry("INFO: Autoswitch mode refreshed. " . originalSize . " vector files found.`n")
+        LogEntry("INFO: Autoswitch mode refreshed. " originalSize " vector files found.`n")
 
         return
     }
@@ -331,20 +292,20 @@ AttractSwitch(update:=false, add_vector:="")
         ;if 1 or no vectors defined, nothing to switch
         if (originalSize <= 1)
         {
-            LogEntry("NOTICE: Autoswitch mode has nothing to switch. " . originalSize . " vector files found.`n")
+            LogEntry("NOTICE: Autoswitch mode has nothing to switch. " originalSize " vector files found.`n")
             return 
         }
-        LogEntry("INFO: Autoswitch mode initialized. " . originalSize . " vector files found.`n")
+        LogEntry("INFO: Autoswitch mode initialized. " originalSize " vector files found.`n")
 
         ;insert any initially run game as the first item so that previous works
         ;as most users would probably expect it to.
         if (gCfg.sys_key && gCfg.rom_file)
         {
-            attractList.InsertAt(1, gCfg.sys_key . " " . gCfg.rom_file)
+            attractList.InsertAt(1, gCfg.sys_key " " gCfg.rom_file)
             idx := 1
             
             ;if next index (2) is same as 1 then remove it
-            if (attractList[2] == gCfg.sys_key . " " . gCfg.rom_file)
+            if (attractList[2] == gCfg.sys_key " " gCfg.rom_file)
             {
                 attractList.RemoveAt(2)
             }
@@ -370,7 +331,7 @@ AttractSwitch(update:=false, add_vector:="")
        idx++  ;advance attractList index to next item
     }
 
-    if (idx > attractList.Length)  ;if we've reached the end of the list...
+    if (attractList.Length > 1 && idx > attractList.Length)  ;if we've reached the end of the list...
     {
         temp_list := originalList.Clone()
         if (gCfg.attract_random)
@@ -391,8 +352,13 @@ AttractSwitch(update:=false, add_vector:="")
             attractList.Push(temp_list[A_Index])
     }
     
-    vector := attractList[idx]
-
+    ;Handle case where there is only one item in attract list
+    if (attractList.Has(idx))
+        vector := attractList[idx]
+    else if (attractList.Has(1))
+        vector := attractList[1]
+    else
+        vector := ""
     /*
     ;output list for debug purposes
     c:=attractList.Count()
@@ -407,7 +373,7 @@ AttractSwitch(update:=false, add_vector:="")
     cur_vec := gCfg.sys_key . " " . gCfg.rom_file
     if (cur_vec == vector)
     {
-        OutputDebug "Exiting because we would have switched to same game: " cur_vec . "`n"
+        OutputDebug "Exiting because we would have switched to same game: " cur_vec "`n"
         return
     }
 
@@ -472,7 +438,7 @@ AttractSwitch(update:=false, add_vector:="")
     }
     else
     {
-        LogEntry("WARNING: Direct switching requires map_exit to be defined in " . cConfigFileName . ".`n")
+        LogEntry("WARNING: Direct switching requires map_exit to be defined in " cConfigFileName ".`n")
     } 
 
     return
@@ -522,6 +488,9 @@ MouseEvent(MouseID, x := 0, y := 0)
     }
     
 /*
+    ;this code might be useful if wanting to support absolute
+    ;tracking, such as with a trackpad
+
     vs := y - yLast ;negative=down, positive=up
     hs := x - xLast ;negative=left, positive=right
     

@@ -109,7 +109,7 @@ CreateStartScreen()
     if (sLicenseType == "public" || gCfg.show_license == 1)
     {
         banner_ypos := nScreenHeight - rom_posH * 4
-        gGui.guiStart_LicenseBanner := guiStart.AddText("cWhite w" . nScreenWidth . " Center vStartLicenseBanner", g_license_Text)
+        gGui.guiStart_LicenseBanner := guiStart.AddText("cWhite w" . nScreenWidth . " Center vStartLicenseBanner", license_text)
         gGui.guiStart_LicenseBanner.Move(0, banner_ypos)
     }
     
@@ -165,7 +165,7 @@ CreateStartScreen()
     }
     else
     {
-        if (logo_full_path)
+        if (logo_full_path) ;but the file doesn't exist
         {
             ;Since we don't have an available image, show the game name instead
             rom_title := oEmulators.Emulators[gCfg.sys_key].meta_names.GetTitle(gCfg.rom_file)

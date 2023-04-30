@@ -13,11 +13,6 @@ ValidateConfig()
     ;[General]
     ;debug_mode ( validated in ProcessIni() )
 
-    if !(gCfg.status_beeps == 0 || gCfg.alpha_effect == 1) {
-        LogEntry("ERROR: Exiting. The [General] 'alpha_effect' setting must be 1 or 0. Current value is: " . gCfg.alpha_effect . ".`n")
-        ExitApp
-    }
-
     ;status_beeps
     if !(gCfg.status_beeps == 0 || gCfg.status_beeps == 1) {
         LogEntry("ERROR: Exiting. The [General] 'status_beeps' setting must be 1 or 0. Current value is: " . gCfg.status_beeps . ".`n")
@@ -71,6 +66,28 @@ ValidateConfig()
     ;mouse_horiz
     if !(gCfg.mouse_horiz == "off" || gCfg.mouse_horiz == "all") {
         LogEntry("ERROR: Exiting. The [Picker_Preferences] 'mouse_horiz' setting must be `"off`" or `"all`". Current value is: `"" . gCfg.mouse_horiz . "`".`n")
+        ExitApp
+    }
+}
+
+;Validate config items for current vector
+ValidateVectorConfig()
+{
+    ;Validation of start and exit timer values
+    if (!IsNumber(start_show_time)) {
+        LogEntry("ERROR: Exiting. The value for start_show_time must be numeric. Current value is: " start_show_time ".`n")
+        ExitApp
+    }
+    if (!IsNumber(exit_show_time)) {
+        LogEntry("ERROR: Exiting. The value for exit_show_time must be numeric. Current value is: " exit_show_time ".`n")
+        ExitApp
+    }
+    if (start_show_time < -1) {
+        LogEntry("ERROR: Exiting. The value for start_show_time must be >= -1. Current value is: " start_show_time ".`n")
+        ExitApp
+    }
+    if (exit_show_time < -1) {
+        LogEntry("ERROR: Exiting. The value for exit_show_time must be >= -1. Current value is: " exit_show_time ".`n")
         ExitApp
     }
 }

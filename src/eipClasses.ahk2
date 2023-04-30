@@ -29,9 +29,6 @@ class config_manager_class
 
 	Write()
 	{
-		;global
-		;local n
-
 		fCfg := FileOpen(this._filename, "a")
 		for n, line in this._oContent
 		{
@@ -259,5 +256,249 @@ class suspend_process_class
 	Pid
 	{		
 		get => this._pid
+	}
+}
+
+
+;static class
+;ControlActivationState.EnablePauseControls()
+class ControlActivationState
+{
+	static EnablePauseControls()
+	{
+		global
+
+		;Turn on the left/right keys for navigation
+		Loop Parse gCfg.left_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.right_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		;Turn off the next and previous game controls
+		Loop Parse gCfg.next_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.previous_key, "CSV"
+			Hotkey A_LoopField, "Off"
+	}
+
+	static DisablePauseControls()
+	{
+		global
+		;this._pause_disabled++
+
+		;Turn off the left/right keys for navigation
+		Loop Parse gCfg.left_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.right_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		;Turn the next and previous game controls back on
+		Loop Parse gCfg.next_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.previous_key, "CSV"
+			Hotkey A_LoopField, "On"
+	}
+
+	static EnableSelectControls()
+	{
+		global
+
+		Loop Parse gCfg.left_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.right_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.up_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.down_key, "CSV"
+			Hotkey A_LoopField, "On"
+		
+		Loop Parse gCfg.launch_key, "CSV"
+			Hotkey A_LoopField, "On"
+		
+		Loop Parse gCfg.pgdn_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.pgup_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.home_key, "CSV"
+			Hotkey A_LoopField, "On"
+		
+		Loop Parse gCfg.end_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.list_mode_key, "CSV"
+			Hotkey A_LoopField, "On"
+		
+		Loop Parse gCfg.edit_mode_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.all_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.genre_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.year_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.publisher_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.developer_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.players_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.rating_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.favorite_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.star5_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.star4_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.star3_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.star2_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.star1_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.star0_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.star_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.favorites_key, "CSV"
+			Hotkey A_LoopField, "On"
+		
+		Loop Parse gCfg.add_remove_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		;Turn off the next and previous game controls
+		Loop Parse gCfg.next_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.previous_key, "CSV"
+			Hotkey A_LoopField, "Off"
+	}
+
+	static DisableSelectControls()
+	{
+		global
+
+		if (!g_pause_state) ;if pause is off
+		{
+			;pause uses these keys to cycle between images, so we only 
+			;turn them off if pause is off
+			Loop Parse gCfg.left_key, "CSV"
+				Hotkey A_LoopField, "Off"
+
+			Loop Parse gCfg.right_key, "CSV"
+				Hotkey A_LoopField, "Off"
+
+			;Turn the next and previous game controls back on, but if pause
+			;is still on, we don't want them turned back on yet since exiting pause
+			;will do that.
+			Loop Parse gCfg.next_key, "CSV"
+				Hotkey A_LoopField, "On"
+
+			Loop Parse gCfg.previous_key, "CSV"
+				Hotkey A_LoopField, "On"
+		}
+
+		Loop Parse gCfg.up_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.down_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.launch_key, "CSV"
+			Hotkey A_LoopField, "Off"
+	
+		Loop Parse gCfg.pgdn_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.pgup_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.home_key, "CSV"
+			Hotkey A_LoopField, "Off"
+		
+		Loop Parse gCfg.end_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.list_mode_key, "CSV"
+			Hotkey A_LoopField, "Off"
+		
+		Loop Parse gCfg.edit_mode_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.all_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.genre_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.year_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.publisher_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.developer_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.players_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.rating_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.favorite_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.star5_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.star4_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.star3_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.star2_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.star1_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.star0_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.star_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.favorites_key, "CSV"
+			Hotkey A_LoopField, "Off"
+		
+		Loop Parse gCfg.add_remove_key, "CSV"
+			Hotkey A_LoopField, "Off"
 	}
 }

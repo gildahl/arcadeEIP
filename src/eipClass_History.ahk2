@@ -28,7 +28,7 @@ class history_manager_class
 		{
 			if (item["vector"] == vector)
 			{
-				this._oHistory.RemoveAt(n)
+				this._oHistory.Delete(n)
 
 				this._serialize()
 				this._update_count_priority()
@@ -40,12 +40,8 @@ class history_manager_class
 	;the game will also be allowed even if it is not in an attract=1 section
 	Update(vector, option:="")
 	{
-		;local interval, freq, n, now, highest_count, manual
-		;local first_play, period, freq
-
 		now := A_Now
 		n := 0
-		n_temp := 0
 		highest_count := 0
 		manual := 0
 
@@ -57,18 +53,13 @@ class history_manager_class
 			{
 				if (item["play_count"] > highest_count)
 					highest_count += item["play_count"]
-
-				n_temp := n ;allows n to be visible outside loop
 			}
 
 			;increment to 1 greater than actual highest count
 			;giving this item the highest count
 			highest_count++ 
 		}
-
-		n := n_temp ;fix the for-loop scope change in AHK2
-
-
+		
 		if (this._oHistory.Count > 0)
 		{
 			;find index of entry if it already exists
@@ -86,7 +77,6 @@ class history_manager_class
 		if (n == 0)
 		{
 			n := this._oHistory.Count + 1 ;add new item to list
-			;OutputDebug newItem %n%`n
 
 			this._oHistory[n] := Map()
 			this._oHistory[n]["vector"] := vector
@@ -119,7 +109,7 @@ class history_manager_class
 	;write .history file
 	_serialize()
 	{
-		;local hiscnt, fState, n, n_temp, h, fp, mr, pc, man, v
+		local n_temp := 0
 
 		hiscnt := this._oHistory.Count
 
@@ -156,14 +146,12 @@ class history_manager_class
 
 		fState.Close()
 
-		LogEntry("INFO: Serialized " . n . " update(s) to .history file.`n")
+		LogEntry("INFO: Serialized " n " update(s) to .history file.`n")
 	}
 
 	;read .history fie
 	_deserialize()
 	{
-		;local first_play, play_count, most_recent, freq, list_idx, hf, period
-
 		list_idx := 0
 
 		if (!FileExist(history_file))
@@ -227,14 +215,12 @@ class history_manager_class
 
 		this._update_count_priority()
 
-		LogEntry("INFO: Deserialized " . list_idx . " item(s) from .history file.`n")
+		LogEntry("INFO: Deserialized " list_idx " item(s) from .history file.`n")
 	}
 
 	;crete a count priority list from current history list
 	_update_count_priority()
 	{
-		;local n, history_item, inserted
-
 		this._oCountPriority := Array()
 
 		;fill and order the count priority object

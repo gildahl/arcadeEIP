@@ -84,30 +84,46 @@ arcadeEIP to other mappings via its configuration file, arcadeEIP.ini.
 
 Here is a list of key defaults.
 
-External controls - must be available/mapped while a game is playing
+Basic controls - available while a game is playing
 -------------------------------------------------------------------------------
-Pause:                   , (comma)        Pause emulator.
-Exit:                    . (period)       Exit emulator.
-Menu:                    '                Toggle Quick-Switch game picker menu
-Magic Key:               . (period)       Hold 2-3 seconds to display the game picker menu 
-Previous Game:           [   or q         Go back to previous game in autoplay list
-Next Game:               ]   or w         Advance to next game in autoplay list
-
+Menu:             '                Toggle game selection menu
+Pause:            , (comma)        Pause emulator.
+Exit:             . (period)       Exit emulator.
+Magic Key:        . (period)       Hold 2-3 seconds to display the game selection menu 
+Previous Game:    [   or q         Go back to previous game in autoplay list
+Next Game:        ]   or w         Advance to next game in autoplay list
 
 Quick-Switch game picker menu controls (only used when in the menu)
 --------------------------------------------------------------------------------
-Navigation:              Arrow keys       Can also use mouse/trackball/spinners, or joysticks
-Launch  		 Left-Ctrl        Launch the currently selected game
-Favorite                 m                Mark (or unmark) game as a favorite
-Star Rating              s                Change star rating of a game
-List Mode:		 Left-Alt         Toggles "Picks" list for a system or custom list.
-Edit Mode:               Left-Shift       Puts a custom list in edit mode for add/remove.
-Add/Remove:              Space            Add/remove games to/from a "Picks" or targeted custom list.
+Navigation:           Arrow keys       Can also use mouse/trackball/spinners, or joysticks
+Launch                Left-Ctrl        Launch the currently selected game
+Favorite              m                Mark (or unmark) game as a favorite
+Star Rating           s                Change star rating of a game
+List Mode:	      Left-Alt         Toggles "Picks" list for a system or custom list.
+Edit Mode:            Left-Shift       Puts a custom list in edit mode for add/remove.
+Add/Remove:           Space            Add/remove selected game to/from a "Picks" or targeted custom list.
+Add/Remove All:       a                Add/remove all games to/from a "Picks" or tageted custom list
+
+Additional controls for use in constructing and managing game lists
+---------------------------------------------------------------------------------
+Add/Remove rating        r        Add/remove all games having the same star rating as selected game.
+Add/Remove favorites     f        Add/remove all games having the same favorite marking as selected game.
+Add/Remove genre         g        Add/remove all games having the same genre as selected game.
+Add/Remove year          y        Add/remove all games having the same release year as selected game.
+Add/Remove publisher     u        Add/remove all games having the same publisher as selected game.
+Add/Remove developer     d        Add/remove all games having the same developer as selected game.
+Add/Remove players       n        Add/remove all games having the same number of players as selected game.
+
+Special keys
+----------------------------------------------------------------------------------
+Panic             Ctrl-Alt-k       Emergency exit arcadeEIP if it or a game hangs 
+Exit Marquee      Ctrl-Alt-x       Exit Marquee application (if in use)
 
 FILE MANIFEST
 =============
 eip.exe                      : main arcadeEIP executable
 marquee.exe                  : marquee player supporting dynamic marquees
+util.exe                     : command line utility
 license.txt                  : terms of the license.
 readme.txt                   : this file
 update.txt                   : version update information

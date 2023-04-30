@@ -149,7 +149,30 @@
 				"stopOnEntry": false,
 				"maxChildren": 10000
 			},
-		
+
+			{
+				"name": "eip -start_screen=3,Navy",
+				"request": "launch",
+				"type": "autohotkey",
+				"runtime_v1": "AutoHotkey.exe",
+				"runtime_v2": "v2/AutoHotkey.exe",
+				"program": "${file}",
+				"args": ["-start_screen=10,Navy", "-exit_screen=2,Yellow", "-video", "gdi"],
+				"stopOnEntry": false,
+				"maxChildren": 10000
+			},
+					
+			{
+				"name": "eip atari2600 space invaders",
+				"request": "launch",
+				"type": "autohotkey",
+				"runtime_v1": "AutoHotkey.exe",
+				"runtime_v2": "v2/AutoHotkey.exe",
+				"program": "${file}",
+				"args": ["atari2600", "space", "invaders"],
+				"stopOnEntry": false,
+				"maxChildren": 10000
+			},
 			{
 				"name": "ColecoVision centipede",
 				"request": "launch",

@@ -18,7 +18,7 @@ ProcessDirectives(&argList)
         {
             if (console_mode)
             {
-                FileAppend "The following command line parameters are supported by the console application:`n", "*"
+                FileAppend "The following command line functions are supported by the utility console application (util.exe):`n", "*"
                 for n, opt in oConsoleOptions
                     FileAppend opt "`n", "*"
             }
@@ -49,7 +49,7 @@ ProcessDirectives(&argList)
             else
                 ShowLog()
             
-            suppressExitMessage := true
+            bSuppressExitMessage := true
             ExitApp
         }
 
@@ -59,9 +59,6 @@ ProcessDirectives(&argList)
             {
                 oBASS := BASS_class()
                 oBASS.Init()
-
-                ;DllCall("AttachConsole", "int", -1)
-                ;FileAppend cExeName . " -sound`n", "*"
 
                 if (oBASS.Active == 0)
                 {
@@ -73,7 +70,7 @@ ProcessDirectives(&argList)
 
                     if (!oSoundDeviceList)
                     {
-                        FileAppend "No sound devices detected.`n", "*" ;CONOUT$
+                        FileAppend "No sound devices detected.`n", "*"
                     }
                     else
                     {
@@ -82,13 +79,11 @@ ProcessDirectives(&argList)
 
                             i := dev["device"]
                             n := dev["name"]
-                            FileAppend i . ": " . n . "`n", "*" ;CONOUT$
+                            FileAppend i . ": " . n . "`n", "*"
                         }
                     }
                 }
                 
-                ;SendInput "{Enter}"
-                ;DllCall("FreeConsole")
                 ExitApp
             }
             catch as e
@@ -103,26 +98,35 @@ ProcessDirectives(&argList)
         if (InStr(input_arg, "-createproxy"))
         {
             fileCount := 0
+
+            if (argList.Length < 5)
+            {
+                FileAppend "-createproxy requires a minimum of four parameters. Received " argList.Length-1 ".`n", "*" 
+                FileAppend "Format: -createproxy [sourceFolder] [destinationFolder] [sys_key] [rom] <prefix>`n", "*"
+                FileAppend "See documentation for more information.`n", "*"
+                ExitApp
+            }
+
             sourceFolder := argList[2]
             destinationFolder := argList[3]
             SplitPath destinationFolder,,&outFolder,&outExt
             emulatorName := argList[4]
             romStyle := argList[5] ;can be [rom_name], [rom_file], [rom_full_path], rom_name, rom_file, rom_full_path
-            filePrefix := argList[6]
+            
+            if (argList.Has(6))
+                filePrefix := argList[6]
+            else
+                filePrefix := ""
             
             SplitPath sourceFolder,,&romPath,&romExt,&searchRomName
             romExt_decomp := StrSplit(romExt, ",", " ")	
             
             try
             {
-                ;DllCall("AttachConsole", "int", -1)
-                ;FileAppend cExeName . " -createproxy " . sourceFolder . " " . destinationFolder . " " . emulatorName . " " . romStyle . " " . filePrefix . "`n", "*" ;CONOUT$
-                
+              
                 if (!FileExist(sourceFolder))
                 {
-                    FileAppend "Source folder does not exist.`n", "*"  ;CONOUT$ 
-                    ;SendInput "{Enter}"
-                    ;DllCall("FreeConsole")
+                    FileAppend "Source folder does not exist.`n", "*"
                     ExitApp
                 }
                 
@@ -161,23 +165,17 @@ ProcessDirectives(&argList)
                 }
                 else
                 {
-                    FileAppend "Unknown rom vector specified on command line: " . romStyle . "`n", "*" ;CONOUT$ 
-                    ;SendInput "{Enter}"
-                    ;DllCall("FreeConsole")
+                    FileAppend "Unknown rom vector specified on command line: " romStyle "`n", "*"
                     ExitApp
                 }
             }
             catch as e
             {
-                FileAppend "Error. Please check syntax and ensure destination folder exists.`n", "*" ;CONOUT$
-                ;SendInput "{Enter}"
-                ;DllCall("FreeConsole")
+                FileAppend "Error. Please check syntax and ensure destination folder exists.`n", "*"
                 ExitApp
             }
             
-            FileAppend "Success`n", "*" ;CONOUT$
-            ;SendInput "{Enter}"
-            ;DllCall("FreeConsole")
+            FileAppend "Success`n", "*"
             ExitApp
         }
         
@@ -188,9 +186,6 @@ ProcessDirectives(&argList)
             
             try
             {
-                ;DllCall("AttachConsole", "int", -1)
-                ;FileAppend cExeName . " -systems " . emu . "`n", "*" ;CONOUT$
-                
                 sortList := "" ;emu_sys_key
                 
                 for n, emulator in oEmulators.Emulators
@@ -202,11 +197,9 @@ ProcessDirectives(&argList)
                 aSortList := StrSplit(sortList, ",", " ")
                 for n, param in aSortList
                 {
-                    FileAppend param . "`n", "*" ;CONOUT$
+                    FileAppend param . "`n", "*"
                 }
-                ;}
-                ;SendInput "{Enter}"
-                ;DllCall("FreeConsole")
+
                 ExitApp
             }
             catch as e
@@ -222,9 +215,6 @@ ProcessDirectives(&argList)
         {
             try
             {
-                ;DllCall("AttachConsole", "int", -1)
-                ;FileAppend cExeName . " -list " . emu . "`n", "*" ;CONOUT$
-
                 ;-list must always be the first argument
                 if (argList.Has(1))
                 {
@@ -243,24 +233,17 @@ ProcessDirectives(&argList)
                     FileAppend "Use format -list <sys_key>`n", "*"
                     ExitApp
                 }
-
-                ;if (emu = "-list")
-                ;    emu := argList[1]
-                
+            
                 if (!oEmulators.IsValidKey(emu))
                 {
-                    FileAppend "Emulator " . emu . " could not found in " . cConfigFileName . "`n", "*" ;CONOUT$
-                    ;SendInput "{Enter}"
-                    ;DllCall("FreeConsole")
+                    FileAppend "Emulator " . emu . " could not found in " cConfigFileName "`n", "*"
                     ExitApp
                 }							
                 
                 aSearchPaths := ParseSearchPath(emu)
                 if (!aSearchPaths)
                 {
-                    FileAppend "No search_path defined in " . cConfigFileName . " for this emulator`n", "*" ;CONOUT$
-                    ;SendInput "{Enter}"
-                    ;DllCall("FreeConsole")
+                    FileAppend "No search_path defined in " cConfigFileName " for this emulator`n", "*"
                     ExitApp
                 }	
                 
@@ -273,11 +256,11 @@ ProcessDirectives(&argList)
                     {	
                         searchPath := romPath . "\" . searchRomName . "." . romExt
                         
-                        FileAppend "`n", "*" ;CONOUT$
+                        FileAppend "`n", "*"
                         sep := RepeatValue("=", StrLen(searchPath))
-                        FileAppend sep . "`n", "*" ;CONOUT$
-                        FileAppend searchPath . "`n", "*" ;CONOUT$
-                        FileAppend sep . "`n", "*" ;CONOUT$
+                        FileAppend sep . "`n", "*"
+                        FileAppend searchPath . "`n", "*"
+                        FileAppend sep . "`n", "*"
                         
                         Loop Files searchPath
                         {
@@ -285,18 +268,17 @@ ProcessDirectives(&argList)
                             properName := oEmulators.Emulators[emu].meta_names.GetTitle(outFile)  
                             if (properName)
                                 outFile := outFile . " (" . properName . ")"
-                            FileAppend outFile . "`n", "*" ;CONOUT$
+                            FileAppend outFile . "`n", "*"
                         }
                     }	
                 }
-                ;SendInput "{Enter}"
-                ;DllCall("FreeConsole")
+
                 ExitApp
             }
             catch as e
             {
                 err := "Error: " . FormatErrorMessage(e) 
-                FileAppend err . "`n", "*" ;CONOUT$
+                FileAppend err . "`n", "*"
                 ExitApp
             }
         }
@@ -369,7 +351,7 @@ ProcessDirectives(&argList)
     
     ;Remove the directive arguments from the argList
     if (gCfg.debug_mode != "")
-        argList.Delete(debug_mode_index)
+        argList.RemoveAt(debug_mode_index)
     
     return bDirectiveArgs
 }
@@ -383,14 +365,9 @@ DisplayRomList(emu, rom, listType, argName)
 
     try
     {
-        ;DllCall("AttachConsole", "int", -1)
-        
         if (InStr(emu, "-f"))
         {
-            ;FileAppend cExeName . " " . emu . "`n", "*" ;CONOUT$
-            FileAppend "Rom name missing`n", "*" ;CONOUT$
-            ;SendInput "{Enter}"
-            ;DllCall("FreeConsole")
+            FileAppend "Rom name missing`n", "*"
             ExitApp
         }
         
@@ -398,20 +375,17 @@ DisplayRomList(emu, rom, listType, argName)
         
         if (!emu)
         {
-            ;FileAppend cExeName . " " . argName . " " . rom . "`n", "*" ;CONOUT$
             bSearchGlobal := true
         }
         else
         {
             if (!oEmulators.IsValidKey(emu))
             {
-                FileAppend "Emulator " .  emu . " could not found in " . cConfigFileName . "`n", "*" ;CONOUT$
-                ;SendInput "{Enter}"
-                ;DllCall("FreeConsole")
+                FileAppend "Emulator " emu " could not found in " cConfigFileName "`n", "*"
                 ExitApp
             }
         }
-        FileAppend "Searching...", "*" ;CONOUT$
+        FileAppend "Searching...", "*"
         
         if (GetRoms(emu, rom, &rom_list))
         {				
@@ -457,8 +431,8 @@ DisplayRomList(emu, rom, listType, argName)
             header := GetColValue(1, col_1_vals, 2, &sep_1) . GetColValue(1, col_2_vals, 2, &sep_2) . GetColValue(1, col_3_vals, 2, &sep_3) ;. GetColValue(1, col_4_vals, 2, sep_4)
             separator := sep_1 . sep_2 . sep_3 ;. sep_4
             
-            FileAppend "found`n`n" . header . "`n", "*" ;CONOUT$
-            FileAppend separator . "`n", "*" ;CONOUT$
+            FileAppend "found`n`n" . header . "`n", "*"
+            FileAppend separator . "`n", "*"
             
             len := col_1_vals.Count
             Loop len
@@ -466,21 +440,19 @@ DisplayRomList(emu, rom, listType, argName)
                 if (A_Index > 1)
                 {
                     output := GetColValue(A_Index, col_1_vals, 2) . GetColValue(A_Index, col_2_vals, 2) . GetColValue(A_Index, col_3_vals, 2) ;. GetColValue(A_Index, col_4_vals, 2)
-                    FileAppend output . "`n", "*" ;CONOUT$
+                    FileAppend output . "`n", "*"
                 }
             }
         }
         else
-            FileAppend "`nNo match found.`n", "*" ;CONOUT$
+            FileAppend "`nNo match found.`n", "*"
         
-        ;SendInput "{Enter}"
-        ;DllCall("FreeConsole")
         ExitApp				
     }
     catch as e
     {
         err := "Error: " . FormatErrorMessage(e) 
-        FileAppend err . "`n", "*" ;CONOUT$
+        FileAppend err . "`n", "*"
         ExitApp
     }
 }
@@ -490,8 +462,6 @@ DisplayRomList(emu, rom, listType, argName)
 ;log in notepad.
 ShowLog(logFileName := "")
 {	
-    ;global
-
     if (logFileName == "")
         logFileName := cLogFileName
     
@@ -503,15 +473,10 @@ ShowLog(logFileName := "")
     
     if (console_mode)
     {
-        ;DllCall("AttachConsole", "int", -1)
-        ;FileAppend, %cExeName% -log %logFileName%`n, CONOUT$
-        ;FileAppend cExeName . " -log " . logFileName . "`n", "*"
         Loop Read logFile
         {
             FileAppend A_LoopReadLine . "`n", "*"
         }
-        ;SendInput "{Enter}"
-        ;DllCall("FreeConsole")
     }
     else
     {

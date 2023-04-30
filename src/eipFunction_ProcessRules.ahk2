@@ -29,8 +29,8 @@ ProcessRules()
             fnc := this_rule.function
             if (sLicenseType == "registered" || sLicenseType == "subscription")
             {
-                LogEntry("INFO: Processing custom rule: <" . fnc . ">`n")
-                filename := A_ScriptDir . "\vars.txt"
+                LogEntry("INFO: Processing custom rule: <" fnc ">`n")
+                filename := A_ScriptDir "\vars.txt"
                 FileDelete(filename)		
                 
                 try
@@ -49,7 +49,7 @@ ProcessRules()
                     param_list_copy := ""
                     for n, param in Emu_Args
                     {
-                        param_list_copy := param_list_copy . " " .param
+                        param_list_copy := param_list_copy " " param
                     }
                     varFile.WriteLine(param_list_copy)
                     
@@ -72,7 +72,7 @@ ProcessRules()
                     
                     varFile.Close
                     
-                    file_to_run := this_rule.function . ".exe"
+                    file_to_run := this_rule.function ".exe"
                     RunWait file_to_run
                     
                     varFile := FileOpen(filename, "r")
@@ -87,13 +87,13 @@ ProcessRules()
                 }
                 catch as e
                 {		
-                    LogEntry("ERROR: Processing custom rule: " . FormatErrorMessage(e) . "`n")
+                    LogEntry("ERROR: Processing custom rule: " FormatErrorMessage(e) "`n")
                     ExitApp
                 }
             }
             else
             {
-                LogEntry("WARNING: Skipped processing rule: <" . fnc . ">. Custom functions are a registered feature.`n")
+                LogEntry("WARNING: Skipped processing rule: <" fnc ">. Custom functions are a registered feature.`n")
             }
         }
         
@@ -104,7 +104,7 @@ ProcessRules()
         if (this_rule.function = "change_exe" && gCfg.rom_name) 
         {
             fnc := this_rule.function
-            LogEntry("INFO: Processing rule: <" . fnc . ">. ")
+            LogEntry("INFO: Processing rule: <" fnc ">. ")
             arg_1 := this_rule.arg_1
             arg_2 := this_rule.arg_2
             policy := this_rule.policy
@@ -130,7 +130,7 @@ ProcessRules()
             }
             else
             {
-                LogEntry("ERROR: Policy specified in <change_exe> rule invalid: [<" . policy . ">]. Valid entries are <if_rom_in_folder> or <if_extension_in_list>`n")
+                LogEntry("ERROR: Policy specified in <change_exe> rule invalid: [<" policy ">]. Valid entries are <if_rom_in_folder> or <if_extension_in_list>`n")
                 ExitApp
             }
             
@@ -151,7 +151,7 @@ ProcessRules()
                     gCfg.root_folder := new_folder
                 
                 if (gCfg.root_folder)
-                    gCfg.exe_full_path := gCfg.root_folder . "\" . gCfg.exe_name
+                    gCfg.exe_full_path := gCfg.root_folder "\" gCfg.exe_name
                 else
                     gCfg.exe_full_path := gCfg.exe_name
                 
@@ -159,7 +159,7 @@ ProcessRules()
                 
                 if (InStr(case_1, "app_asset_name"))
                 {
-                    LogEntry("INFO: Changed asset_name used for emulator run_apps from [" . gCfg.asset_name . "] to [" . arg_3 . "]`n")
+                    LogEntry("INFO: Changed asset_name used for emulator run_apps from [" gCfg.asset_name "] to [" arg_3 "]`n")
                     gCfg.asset_name := arg_3
                 }
             }
@@ -169,7 +169,7 @@ ProcessRules()
                 
                 if (else_part)
                 {
-                    LogEntry("INFO: Changed asset_name used for emulator run_apps from [" . gCfg.asset_name . "] to [" . else_part . "]`n")
+                    LogEntry("INFO: Changed asset_name used for emulator run_apps from [" gCfg.asset_name "] to [" else_part "]`n")
                     gCfg.asset_name := else_part	
                 }				
             }
@@ -179,7 +179,7 @@ ProcessRules()
         if (this_rule.function = "remove_param" && gCfg.rom_name) ;remove an item from the command line
         {
             fnc := this_rule.function
-            LogEntry("INFO: Processing rule: <" . fnc . ">`n")
+            LogEntry("INFO: Processing rule: <" fnc ">`n")
             arg_1 := this_rule.arg_1
             
             Loop Parse arg_1, "," . A_Space, A_Space 
@@ -219,7 +219,7 @@ ProcessRules()
             ;rebuild param_list
             gCfg.param_list := ""
             for n, param in Emu_Args
-                gCfg.param_list := gCfg.param_list . " " . param
+                gCfg.param_list := gCfg.param_list " " param
         }
         
         ;*** [append_params] ***
@@ -227,7 +227,7 @@ ProcessRules()
         else if (this_rule.function = "append_param" && gCfg.rom_name) 
         {
             fnc := this_rule.function
-            LogEntry("INFO: Processing rule: <" . fnc . ">`n")
+            LogEntry("INFO: Processing rule: <" fnc ">`n")
             
             if (this_rule.policy = "")
             {
@@ -257,7 +257,7 @@ ProcessRules()
 		else if (this_rule.function = "vector_to" && gCfg.rom_name) ;add an item to the command line
 		{
 			fnc := this_rule.function
-			LogEntry("INFO: Processing rule: <" . fnc . ">`n")
+			LogEntry("INFO: Processing rule: <" fnc ">`n")
 			
 			arg_1 := this_rule.arg_1
 			policy := this_rule.policy
@@ -273,15 +273,15 @@ ProcessRules()
 				{
 					if (!FileExist(arg_2))
 					{
-						LogEntry("NOTICE: In rule <vector_to>, rom folder `"" . arg_2 . "`" does not exist.`n")
+						LogEntry("NOTICE: In rule <vector_to>, rom folder `"" arg_2 "`" does not exist.`n")
 						return
 					}
 					
-					this_rom_full_path := arg_2 . "\" . gCfg.rom_file
+					this_rom_full_path := arg_2 "\" gCfg.rom_file
 					
 					if (FileExist(this_rom_full_path))
 					{	
-						vector_args := arg_1 . " " . Trim(this_rom_full_path, omitchars := "`"")
+						vector_args := arg_1 " " Trim(this_rom_full_path, omitchars := "`"")
 						bValidVector := true
 					}
 				}
@@ -295,11 +295,11 @@ ProcessRules()
 						if (gCfg.rom_ext = ext)
 						{
 							if (gCfg.rom_full_path)
-								vector_args := arg_1 . " " . Trim(gCfg.rom_full_path, omitchars := "`"")
+								vector_args := arg_1 " " Trim(gCfg.rom_full_path, omitchars := "`"")
 							else if (gCfg.rom_file)
-								vector_args := arg_1 . " " . Trim(gCfg.rom_file, omitchars := "`"")
+								vector_args := arg_1 " " Trim(gCfg.rom_file, omitchars := "`"")
 							else
-								vector_args := arg_1 . " " . Trim(gCfg.rom_name, omitchars := "`"")
+								vector_args := arg_1 " " Trim(gCfg.rom_name, omitchars := "`"")
 							
 							bValidVector := true
 							
@@ -309,19 +309,19 @@ ProcessRules()
 				}
 				else
 				{
-					LogEntry("ERROR: Policy specified in <vector_to> rule invalid: [<" . policy . ">]. Valid entries are <if_rom_in_folder> or <if_extension_in_list>`n")
+					LogEntry("ERROR: Policy specified in <vector_to> rule invalid: [<" policy ">]. Valid entries are <if_rom_in_folder> or <if_extension_in_list>`n")
 					ExitApp
 				}
 			}
 			else
 			{
-				LogEntry("ERROR: In rule <vector_to>. Emulator with sys_key `"" . arg_1 . "`" not found.`n")
+				LogEntry("ERROR: In rule <vector_to>. Emulator with sys_key `"" arg_1 "`" not found.`n")
 				ExitApp
 			}
 			
 			if (bValidVector)
 			{
-				LogEntry("INFO: " . fnc . ": Vectoring as: " . vector_args . "`n")
+				LogEntry("INFO: " fnc ": Vectoring as: " vector_args "`n")
 				VectorNow(vector_args)
 			}
 			
@@ -351,25 +351,26 @@ ProcessRules()
             proxy_folder := InsertTemplateField(this_rule.arg_2, "[root_folder]", gCfg.root_folder, "rule_" . n)
             if (SubStr(proxy_folder,1,1) = "\")
                 proxy_folder := gCfg.root_folder . proxy_folder
-            proxy_full_path := proxy_folder . "\" . proxy_file
+            proxy_full_path := proxy_folder "\" proxy_file
             
             if FileExist(proxy_full_path)
             {
                 proxy_type := ""
                 proxy_contents := Array()
-                idx := 1
+                ;idx := 1
                 
                 try
                 {
                     Loop Read proxy_full_path
                     {
-                        proxy_contents[idx] := A_LoopReadLine
-                        idx := idx+1
+                        proxy_contents.Push(A_LoopReadLine)
+                        ;proxy_contents[idx] := A_LoopReadLine
+                        ;idx := idx+1
                     }
                 }
                 catch as e
                 {	
-                    LogEntry("ERROR: READ PROXY FILE: " . FormatErrorMessage(e) . "`n")
+                    LogEntry("ERROR: READ PROXY FILE: " FormatErrorMessage(e) "`n")
                     ExitApp
                 }
                 
@@ -394,7 +395,7 @@ ProcessRules()
                 }				
                 else if (SubStr(proxy_contents[1],1,1) = "-" || SubStr(proxy_contents[1],1,1) = "/" || SubStr(proxy_contents[1],1,1) = "\" || SubStr(proxy_contents[1],1,1 = "["))
                 proxy_type := "Params"
-                else if (idx > 2 && InStr(proxy_contents[1], ".exe") && SubStr(proxy_contents[1],2,2) = ":\")
+                else if (proxy_contents.Length > 2 && InStr(proxy_contents[1], ".exe") && SubStr(proxy_contents[1],2,2) = ":\")
                     proxy_type := "Batch"
                 else if (InStr(proxy_contents[1], ".exe") && SubStr(proxy_contents[1],2,2) = ":\")
                     proxy_type := "Batch"
@@ -403,7 +404,7 @@ ProcessRules()
                 else
                     proxy_type := "Params"	
                 
-                LogEntry("INFO: " . fnc . ": Found proxy file: " . proxy_full_path . ", Type: " . proxy_type . "`n")
+                LogEntry("INFO: " fnc ": Found proxy file: " proxy_full_path ", Type: " proxy_type "`n")
                 
                 if (proxy_type = "Batch")
                 {
@@ -459,7 +460,7 @@ ProcessRules()
                     proxy_rule_count := proxy_rule_count + 1
                     if (proxy_rule_count > 10)
                     {
-                        LogEntry("ERROR: " . fnc . ": Rule experienced more than 10 recursions. Possible circular call. Aborting...`n")
+                        LogEntry("ERROR: " fnc ": Rule experienced more than 10 recursions. Possible circular call. Aborting...`n")
                         ExitApp
                     }
                     
@@ -472,7 +473,7 @@ ProcessRules()
         else if (this_rule.function = "change_root" && gCfg.rom_name) ;add an item to the command line
         {
             fnc := this_rule.function
-            LogEntry("INFO: Processing rule: <" . fnc . ">. ")
+            LogEntry("INFO: Processing rule: <" fnc ">. ")
             foundRom := false
             searchTag := ""
             
@@ -525,7 +526,7 @@ ProcessRules()
                         if (filename == gCfg.rom_name)
                         {
                             gCfg.root_folder := current_folder
-                            LogEntry("Changed root to: " . gCfg.root_folder . "`n", true)
+                            LogEntry("Changed root to: " gCfg.root_folder "`n", true)
                             search_tag := SubStr(gCfg.root_folder, InStr(search_pattern, "*"), StrLen(gCfg.root_folder) - StrLen(search_pattern) + 1)
                             bChangedRoot := true
                             break 2
@@ -541,7 +542,7 @@ ProcessRules()
                 ExitApp
             }
             
-            gCfg.exe_full_path := gCfg.root_folder . "\" . gCfg.exe_name
+            gCfg.exe_full_path := gCfg.root_folder "\" gCfg.exe_name
             
             ;We only have to update the path if rom_full_path was found
             ;in the parameter list.
@@ -549,7 +550,7 @@ ProcessRules()
             {
                 gCfg.rom_full_path := gCfg.root_folder . rom_subfolder . "\" . gCfg.rom_file
                 if (param_is_quoted)
-                    gCfg.rom_full_path := "`"" . gCfg.rom_full_path . "`""
+                    gCfg.rom_full_path := "`"" gCfg.rom_full_path "`""
                 len := Emu_Args.Length
                 Emu_Args.RemoveAt(pathIdx)
                 Emu_Args.InsertAt(pathIdx, gCfg.rom_full_path)
@@ -560,11 +561,11 @@ ProcessRules()
             ;In particular, param_list, map_exit, and map_pause are thought to be the most useful.
             ;Among other things, rules are not permitted.  Place this rule first in the list if other rules
             ;should be processed on the adjusted settings (like the modified param_list).
-            partial_config_file := gCfg.root_folder . "\" . cConfigFileName
+            partial_config_file := gCfg.root_folder "\" cConfigFileName
 
             if FileExist(partial_config_file)
             {
-                LogEntry("INFO: Found partial " . cConfigFileName . " file: " . partial_config_file . ". Procesing.`n")
+                LogEntry("INFO: Found partial " cConfigFileName " file: " partial_config_file ". Procesing.`n")
 
                 ;[General]
                 gCfg.pause_key := IniRead(partial_config_file, "General", "pause_key", gCfg.pause_key)

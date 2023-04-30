@@ -7,8 +7,8 @@ Works best with a no-nag build of MAME (but not strictly required).
 See video here for a walk-through of these instructions:
 https://youtu.be/1RueDRhyrao
 
-*** By default, tap the period key (.) to exit a game.            ***
-*** Use ctrl-alt-k to force-exit arcadeEIP if it ever hangs.      ***
+*** By default, tap the period key (.) to exit a game.             ***
+*** Use right ctrl-alt-k to force-exit arcadeEIP if it ever hangs. ***
 =======================================================================
 
 1. Double-click create_cfg.bat to create arcadeEIP.ini and
@@ -20,10 +20,13 @@ https://youtu.be/1RueDRhyrao
 3. In the [System_mame] section of arcadeEIP.ini, edit exe_full_path= 
    to match your system (don't remove the ",min" option at the end).
 
-4. In the [General] section, set seed_rom= to any favorite rom you 
+4. If your roms are located somewhere other than mame's \rom folder,
+   also edit the search_path= to match the actual location of your roms 
+
+5. In the [General] section, set seed_rom= to any favorite rom you 
    know you have.
 
-5. If you'd like to hide the mouse cursor during gameplay, set hide_cursor=1
+6. If you'd like to hide the mouse cursor during gameplay, set hide_cursor=1
    in the [Front_End_os] section.
 
 6a. Optional: If you have them, copy a set of game logo files (named
@@ -57,12 +60,12 @@ While in any game:
    keys or joystick to page through controls and info screens.
 3. Press apostrophe (') or hold the period key (.) for 2+ sec to toggle the
    game selection menu on/off:
-4.    Navigate using the arrow keys or joystick.
-5.    Select a new game to play using the LCtrl key.
-6.    Use "M" key to mark a game as a favorite or "S" to change star rating
-6.    Use Space to add a game to the "Picks" list for the system and "LAlt" to
-      view that list.
-8.    See docs for many more functions.
+4. Navigate using the arrow keys or joystick.
+5. Select a new game to play using the LCtrl key.
+6. Use "M" key to mark a game as a favorite or "S" to change star rating
+7. Use Space to add a game to the "Picks" list for the system and "LAlt" to
+   view that list.
+8. See docs for many more functions.
 
 Autoswitching:
 By default, as you play games, the autoswitch list will auto-populate with

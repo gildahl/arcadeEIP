@@ -28,7 +28,7 @@ global CodeVersion := "0.4.0.0"
 ;@Ahk2Exe-SetDescription arcadeEIP
 ;@Ahk2Exe-SetProductVersion %U_version% beta
 ;@Ahk2Exe-SetFileVersion %U_version%
-;--@Ahk2Exe-ConsoleApp
+; ;@Ahk2Exe-ConsoleApp
 ;***********************************************************
 ;---------------------------------------------------------------------------------
 ;Set test_mode=true for testing *instead* of debug_mode when there is a need
@@ -39,43 +39,12 @@ global CodeVersion := "0.4.0.0"
 ;Also recommended to disable window_name= lines in the ini file.
 ;Note that certain effects (like Alpha) may not work quite right in test mode.
 global test_mode := false                               
-global diag_mode := true     ;do diagnostic tests (normally true)
+global diag_mode := true      ;do diagnostic tests (normally true)
 global console_mode := false  ;to compile console app, set to true and uncomment @Ahk2Exe-ConsoleApp above
 ;---------------------------------------------------------------------------------
 
 ;Start global timers
 global start_tick := A_TickCount, start_time := A_Now 
-
-;Install a system event hook to check for z-order changes
-;https://www.autohotkey.com/boards/viewtopic.php?t=68550
-;https://learn.microsoft.com/en-us/windows/win32/winauto/event-constants
-global zChanged := false
-global hHook := 0
-
-EVENT_OBJECT_REORDER := 0x8004
-hHook := SetWinEventHook(EVENT_OBJECT_REORDER, EVENT_OBJECT_REORDER, 0, CallbackCreate(HookProc, "F"), 0, 0, 0 )
-
-;This callback function simply sets the global zChanged to true indicating that the z-order
-;of some user interface element has change during runtime. This is used in RunWaitTimer to
-;push guiSelect to the top in case it was stomped on by another window.
-HookProc(hWinEventHook, event, hwnd, idObject, idChild, dwEventThread, dwmsEventTime)
-{
-   global
-
-   zChanged := true
-
-   return
-}
-
-SetWinEventHook(eventMin, eventMax, hmodWinEventProc, lpfnWinEventProc, idProcess, idThread, dwFlags)
-{
-   return DllCall("SetWinEventHook", "UInt", eventMin, "UInt", eventMax, "Ptr", hmodWinEventProc, "Ptr", lpfnWinEventProc, "UInt", idProcess, "UInt", idThread, "UInt", dwFlags, "Ptr")
-}
-
-;call this on exit
-FreeResource(hHook) {
-    DllCall("UnhookWindowsHookEx", "Ptr", hHook)
- }
 
 ;Early declarations needed in case we have to exit early
 global mouse_clicks_off  := 0
@@ -114,7 +83,7 @@ if (console_mode)
 {
     if (!bValidConsoleOption)
     {
-        FileAppend "The console application (eipc.exe) may only be used with the following options:`n", "*"
+        FileAppend "The console application (util.exe) may only be used with the following options:`n", "*"
         for n, opt in oConsoleOptions
             FileAppend opt "`n", "*"
 
@@ -128,72 +97,41 @@ else
         msg := ""
         for n, opt in oConsoleOnlyOptions
             msg := msg opt "`n"
-        MsgBox("You must use the console application (eipc.exe) to run the following commands:`n`n" msg, "arcadeEIP - Invalid Option", 64)
+        MsgBox("You must use the console application (util.exe) to run the following commands:`n`n" msg, "arcadeEIP - Invalid Option", 64)
         ExitApp
     }
 }
 ;---------------------------------------------------------------------------------
 ; File Includes
 ;---------------------------------------------------------------------------------
-#include eipFunctions.ahk2                      ;major application-specific functions
-#include eipFunctions_CreateGui.ahk2            ;create gui screens
-#include eipFunctions_Utility.ahk2		        ;library of general utility functions
+#include eipClass_BASS.ahk2                     ;Support for the BASS sound library
+#include eipClass_DetectInactivity.ahk2         ;Detects inactivity supporting attract switching
+#include eipClass_Emulators.ahk2                ;Emulator management class
+#include eipClass_FadeWindow.ahk2               ;Fades a window in and out
+#include eipClass_Gdip.ahk2                     ;Graphics library (GDI+)
+#include eipClass_History.ahk2                  ;Game history management and serialization
+#include eipClass_LaunchBox.ahk2                ;Support for LaunchBox/BigBox
+#include eipClass_LVColors.ahk2                 ;Support colors in ListView control
+#include eipClass_MameData.ahk2                 ;Get and process Mame game data
+#include eipClass_MouseDelta.ahk2               ;Mouse raw input processing
+#include eipClass_PauseControl.ahk2             ;Support for pause screens
+#include eipClass_Schedule.ahk2                 ;Support for attract mode scheduling
+#include eipClass_SelectListControl.ahk2        ;Game select screen
+#include eipClasses.ahk2                        ;Miscellaneous classes
+#include eipFunction_CheckLicense.ahk2          ;checkLicense & Hash functions
+#include eipFunction_ConfigCreate.ahk2          ;Creates arcadeEIP.ini files
+#include eipFunction_ConfigValidate.ahk2        ;Validate arcadeEIP.ini settings
+#include eipFunction_GetHighScores.ahk2         ;Support for hi2txt
 #include eipFunction_ProcessRules.ahk2		    ;Rules processor
+#include eipFunctions_AttractMode.ahk2          ;Attract switching functions
+#include eipFunctions_Attributed.ahk2           ;Attributed/Public domain functions from the web
+#include eipFunctions_ConfigProcess.ahk2        ;Functions supporting config file processing
+#include eipFunctions_CreateGui.ahk2            ;Create gui screens
 #include eipFunctions_ProcessDirectives.ahk2    ;Process command line directives
 #include eipFunctions_ProcessHotkeys.ahk2       ;Hotkey management and functions
-#include eipFunctions_AttractMode.ahk2          ;Attract switching functions
-#include eipClass_Emulators.ahk2                ;Emulator management class
-#include eipClass_History.ahk2                  ;Game history management and serialization
-#include eipClass_Schedule.ahk2                 ;Support for attract mode scheduling
-#include eipClass_DetectInactivity.ahk2         ;Detects inactivity supporting attract switching
-#include eipClass_MouseDelta.ahk2               ;Mouse raw input processing
-#include eipClass_FadeWindow.ahk2               ;Fades a window in and out
-#include eipClass_MameData.ahk2                 ;Get and process Mame game data
-#include eipClass_LaunchBox.ahk2                ;Support for LaunchBox/BigBox
-#include eipClass_PauseControl.ahk2             ;Support for pause screens
-#include eipClass_SelectListControl.ahk2        ;Game select screen
-#include eipClass_LVColors.ahk2                 ;Support colors in ListView control
-#include eipClass_BASS.ahk2                     ;Support for the BASS sound library
-#include eipClasses.ahk2                        ;Miscellaneous classes
-#include eipFunction_ConfigCreate.ahk2          ;Creates arcadeEIP.ini files
-#include eipFunctions_ConfigProcess.ahk2        ;Functions supporting config file processing
-#include eipFunction_ConfigValidate.ahk2        ;Validate arcadeEIP.ini settings
-#include eipFunctions_TimerThreads.ahk2          ;major thread functions launched by timers
-#include eipClass_Gdip.ahk2                     ;Graphics library (GDI+)
-#include eipFunctions_Attributed.ahk2           ;Attributed/Public domain functions from the web
-#include eipFunction_GetHighScores.ahk2         ;Support for hi2txt
-#include eipFunction_CheckLicense.ahk2          ;checkLicense & Hash functions
-
-;#include eipConfiguration.ahk                ;Configuration Screens
-;#include VA.ahk                              ;Sound library
-;#include CLR.ahk                             ;.NET Framework Interop
-;#include external_ConsoleSend.ahk	          ;Function for using the console 
-;#include external_ChangeDisplaySettings.ahk  ;Functions to change the display resolution, etc.
-
-;---------------------------------------------------------------------------------
-; ;Important list state, current state, and LV list item settings
-;---------------------------------------------------------------------------------
-;this._state[base_pl]["sublist"]   ;which sublist is currently selected (0=base or 1=picks)
-;this._state[pl]["selectedItem"]   ;== this._current_game == column 2 in LV list
-;this._state[pl]["selectedObject"] ;== this._current_object == column 3 in LV list
-
-;this._state[pl]["selectedRow"]    ;== this._current_row)
-;this._state[pl]["count"]          ;== this._current_count)		
-
-;this._state[pl]["maxRows"]
-;this._state[pl]["maxRowsB"]
-
-;this._current_playlist ;current playlist selected (could be base or pick)
-
-;LV_GetText(selectedText, selectedRow, 1)    ;proper name of the item
-;LV_GetText(selectedItem, selectedRow, 2)    ;not currently used
-;LV_GetText(selectedObject, selectedRow, 3)  ;ref to object containing extended game info
-
-;Fields in ;this._current_object[] and this._playlists[pl]["playlist"][gm][]
-;["parent"], ["vector"], ["rom_category"], ["rom_release"], ["rom_players"]
-;["rom_year"], ["rom_publisher"], ["rom_developer"], ["rom_favorite"], ["favorite_icon_file"]
-;["sys_key"], ["rom_spec"], ["proper_name"], ["logo_file"], ["system_logo_file"], ["parent"]
-;---------------------------------------------------------------------------------	
+#include eipFunctions_TimerThreads.ahk2         ;Major thread functions launched by timers
+#include eipFunctions_Utility.ahk2		        ;Library of general utility functions
+#include eipFunctions.ahk2                      ;Miscellaneous pplication-specific functions
 
 ;---------------------------------------------------------------------------------
 ; Global Flags
@@ -224,6 +162,8 @@ global gCfg := {}
 
 ;[General]
 gCfg.debug_mode := "" ;Set to "os" or front-end fe_key to be simulated
+gCfg.idle_log := 0
+gCfg.fast_load := 0
 gCfg.status_beeps := false
 gCfg.alpha_effect := 1
 gCfg.sound_device := 1
@@ -307,7 +247,7 @@ gCfg.attract_folder := "Lists\autoswitch"
 gCfg.attract_auto := 1
 gCfg.attract_mute := 0
 gCfg.attract_delay := 180
-gCfg.attract_timer := 5
+gCfg.attract_timer := "5"
 gCfg.attract_random := 0
 
 ;[Global_Assets]
@@ -363,18 +303,18 @@ global oDom := "", oDetectInactivity, oSelectListControl := "", oMameData := ""
 
 ;Miscellaneous inits and declarations
 global current_volume := -1
-global fast_load := fav_idx := g_idx := 0
+global fav_idx := g_idx := 0
 global exit_key_off, pause_key_off, magic_key_off, g_param, g_offset, orig_run_apps
 global play_next := play_previous := emu := search_tag := ""
-global g_license_text := mouse_horiz := attract_pattern := proxy_type := ""
+global license_text := mouse_horiz := attract_pattern := proxy_type := ""
 global cl_start_screen := cl_exit_screen := cl_run_apps := ""
-global suppressExitMessage := hotkeys_on := idle_log := false
+global bSuppressExitMessage := bHotkeysOn := false
 
 ;Gui inits and declarations
 global start_back_color := exit_back_color := "Black"
-global rom_title := "", logo_full_path, controls_full_path := "", alpha_effect := 1
-global default_start_show_time := default_exit_show_time := start_show_time := exit_show_time := "-1"
 global default_start_back_color := default_exit_back_color := "Black"
+global rom_title := "", logo_full_path, controls_full_path := ""
+global default_start_show_time := default_exit_show_time := start_show_time := exit_show_time := "-1"
 
 ;Colors
 global color_dark       := "0a0a0a" ;"171B1B" dark ;"1F2425" light ;0a0a0a darkest
@@ -433,27 +373,27 @@ global cSchedule_Period := 1000
 global cInactivityTest_Period := 1000
 
 ;Define global folders
-global favorite_on_icon_file := A_ScriptDir . "\Resources\Icons\" . cFavoriteOnIconFileName
-global favorite_off_icon_file := A_ScriptDir . "\Resources\Icons\" . cFavoriteOffIconFileName
-global rating_icon_file := A_ScriptDir . "\Resources\Icons\" . cRatingIconFileName
-global rating_off_icon_file := A_ScriptDir . "\Resources\Icons\" . cRatingOffIconFileName
-global log_file := A_ScriptDir . "\" . cLogFileName
-global batch_file := A_ScriptDir . "\" . cBatchFileName
-global launch_file := A_ScriptDir . "\" . cLaunchFileName
-global directswitch_folder := A_ScriptDir . "\" . cDirectSwitchName
-global directswitch_pattern := directswitch_folder . "\*.txt"
-global favorites_folder := A_ScriptDir . "\" . cFavoritesFolder
-gCfg.attract_folder := A_ScriptDir . "\" . cAttractFolder
-global lists_folder := A_ScriptDir . "\" . cListsFolder
-global sound_folder := A_ScriptDir . "\" . cSoundFolder
-global config_file := A_ScriptDir . "\" cConfigFileName
-global config_example := A_ScriptDir . "\" . cConfigExampleFileName
-global state_file :=  A_ScriptDir . "\.state"
-global history_file := A_ScriptDir . "\.history"
-global idle_log_file := A_ScriptDir . "\idle.log"
-global marqueePipeFile := A_ScriptDir . "\marquee.txt"
-global hi2txt_exe := A_ScriptDir . "\hi2txt\hi2txt.exe"
-global hi2txt_omit := A_ScriptDir . "\hi2txt\omit.txt"
+global favorite_on_icon_file := A_ScriptDir "\Resources\Icons\" cFavoriteOnIconFileName
+global favorite_off_icon_file := A_ScriptDir "\Resources\Icons\" cFavoriteOffIconFileName
+global rating_icon_file := A_ScriptDir "\Resources\Icons\" cRatingIconFileName
+global rating_off_icon_file := A_ScriptDir "\Resources\Icons\" cRatingOffIconFileName
+global log_file := A_ScriptDir "\" cLogFileName
+global batch_file := A_ScriptDir "\" cBatchFileName
+global launch_file := A_ScriptDir "\" cLaunchFileName
+global directswitch_folder := A_ScriptDir "\" cDirectSwitchName
+global directswitch_pattern := directswitch_folder "\*.txt"
+global favorites_folder := A_ScriptDir "\" cFavoritesFolder
+gCfg.attract_folder := A_ScriptDir "\" cAttractFolder
+global lists_folder := A_ScriptDir "\" cListsFolder
+global sound_folder := A_ScriptDir "\" cSoundFolder
+global config_file := A_ScriptDir "\" cConfigFileName
+global config_example := A_ScriptDir "\" cConfigExampleFileName
+global state_file :=  A_ScriptDir "\.state"
+global history_file := A_ScriptDir "\.history"
+global idle_log_file := A_ScriptDir "\idle.log"
+global marqueePipeFile := A_ScriptDir "\marquee.txt"
+global hi2txt_exe := A_ScriptDir "\hi2txt\hi2txt.exe"
+global hi2txt_omit := A_ScriptDir "\hi2txt\omit.txt"
 
 ;Sound methods
 global oMasterSound := master_sound_class()
@@ -570,19 +510,19 @@ LogEntry(RepeatValue("=", StrLen(startupMsg)-1) . "`n")
 TimeString := FormatTime(,"Time")
 DateString := FormatTime(,"LongDate")
 
-LogEntry("INFO: Started on: " . DateString . ", at " . TimeString . "`n")
-LogEntry("INFO: Native Width: " . A_ScreenWidth . ", Native Height: " . A_ScreenHeight . "`n")
-LogEntry("INFO: DPI: " . A_ScreenDPI . ", DPI Width: " . nScreenWidth . ", DPI Height: " . nScreenHeight . "`n")
+LogEntry("INFO: Started on: " DateString ", at " TimeString "`n")
+LogEntry("INFO: Native Width: " A_ScreenWidth ", Native Height: " A_ScreenHeight "`n")
+LogEntry("INFO: DPI: " A_ScreenDPI ", DPI Width: " nScreenWidth ", DPI Height: " nScreenHeight "`n")
 
 ;---------------------------------------------------------------------------------
 ; Remove legacy files if they exist 
 ;---------------------------------------------------------------------------------
 
-if (FileExist(A_ScriptDir . "\runlast.bat"))
-    FileDelete(A_ScriptDir . "\runlast.bat")
+if (FileExist(A_ScriptDir "\runlast.bat"))
+    FileDelete(A_ScriptDir "\runlast.bat")
     
-if (FileExist(A_ScriptDir . "\launchlast.bat"))
-    FileDelete(A_ScriptDir . "\launchlast.bat")
+if (FileExist(A_ScriptDir "\launchlast.bat"))
+    FileDelete(A_ScriptDir "\launchlast.bat")
 
 ;---------------------------------------------------------------------------------
 ; Create sub-folders if they don't exist
@@ -595,9 +535,9 @@ if (!InStr(FileExist(directswitch_folder), "D"))
     try 
         DirCreate directswitch_folder
     catch
-        LogEntry("NOTICE: Failed to create folder, " . directswitch_folder . ".`n")
+        LogEntry("NOTICE: Failed to create folder, " directswitch_folder ".`n")
     else
-        LogEntry("INFO: Created folder, " . directswitch_folder . ".`n")     
+        LogEntry("INFO: Created folder, " directswitch_folder ".`n")     
 }
 
 if (!InStr(FileExist(favorites_folder), "D"))
@@ -605,9 +545,9 @@ if (!InStr(FileExist(favorites_folder), "D"))
     try
         DirCreate favorites_folder
     catch
-        LogEntry("NOTICE: Failed to create folder, " . favorites_folder . ".`n")
+        LogEntry("NOTICE: Failed to create folder, " favorites_folder ".`n")
     else
-        LogEntry("INFO: Created folder, " . favorites_folder . ".`n")     
+        LogEntry("INFO: Created folder, " favorites_folder ".`n")     
 }
 
 if (!InStr(FileExist(gCfg.attract_folder), "D"))
@@ -615,9 +555,9 @@ if (!InStr(FileExist(gCfg.attract_folder), "D"))
     try
         DirCreate gCfg.attract_folder . "\suppress"
     catch
-        LogEntry("NOTICE: Failed to create folder, " . gCfg.attract_folder . ".`n")
+        LogEntry("NOTICE: Failed to create folder, " gCfg.attract_folder ".`n")
     else
-        LogEntry("INFO: Created folder, " . gCfg.attract_folder . ".`n")      
+        LogEntry("INFO: Created folder, " gCfg.attract_folder ".`n")      
 }
 
 if (!InStr(FileExist(lists_folder), "D"))
@@ -625,12 +565,12 @@ if (!InStr(FileExist(lists_folder), "D"))
     try
         DirCreate lists_folder
     catch
-        LogEntry("NOTICE: Failed to create folder, " . lists_folder . ".`n")
+        LogEntry("NOTICE: Failed to create folder, " lists_folder ".`n")
     else
-        LogEntry("INFO: Created folder, " . lists_folder . ".`n")     
+        LogEntry("INFO: Created folder, " lists_folder ".`n")     
 }
 
-emptyControlsFolder := A_ScriptDir . "\Assets\MAME\Controls\System"
+emptyControlsFolder := A_ScriptDir "\Assets\MAME\Controls\System"
 if (!InStr(FileExist(emptyControlsFolder), "D"))
 {
     DirCreate emptyControlsFolder
@@ -659,42 +599,42 @@ if (A_Args.Length = 1)
         msgAnswer := MsgBox("Press Yes to revert back to defaults. This will erase all picks, custom lists, state, history, ratings, and favorites. Configuration will be unaffected.  `n`nPress No to cancel this dialog and do nothing.", cProductName . " - Restore Clean Settings", 52)
         if (msgAnswer == "Yes")
         {
-            LogEntry("INFO: " . cProductName . " called with -clean.`n")
+            LogEntry("INFO: " cProductName " called with -clean.`n")
 
-            FileDelete(A_ScriptDir . "\.history")
-            LogEntry("INFO: Deleted: " . A_ScriptDir . "\.history.`n")
+            FileDelete(A_ScriptDir "\.history")
+            LogEntry("INFO: Deleted: " A_ScriptDir "\.history.`n")
 
-            FileDelete(A_ScriptDir . "\.state")
-            LogEntry("INFO: Deleted: " . A_ScriptDir . "\.state.`n")
+            FileDelete(A_ScriptDir "\.state")
+            LogEntry("INFO: Deleted: " A_ScriptDir "\.state.`n")
 
             DirDelete(directswitch_folder, 1)
-            LogEntry("INFO: Deleted: " . directswitch_folder . "`n")
+            LogEntry("INFO: Deleted: " directswitch_folder "`n")
 
             DirDelete(favorites_folder, 1)
-            LogEntry("INFO: Deleted: " . favorites_folder . "`n")
+            LogEntry("INFO: Deleted: " favorites_folder "`n")
 
             DirDelete(gCfg.attract_folder, 1)
-            LogEntry("INFO: Deleted: " . gCfg.attract_folder . "`n")
+            LogEntry("INFO: Deleted: " gCfg.attract_folder "`n")
 
             DirDelete(lists_folder, 1)
-            LogEntry("INFO: Deleted: " . lists_folder . "`n")
+            LogEntry("INFO: Deleted: " lists_folder "`n")
 
             CreateDirectSwitchFolder() 
 
             DirCreate(favorites_folder)
-            LogEntry("INFO: Created folder, " . favorites_folder . ".`n")
+            LogEntry("INFO: Created folder, " favorites_folder ".`n")
            
-            DirCreate(gCfg.attract_folder . "\suppress")
-            LogEntry("INFO: Created folder, " . gCfg.attract_folder . ".`n")
+            DirCreate(gCfg.attract_folder "\suppress")
+            LogEntry("INFO: Created folder, " gCfg.attract_folder ".`n")
         
             DirCreate(lists_folder)
-            LogEntry("INFO: Created folder, " . lists_folder . ".`n")
+            LogEntry("INFO: Created folder, " lists_folder ".`n")
 
             for n, emulator in oEmulators.Emulators
             {
                 assetspec := emulator.asset_name
-                FileDelete(A_ScriptDir . "\Assets\" . assetspec . "\Settings\favorites.ini")
-                FileDelete(A_ScriptDir . "\Assets\" . assetspec . "\Settings\ratings.ini")
+                FileDelete(A_ScriptDir "\Assets\" assetspec "\Settings\favorites.ini")
+                FileDelete(A_ScriptDir "\Assets\" assetspec "\Settings\ratings.ini")
             }
 
             ExitApp
@@ -704,12 +644,12 @@ if (A_Args.Length = 1)
     }
     else if (A_Args[1] == "-createcfg" && FileExist(config_file))
     {
-        LogEntry("ERROR: Can't create " . cConfigFileName . ". File already exists.`n")
+        LogEntry("ERROR: Can't create " cConfigFileName ". File already exists.`n")
         ExitApp
     }
     else if (A_Args[1] == "-createcfgexample" && FileExist(config_example))
     {
-        LogEntry("ERROR: Can't create " . cConfigExampleFileName . ". File already exists.`n")
+        LogEntry("ERROR: Can't create " cConfigExampleFileName ". File already exists.`n")
         ExitApp
     }
     else if (A_Args[1] == "-createcfg" || A_Args[1] == "-createcfgexample")
@@ -739,12 +679,12 @@ if (!GetTaskbarState()) ;if taskbar visible
 ;---------------------------------------------------------------------------------
 if !FileExist(config_file)
 {
-    LogEntry("NOTICE: Configuration file not found: " . config_file . "`n")
+    LogEntry("NOTICE: Configuration file not found: " config_file "`n")
     LogEntry("`n")
-    LogEntry("NOTICE: A configuration file called " . cConfigFileName . " must be present to operate this software. A normal`n")
-    LogEntry("NOTICE: sparce configuration file template may be created by typing `"" . cExeName . " -createcfg`" at`n")
+    LogEntry("NOTICE: A configuration file called " cConfigFileName " must be present to operate this software. A normal`n")
+    LogEntry("NOTICE: sparce configuration file template may be created by typing `"" cExeName " -createcfg`" at`n")
     LogEntry("NOTICE: the command prompt. A verbose example configuration file with helpful comments can be created`n")
-    LogEntry("NOTICE: by typing `"" . cExeName . " -createcfgexample`" at the command prompt.`n")
+    LogEntry("NOTICE: by typing `"" cExeName " -createcfgexample`" at the command prompt.`n")
     LogEntry("`n")
     LogEntry("NOTICE: Please see the documentation for further instructions.`n")
     LogEntry("ERROR: Exiting.  Could not continue.`n")
@@ -802,7 +742,7 @@ if (gCfg.debug_mode)
     config_section := config_section_temp
     
     ;In all cases...
-    LogEntry("INFO: debug=" . gCfg.debug_mode . debug_mode_override . "; LAUNCHING OF EXECUTABLES WILL BE SUPPRESSED IN THIS MODE.`n")
+    LogEntry("INFO: debug=" gCfg.debug_mode debug_mode_override "; LAUNCHING OF EXECUTABLES WILL BE SUPPRESSED IN THIS MODE.`n")
 }
 
 ;---------------------------------------------------------------------------------
@@ -811,10 +751,10 @@ if (gCfg.debug_mode)
 
 ;These log entry values were collected earlier, but presented to the user here
 true_word := ""
-LogEntry("INFO: Original argument list: " . args_original . "`n")
+LogEntry("INFO: Original argument list: " args_original "`n")
 if (args_original != args_postprocess)
 {
-    LogEntry("INFO: Argument list after passthrough arguments moved to param_list: " . args_postprocess . "`n")
+    LogEntry("INFO: Argument list after passthrough arguments moved to param_list: " args_postprocess "`n")
     true_word := "true "
 }
 
@@ -822,16 +762,16 @@ if (args_original != args_postprocess)
 if (ProcessOverrideArgs(&A_Args))
 {
     args_postprocess := ArgArrayToParamString(A_Args)
-    LogEntry("INFO: Argument list after override arguments processed and removed: " . args_postprocess . "`n")
+    LogEntry("INFO: Argument list after override arguments processed and removed: " args_postprocess "`n")
     true_word := "true "
 }
 
 if (A_Args.Length == 0)
-    LogEntry("INFO: " . cExeName . " launched with no arguments.`n")
+    LogEntry("INFO: " cExeName " launched with no arguments.`n")
 else if (A_Args.Length == 1)
-    LogEntry("INFO: " . cExeName . " launched with the following " . true_word . "argument: " . args_postprocess . "`n")
+    LogEntry("INFO: " cExeName " launched with the following " true_word "argument: " args_postprocess "`n")
 else
-    LogEntry("INFO: " . cExeName . " launched with the following " . true_word . "arguments: " . args_postprocess . "`n")
+    LogEntry("INFO: " cExeName " launched with the following " true_word "arguments: " args_postprocess "`n")
 
 ;******* create runlast_eip.bat file ******************
 if (FileExist(launch_file))
@@ -863,11 +803,11 @@ if (A_Args.Length > 2 || (A_Args.Length == 2 && !oEmulators.IsValidKey(A_Args[1]
     A_Args := Array()
     if (g_offset == 1)
     {
-        A_Args[1] := temp_sys
-        A_Args[2] := temp_rom
+        A_Args.Push(temp_sys)
+        A_Args.Push(temp_rom)
     }
     else
-        A_Args[1] := temp_rom
+        A_Args.Push(temp_rom)
 }
 
 ;---------------------------------------------------------------------------------
@@ -899,7 +839,7 @@ oDetectInactivity.Activate()
 fAction := ScheduleAction.Bind("") ;this callback function is not actually used at this time
 oSchedule := Schedule_Class(gCfg.attract_timer, gCfg.attract_delay, fAction)
 
-if (gCfg.attract_timer != 0)
+if (gCfg.attract_timer != "0")
 {
     oSchedule.Start() ;makes the schedule active
 }
@@ -907,9 +847,9 @@ if (gCfg.attract_timer != 0)
 if (gCfg.attract_delay == 0) 
     LogEntry("INFO: Auto-Switch mode is off (delay set to 0).`n")
 else if (gCfg.attract_delay < 20)
-    LogEntry("WARNING: Auto-Switch mode is off (delay set to " . gCfg.attract_delay . " seconds). Must be set to at least 20 seconds to function.`n")
+    LogEntry("WARNING: Auto-Switch mode is off (delay set to " gCfg.attract_delay " seconds). Must be set to at least 20 seconds to function.`n")
 else
-    LogEntry("INFO: Auto-Switch mode is on (delay set to " . gCfg.attract_delay . " seconds, timer set to " . gCfg.attract_timer . ").`n")
+    LogEntry("INFO: Auto-Switch mode is on (delay set to " gCfg.attract_delay " seconds, timer set to " gCfg.attract_timer ").`n")
 
 ;Start marquee.exe if marquee mode and autostart is enabled
 if (gCfg.marquee_active && gCfg.marquee_autostart)
@@ -936,12 +876,12 @@ if (A_Args.Length == 0)
     }
     else if (gCfg.seed_rom)
     {
-        LogEntry("NOTICE: Attempting to launch the seed_rom: " . gCfg.seed_rom . "`n")
+        LogEntry("NOTICE: Attempting to launch the seed_rom: " gCfg.seed_rom "`n")
         VectorNow(gCfg.seed_rom)	
     }
     else
     {
-        LogEntry("ERROR: Must run with a defined playlist, parameter, or seed_rom (try `"" . cExeName . " <sys_key> <rom_file>`"). Exiting.`n")
+        LogEntry("ERROR: Must run with a defined playlist, parameter, or seed_rom (try `"" cExeName " <sys_key> <rom_file>`"). Exiting.`n")
         ExitApp 
     }
 }
@@ -951,7 +891,7 @@ if (A_Args.Length == 0)
 ;---------------------------------------------------------------------------------
 Vector:
 
-    ;Do initializations for the new game
+    ;Do initializations for the new vector
     pid_emulator := 0  
     bSearchGlobal := false
     winset_style := ""
@@ -963,7 +903,7 @@ Vector:
     oConfigFile.ReadSection("Key_Map")
 
     ;Initialize all asset paths
-    ;These will be populated by the ProcessIni() function below
+    ;These will be populated by the ProcessIni() call below
     gCfg.logo_folder := ""
     gCfg.system_logo := ""
     gCfg.marquee_folder := ""
@@ -979,7 +919,7 @@ Vector:
     szExtraTypes := extraTypes.Length
     Loop szExtraTypes
     {
-        extraType := Trim(extraTypes[A_Index]) . "_folder"
+        extraType := Trim(extraTypes[A_Index]) "_folder"
         gCfg.%extraType% := ""
 
         extraType := "system_" . Trim(extraTypes[A_Index])
@@ -1012,11 +952,10 @@ Vector:
 
     ;Marquee support initialization
     marquee_full_path := SetAssetFullPath("marquee", gCfg.rom_name, gCfg.marquee_folder, gCfg.system_marquee, gCfg.global_asset_name)
-    LogEntry("INFO: Marquee file set to: " . marquee_full_path . "`n")
+    LogEntry("INFO: Marquee file set to: " marquee_full_path "`n")
 
     ;If marquee mode is configured and active and marquee.exe is running...
-    if (true)
-    ;if (marquee_full_path && gCfg.marquee_active && (ProcessExist(marquee_pid) || ProcessExist("marquee.exe")))
+    if (marquee_full_path && gCfg.marquee_active && (ProcessExist(marquee_pid) || ProcessExist("marquee.exe")))
     {
         LogEntry("INFO: Sending marquee mode update.`n")        		
 
@@ -1044,21 +983,28 @@ Vector:
         }
         catch as e
         {		
-            LogEntry("ERROR: Processing marquee mode: " . FormatErrorMessage(e) . "`n")
+            LogEntry("ERROR: Processing marquee mode: " FormatErrorMessage(e) "`n")
             ExitApp
         }
     }
 
+    ;Do any validation specific to this vector
+    ValidateVectorConfig()
+
     g_cycle++ ;this count increment needs to be after ProcessRules()
-    if (g_cycle == 1)
+    if (g_cycle == 1) ;first run only
     {
         SetTimer RunWaitTimer, runwait_default_freq
         SetTimer SelectControlTimer, 100
-        SetTimer KeepActive, 1000
+
+        ;Delay starting until it is reasonable to expect the game's screen to be active
+        ;Also see the delay on setting bEmuWindowActive:=true in RunWaitTimer which
+        ;performs a similar function for subsequent runs.
+        SetTimer KeepActive, start_show_time * 1000 + 4000
     }
 
     ;Add game to the play log
-    play_log["log"].Push(gCfg.sys_key . " " . gCfg.rom_name)
+    play_log["log"].Push(gCfg.sys_key " " gCfg.rom_name)
 
     ;support for magic_key delay
     if (gCfg.magic_delay > 0)
@@ -1089,7 +1035,7 @@ Vector:
     logo_full_path := SetAssetFullPath("logo", gCfg.rom_name, gCfg.logo_folder, gCfg.system_logo, gCfg.global_asset_name)
     
     if (logo_full_path)
-        LogEntry("INFO: Logo file set to: " . logo_full_path . "`n")
+        LogEntry("INFO: Logo file set to: " logo_full_path "`n")
     else
         LogEntry("INFO: No logo files found.`n")
     
@@ -1132,51 +1078,36 @@ Vector:
         global oFadeAlphaOverlay := fade_window_class(gGui.guiAlpha_Overlay.Hwnd)  ;this fades the overlay on top of the window
         global oFadeStart := fade_window_class(guiStart.Hwnd)                      ;this fades in the start screen
 
-        LogEntry("INFO: Showing start screen (minimum duration: " . start_show_time . " seconds)`n") 
+        LogEntry("INFO: Showing start screen (minimum duration: " start_show_time " seconds)`n") 
         
-        ;**** House of cards warning!! *****
-        ;If changing any of these settings, TEST for these things....A LOT
+        ;---------------------------------------------------------------------------------
+        ;If changing any of the following settings, TEST for these things....A LOT
         ;1. Glitching between games (momentary display of Select screen)
         ;2. Ensure Select screen is visible when using the Magic key after
         ;   the first game switch (and then agan after subsequent game switches.) 
         ;3. Make sure Alpha fading still works THE RIGHT WAY.
-        if (gCfg.debug_mode || test_mode)
-        {
-            ;set the initial z-order
-            ;guiAlpha.Opt("-AlwaysOnTop")                   
-        }
-        else
-        {
-            ;guiAlpha.Opt("-AlwaysOnTop")
+        ;---------------------------------------------------------------------------------
+        guiAlpha.Opt("-AlwaysOnTop")
             
-            ;set the initial z-order     
-            ;guiAlpha.Opt("+AlwaysOnTop")
-            ;guiSelect.Opt("+AlwaysOnTop")
-            ;ShowControls("guiSelect") ;ShowControls should always follow a guiSelect +AlwaysOnTop directive
-
-            ;guiBackground.Opt("+AlwaysOnTop")
-            ;guiStart.Opt("+AlwaysOnTop")
-        }
-
         ;Show the Alpha screen
-        guiAlpha.Show("W" . nScreenWidth . " H" . nScreenHeight . " X0 Y0")
+        guiAlpha.Show("W" nScreenWidth " H" nScreenHeight " X0 Y0")
 
         ;Set the Alpha screen's transparency
         ;This is used for the partial transparency effect when the game menu (gGui.guiSelect) is displayed 
-        WinSetTransparent 0, "ahk_id " . guiAlpha.Hwnd ;0 is transparent, 255 is opaque
+        WinSetTransparent 0, "ahk_id " guiAlpha.Hwnd ;0 is transparent, 255 is opaque
 
         ;Set transparency of the Alpha screeen's black overlay
         ;This is used to darken the pause screen when the game menu (gGui.guiSelect) is shown over it
-        WinSetTransparent 255, "ahk_id " . gGui.guiAlpha_Overlay.Hwnd ;0 is transparent, 255 is opaque
+        WinSetTransparent 255, "ahk_id " gGui.guiAlpha_Overlay.Hwnd ;0 is transparent, 255 is opaque
 
-        guiSelect.Show("W" . nScreenWidth . " H" . nScreenHeight . " X0 Y0")
-        guiBackground.Show("W" . nScreenWidth . " H" . nScreenHeight . " X0 Y0")
-        guiStart.Show("W" . nScreenWidth . " H" . nScreenHeight . " X0 Y0 NA")           
+        guiSelect.Show("W" nScreenWidth " H" nScreenHeight " X0 Y0")
+        guiBackground.Show("W" nScreenWidth " H" nScreenHeight " X0 Y0")
+        guiStart.Show("W" nScreenWidth " H" nScreenHeight " X0 Y0 NA")           
 
         ;Alpha fade-in start screen when switching games
-        if (alpha_effect)
+        if (gCfg.alpha_effect)
         {
-            WinSetTransparent 0, "ahk_id " . guiStart.Hwnd
+            WinSetTransparent 0, "ahk_id " guiStart.Hwnd
             
             oFadeStart.Start(1,255,20,16)  ;fade when switching 
                 
@@ -1196,9 +1127,9 @@ Vector:
             }
         }  
         else  
-            WinSetTransparent 255, "ahk_id " . guiStart.Hwnd 
+            WinSetTransparent 255, "ahk_id " guiStart.Hwnd 
 
-        DisableControls("guiSelect")
+        ControlActivationState.DisableSelectControls()
     }
 
     ;Start a thread to create the image/info screens for pause while we're loading...
@@ -1214,7 +1145,7 @@ Vector:
     ;  Run the emulator's apps
     ;---------------------------------------------------------------------------------
     
-    if (proxy_type = "Batch")
+    if (proxy_type == "Batch")
         LogEntry("INFO: use_proxy: Skipping emulator run_apps. Running apps in file proxy instead.`n")
     else
     {	
@@ -1238,8 +1169,8 @@ Vector:
 
     if (!FileExist(cl))
     {
-        LogEntry("NOTICE: An emulator at the location: " . cl . " could not be found.`n")
-        LogEntry("NOTICE: Please review the configuration file (" . cConfigFileName . "), and ensure that the value`n" )
+        LogEntry("NOTICE: An emulator at the location: " cl " could not be found.`n")
+        LogEntry("NOTICE: Please review the configuration file (" cConfigFileName "), and ensure that the value`n" )
         LogEntry("NOTICE: of exe_full_path points to a valid folder and filename.`n")
         LogEntry("ERROR: Could not continue.`n")
     }
@@ -1278,7 +1209,7 @@ Vector:
     ;  Launch Emulator (or Batch proxy instructions if so configured)
     ;---------------------------------------------------------------------------------
     
-    if (proxy_type = "Batch")
+    if (proxy_type == "Batch")
     {
         for g_idx, g_param in proxy_contents
         {
@@ -1300,7 +1231,7 @@ Vector:
             }
             catch as e
             {		
-                LogEntry("ERROR: FILE PROXY BATCH: " . FormatErrorMessage(e) . "`n")
+                LogEntry("ERROR: FILE PROXY BATCH: " FormatErrorMessage(e) "`n")
                 ExitApp
             }
         }
@@ -1332,7 +1263,7 @@ Vector:
         }
         catch as e
         {		
-            LogEntry("ERROR: Launching System: " . FormatErrorMessage(e) . "`n")
+            LogEntry("ERROR: Launching System: " FormatErrorMessage(e) "`n")
             ExitApp
         }
     }
@@ -1343,30 +1274,18 @@ Vector:
     
     ;re-hide cursor since some emulators force cursor back on when they exit
     if (gCfg.hide_cursor && !test_mode && !gCfg.debug_mode)
-        SystemCursor("Off") ;comment out while debugging to prevent loss of cursor
+        SystemCursor("Off") 
     
     if (exit_show_time > -1)
-        LogEntry("INFO: Showing exit screen (minimum duration: " . exit_show_time . " seconds)`n") 
+        LogEntry("INFO: Showing exit screen (minimum duration: " exit_show_time " seconds)`n") 
     
     bScreenContinue := false
-    ;exit_timer_val := exit_show_time = -1 ? 0 : 1000 * exit_show_time
     exit_timer_val := exit_show_time <= 0 ? -100 : -1000 * exit_show_time
     SetTimer ScreenDelay, exit_timer_val
 
     if (exit_show_time > -1)
     {
-        if (!test_mode)
-        {
-            ;guiBackground.Opt("-AlwaysOnTop")
-            ;guiExit.Opt("-AlwaysOnTop")
-        }
-        else
-        {
-            ;guiBackground.Opt("-AlwaysOnTop")
-            ;guiExit.Opt("-AlwaysOnTop")
-        }
-
-        guiExit.Show("W" . nScreenWidth . " H" . nScreenHeight . " X0 Y0")
+        guiExit.Show("W" nScreenWidth " H" nScreenHeight " X0 Y0")
     }
     
     ;---------------------------------------------------------------------------------
@@ -1402,21 +1321,15 @@ Vector:
         oDetectInactivity.ActionCount := actCnt-1
     }
 
-    ;c:=oDetectInactivity.ActionCount
-    ;OutputDebug cnt: %c%`n 
-
-    ;The action count translates roughly into how many
-    ;seconds of detected activity a game received.
+    ;The action count translates roughly into how many seconds of activity a game received
+    ;This determines if it is added to the history/auto-attract lists
     if (oDetectInactivity.ActionCount > 5)
     {
         LogEntry("INFO: Detected game interaction. Updating history.`n")
 
         ;add vector to the history file
-        oHistory.Update(gCfg.sys_key . " " . gCfg.rom_file)
+        oHistory.Update(gCfg.sys_key " " gCfg.rom_file)
         
-        ;c:=oDetectInactivity.ActionCount
-        ;OutputDebug cnt: %c%`n 
-
         oSelectListControl.UpdateAttractListView()
     }
     oDetectInactivity.ActionCount := 0  
@@ -1431,7 +1344,7 @@ Vector:
         if (gCfg.attract_mute > 0) 
             oMasterSound.Off() ;mute audio
 
-        LogEntry("INFO: Vectoring under automation to new game: " . g_directswitch_args . ".`n")
+        LogEntry("INFO: Vectoring under automation to new game: " g_directswitch_args ".`n")
         
         VectorNow(g_directswitch_args)
         Goto Vector
@@ -1441,19 +1354,17 @@ ExitApp
 ;*********************************************************************************************
 ;*********************************************************************************************
 
-;Call this function whenever exiting arcadeEIP to close and free resources
+;Call this function when exiting arcadeEIP to close and free resources
 ExitFunction(ExitReason, ExitCode)
 {
     global
     
     local logFileName
 
-    FreeResource(hHook)
-
     ;Send appropriate exit message to marquee.exe if marquee mode active
     if (gCfg.marquee_active && ProcessExist("marquee.exe"))
     {
-        LogEntry("INFO: Notifying marquee.exe that eip.exe is exiting (autoexit=" . gCfg.marquee_autoexit . ").`n")        		
+        LogEntry("INFO: Notifying marquee.exe that eip.exe is exiting (autoexit=" gCfg.marquee_autoexit ").`n")        		
         
         try
         {	
@@ -1473,11 +1384,12 @@ ExitFunction(ExitReason, ExitCode)
         }
         catch Error
         {		
-            LogEntry("ERROR: Processing marquee mode: " . FormatErrorMessage(e) . "`n")
+            LogEntry("ERROR: Processing marquee mode: " FormatErrorMessage(e) "`n")
             ExitApp
         }
     }
 
+    ;Destroy Guis
     if (start_show_time > -1 || exit_show_time > -1)
     {
         try guiBackground.Destroy()
@@ -1520,8 +1432,8 @@ ExitFunction(ExitReason, ExitCode)
         ShowLog(logFileName)	
     }
     
-    if (!suppressExitMessage)
-        LogEntry("Exiting " . cExeName . "`n")
+    if (!bSuppressExitMessage)
+        LogEntry("Exiting " cExeName "`n")
     
     if (gCfg.status_beeps)
         DoBeep()
@@ -1542,20 +1454,27 @@ ExitFunction(ExitReason, ExitCode)
     {
         if (ut_runwait_cycle == 0)
             ut_runwait_avg := 0
-        else
-            ut_runwait_avg := ut_runwait_timer_total / ut_runwait_cycle
-        LogEntry("INFO: Runwait cycle average: " . ut_runwait_avg . ". Peak was: " . ut_runwait_peak . ".`n")
+
+        LogEntry("INFO: Runwait cycle average: " ut_runwait_avg " ms. Peak was: " ut_runwait_peak " ms.`n")
     }
 
     ;if we started from a front end, make sure it gets the focus back
     ;(GameEx didn't need, but BigBox does)
     if (fe_pid)
        WinActivate "ahk_pid " . fe_pid
+
+    ;Turn off timer threads
+    SetTimer RunWaitTimer, 0
+    SetTimer KeepActive, 0
+    if (gCfg.kiosk_mode)
+        SetTimer KeyboardStrobeA, 0
+    else
+        SetTimer KeyboardStrobeB, 0
 }
 
 KillApp(theHotkey:="") 
 {
-    LogEntry("INFO: " theHotkey " pressed. Terminating " . cProductName . ".`n")
+    LogEntry("INFO: " theHotkey " pressed. Terminating " cProductName ".`n")
     ExitApp
     return
 }

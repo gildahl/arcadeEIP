@@ -18,11 +18,12 @@ MagicKey(option, theHotkey:="")
     ;*** HOUSE OF CARDS ALERT ***
     ;BEWARE that the sequence of events in this function are
     ;very delicate.  Test throroughly if changing anything here.
-    if (magic_key_off)
+   
+    if (magic_key_off || !bEmuWindowActive)
+    {
+        oBASS.Play("error")
         return
-
-    if (!bEmuWindowActive)
-        return
+    }
 
     if (!g_guiselect_visible) ;guiSelect hidden, so lets show it.
     {
@@ -61,6 +62,7 @@ MagicKey(option, theHotkey:="")
             Hotkey gCfg.magic_key, "On"
         }
 
+        oBASS.Play("menu")
         g_guiselect_visible := true ;must be above ShowControls
         guiSelect.Opt("+AlwaysOnTop")
         ShowControls("guiSelect") ;ShowControls should always follow a guiSelect +AlwaysOnTop directive          
@@ -82,21 +84,13 @@ MagicKey(option, theHotkey:="")
         ;a pause screen, we don't want to bury it.)
         if (!oPauseProc.Active && !g_guipause_visible) 
         {
-            ;MouseGetPos &OutputVarX, &OutputVarY, &OutputVarWin, &OutputVarControl, 2
-            ;eHwnd := WinGetID("ahk_pid " . pid_emulator)
-            ;emu_hwnd := "ahk_id " . emu_id
-
             ControlFocus(WinGetID("ahk_pid " . pid_emulator))
-            ;ControlFocus,,ahk_pid %pid_emulator%
         }
         
         g_guiselect_visible := false
 
         mouse_clicks_off := 0
         HideControls("guiSelect")  
-
-        ;WinSet, AlwaysOnTop, Off, ahk_pid %pid_emulator%
-        ;WinSet, Style, 0x1000000, ahk_pid %pid_emulator%
 
         ;Wait for apps to reload
         ;option 0 means we're returning to the current game so no point
@@ -526,13 +520,13 @@ HideControls(guiName)
     {
         Critical
         oPauseControl.GoPage("hide")
-        DisableControls("guiPause")
+        ControlActivationState.DisablePauseControls()
     }
 
     if (guiName == "guiSelect")
     {
         oSelectListControl.Hide()
-        DisableControls("guiSelect")
+        ControlActivationState.DisableSelectControls()
     }
 
     if (guiName == "guiStart")
@@ -559,17 +553,13 @@ ShowControls(guiName)
     {
         Critical
         oPauseControl.GoPage("start")
-        EnableControls("guiPause")
+        ControlActivationState.EnablePauseControls()
     }
 
     if (guiName == "guiSelect")
     {
-        ;if (IsSet(oSelectListControl))
-        ;if (g_guiselect_loaded)
-        ;{
-            oSelectListControl.Show()
-            EnableControls("guiSelect")
-        ;}
+        oSelectListControl.Show()
+        ControlActivationState.EnableSelectControls()
     }
 
     if (guiName == "guiStart")
@@ -934,10 +924,11 @@ ScrollList(direction, theHotkey:="")
 
     Switch direction
     {
-        Case "d","u","home","end","pu","pd":        
+        Case "d","u","home","end","pu","pd":  ;navigation
+            Critical "On"
             oSelectListControl.ScrollVertical(direction)
-
-        Case "s":
+            Critical "Off"
+        Case "s": ;launch game (i.e. "select")
             if (g_directswitch_args)
                 return
             
@@ -952,7 +943,7 @@ ScrollList(direction, theHotkey:="")
         ;to prevent re-entry issues stemming from quickly toggling back and forth
         ;between left and right (vertical scroll control does not seem to 
         ; require this)
-        Case "r":
+        Case "r":  
             Loop Parse gCfg.left_key, "CSV"
                 Hotkey A_LoopField, "Off"
 
@@ -966,13 +957,14 @@ ScrollList(direction, theHotkey:="")
                 Hotkey A_LoopField, "Off"
 
             oSelectListControl.ScrollHorizontal(direction)
-            ;oBASS.Play("page")
             
             Loop Parse gCfg.right_key, "CSV"
                 Hotkey A_LoopField, "On"
 
         Case "picks","tog","targ":  ;picks toggles the picks (formerly favorites) list, "tog" adds/removes single item, "targ" toggles edit mode
+            Critical "On"
             oSelectListControl.SublistCommand(direction)
+            Critical "Off"
         Case "all", "genre","year", "publisher","developer","players","favorites","rating":
             oSelectListControl.SublistCommand(direction)
         Case "mark": ;mark as favorite
@@ -1016,10 +1008,6 @@ ModifyHotkeys(hk_style)
     global
 
     local e
-    ;local fScrollNowhere, fScrollUp, fScrollDown ;fScrollLeft, fScrollRight
-    ;local fScrollSelect, fPageDown, fPageUp
-    ;local fHome, fEnd, fFav, fTarget
-    ;local fToggle
 
     try
     {
@@ -1629,6 +1617,7 @@ InActivateHotKeys()
 AttractNext(theHotkey:="")
 {   
     global
+    
     ;If startup initialization is still occurring, we can't switch till its done.
     ;So put up a message.
     if (!g_guiselect_loaded)

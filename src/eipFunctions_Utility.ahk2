@@ -2,9 +2,9 @@
 ; © 2023 David G. Dahlstrom
 ; File: eipFunctions_Utility.ahk2
 
-;THIS FILE IS FOR UTILITY FUNCTIONS THAT ARE RELATIVELY GENERIC
-;AND WHICH ARE TRUE LOCAL FUNCTIONS REQUIRING NO GLOBAL PROJECT VARIABLES
-;MAKING IT POSSIBLE TO SHARE WITH OTHER PROJECTS WITH NO DEPENDENCIES
+;This file is for utility functions tht are relatively generic and which
+;are true local functions requiring no global project variables, making
+;it possible to share with other projects with no dependencies.
 
 ;Strips a string of all text in () or [], unless the enclosures
 ;are doubled, such as ((test)) or [[test]].
@@ -65,6 +65,10 @@ StripEnclosures(val, mode)
 ArgArrayToParamString(oArgs)
 {
 	sParams := ""
+
+	if (!IsSet(oArgs))
+		return SParams
+
 	for n, arg in oArgs
 	{
 		if (InStr(arg, A_Space))

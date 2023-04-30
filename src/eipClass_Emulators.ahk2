@@ -53,8 +53,14 @@ class emulators_class
 			{
 				aLine := StrSplit(systemSetting, "=", " ", 2)
 				systemKey := aLine[1] 
-				systemValue := aLine[2] 						
-				systemArray[systemKey] := systemValue
+				systemValue := aLine[2] 
+				
+				if (IsInteger(systemValue))
+					systemArray[systemKey] := Integer(systemValue)
+				else if (IsFloat(systemValue))
+					systemArray[systemKey] := Float(systemValue)
+				else
+					systemArray[systemKey] := systemValue
 
 				;special case 1 - create root_folder out of exe_full_path
 				if (systemKey == "exe_full_path")
@@ -106,7 +112,7 @@ class emulators_class
 	
 	__Destroy()
 	{
-		this.Emulators := Map()
+		this.Emulators := ""
 	}
 
 	IsValidKey(sysKey)
@@ -371,7 +377,7 @@ class emulators_class
 						}
 						catch as e
 						{
-							LogEntry("ERROR: XML Processing Error (MSXML2.DOMDocument.3.0): " . FormatErrorMessage(e) . "`n")
+							LogEntry("ERROR: XML Processing Error (MSXML2.DOMDocument.3.0): " FormatErrorMessage(e) "`n")
 						}				
 					}
 					this._oDOM.async := false
@@ -392,7 +398,7 @@ class emulators_class
 							game_rom := element.item(0).text
 						}
 						catch as e {
-							LogEntry("WARNING: Unexpected XML read error: " . FormatErrorMessage(e) . "`n")
+							LogEntry("WARNING: Unexpected XML read error: " FormatErrorMessage(e) "`n")
 							break
 						}
 						
@@ -472,7 +478,7 @@ class emulators_class
 				metaFile := this._location
 				SplitPath metaFile,, &metaDir
 				
-				metaPattern := metaDir . "\*.txt"
+				metaPattern := metaDir "\*.txt"
 				metaPatternGlobal := ""
 
 				if (this._global_location)
@@ -480,7 +486,7 @@ class emulators_class
 					metaFileGlobal := this._global_location
 					SplitPath metaFileGlobal,, &metaGlobalDir
 					
-					metaPatternGlobal := metaGlobalDir . "\*.txt"
+					metaPatternGlobal := metaGlobalDir "\*.txt"
 				}
 
 				if FileExist(metaFile)
@@ -524,7 +530,7 @@ class emulators_class
 					;overrides any data from .meta.txt
 					Loop Files metaPattern
 					{
-						thisMetaFile := metaDir . "\" . A_LoopFileName
+						thisMetaFile := metaDir "\" A_LoopFileName
 						Loop Read thisMetaFile
 						{
 							thisContent := A_LoopReadLine 
@@ -541,7 +547,7 @@ class emulators_class
 					;overrides any data from .meta.txt
 					Loop Files metaPatternGlobal
 					{
-						thisMetaFile := metaGlobalDir . "\" . A_LoopFileName
+						thisMetaFile := metaGlobalDir "\" A_LoopFileName
 
 						Loop Read thisMetaFile
 						{
@@ -599,10 +605,6 @@ class emulators_class
 				romNoExt := "" . romNoExt . "" ;Need to quote since may have spaces
 				romName := "" . romName . ""
 
-				;try looking with both the root file name and the name with extension
-				;since the filename in different meta files may vary.  For example,
-				;mame does not include the file extension in its game list, while 
-				;GameEx does include the file extension.  So support both types.
 				data1 := data2 := ""
 				try data1 := this._cache[romNoExt].release_date
 				try data2 := this._cache[romName].release_date
@@ -622,10 +624,6 @@ class emulators_class
 				romNoExt := "" . romNoExt . "" ;Need to quote since may have spaces
 				romName := "" . romName . ""
 
-				;try looking with both the root file name and the name with extension
-				;since the filename in different meta files may vary.  For example,
-				;mame does not include the file extension in its game list, while 
-				;GameEx does include the file extension.  So support both types.
 				data1 := data2 := ""
 				try data1 := this._cache[romNoExt].developer
 				try data2 := this._cache[romName].developer			
@@ -645,10 +643,6 @@ class emulators_class
 				romNoExt := "" . romNoExt . "" ;Need to quote since may have spaces
 				romName := "" . romName . ""
 
-				;try looking with both the root file name and the name with extension
-				;since the filename in different meta files may vary.  For example,
-				;mame does not include the file extension in its game list, while 
-				;GameEx does include the file extension.  So support both types.
 				data1 := data2 := ""
 				try data1 := this._cache[romNoExt].play_mode
 				try data2 := this._cache[romName].play_mode
@@ -668,10 +662,6 @@ class emulators_class
 				romNoExt := "" . romNoExt . "" ;Need to quote since may have spaces
 				romName := "" . romName . ""
 
-				;try looking with both the root file name and the name with extension
-				;since the filename in different meta files may vary.  For example,
-				;mame does not include the file extension in its game list, while 
-				;GameEx does include the file extension.  So support both types.
 				data1 := data2 := ""
 				try data1 := this._cache[romNoExt].publisher
 				try data2 := this._cache[romName].publisher
@@ -691,10 +681,6 @@ class emulators_class
 				romNoExt := "" . romNoExt . "" ;Need to quote since may have spaces
 				romName := "" . romName . ""
 
-				;try looking with both the root file name and the name with extension
-				;since the filename in different meta files may vary.  For example,
-				;mame does not include the file extension in its game list, while 
-				;GameEx does include the file extension.  So support both types.
 				data1 := data2 := ""
 				try data1 := this._cache[romNoExt].genre
 				try data2 := this._cache[romName].genre
@@ -714,10 +700,6 @@ class emulators_class
 				romNoExt := "" . romNoExt . "" ;Need to quote since may have spaces
 				romName := "" . romName . ""
 
-				;try looking with both the root file name and the name with extension
-				;since the filename in different meta files may vary.  For example,
-				;mame does not include the file extension in its game list, while 
-				;GameEx does include the file extension.  So support both types.
 				name1 := name2 := ""
 				try name1 := this._cache[romNoExt].title
 				try name2 := this._cache[romName].title
@@ -743,7 +725,7 @@ class emulators_class
 			}
 			
 			;if metaData is found, returns a list of all file roots (no extension)
-			;of exact matches and partial matches.
+			;of exact matches and partial matches (not currently used).
 			/*
 			GetRomsFromContents(metaData)
 			{
