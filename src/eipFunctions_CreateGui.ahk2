@@ -74,11 +74,13 @@ CreateStartScreen()
 {
     global
 
-    ;Note *don't* make label_pos a local variable
+    ;Note *DON'T* make label_pos a local variable
+
     local label_width, stack_height
     local label_xpos, label_ypos, label_tag
     local rom_tag, rom_xpos, rom_ypos
     local screen_centerH, screen_centerW
+    local bb_platform
 
     label_tag := gCfg.rom_name ? "Game..." : "System..."
     
@@ -182,12 +184,13 @@ CreateStartScreen()
             title_ypos := screen_centerH + stack_height/2 - title_posH
             title_xpos := screen_centerW - title_posW / 2
             
-            label_ypos := title_ypos - label_posH * 2            
+            gGui.guiStart_GameTitle.Move(title_xpos, title_ypos)
+
+            ;label_ypos := title_ypos - label_posH * 2            
         }
 
         label_ypos := nScreenHeight / 2 - label_posH / 2
         gGui.guiStart_Label.Move(label_xpos, label_ypos)
-        gGui.guiStart_GameTitle.Move(title_xpos, title_ypos)
     }	
     
     return
@@ -200,11 +203,13 @@ CreateExitScreen()
 {
     global
 
-    ;Note *don't* make label_pos a local variable
+    ;Note *DON'T* make label_pos a local variable
+
     local label_width, stack_height
     local label_xpos, label_ypos, label_tag
     local rom_tag, rom_xpos, rom_ypos
     local screen_centerH, screen_centerW
+    local bb_platform
     
     label_tag := gCfg.rom_name ? "Game..." : "System..."
     
@@ -284,12 +289,12 @@ CreateExitScreen()
             title_ypos := screen_centerH + stack_height/2 - title_posH
             title_xpos := screen_centerW - title_posW / 2
             
-            label_ypos := title_ypos - label_posH * 2
+            gGui.guiExit_GameTitle.Move(title_xpos, title_ypos)
+            ;label_ypos := title_ypos - label_posH * 2
         }
 
         label_ypos := nScreenHeight / 2 - label_posH / 2
         gGui.guiExit_Label.Move(label_xpos, label_ypos)
-        gGui.guiExit_GameTitle.Move(title_xpos, title_ypos)
     }
     
 return

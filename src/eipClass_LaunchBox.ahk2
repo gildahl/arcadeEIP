@@ -23,7 +23,6 @@ class launchbox_frontend_class
 	;Can accept one or two folders (typically the logo_folder and marquee_folder)
 	SetAssetPath(asset_path, asset_path2:="")
 	{
-		;global ;fe_exe_full_path
 		this._current_asset_path := asset_path
 
 		root := this.GetRootFolder()
@@ -103,16 +102,16 @@ class launchbox_frontend_class
 		{
 			oDOM := ComObject("MSXML2.DOMDocument.6.0")
 		}
-		catch as err
+		catch as e
 		{
 			try
 			{
 				oDOM := ComObject("MSXML2.DOMDocument.3.0")
 			}
-			catch as err
+			catch as e
 			{
 
-				LogEntry("ERROR: XML Processing Error (MSXML2.DOMDocument.3.0): " FormatErrorMessage(err) "`n")
+				LogEntry("ERROR: XML Processing Error (MSXML2.DOMDocument.3.0): " FormatErrorMessage(e) "`n")
 			}				
 		}
 		oDOM.async := false

@@ -24,6 +24,7 @@ class BASS_class
 	__New()
 	{
 		this._active := 1 ;sound is on
+		this._available := 1 ;sound is available
 		this._device := gCfg.sound_device ;sound_device is a global set in arcadeEIP.ini [General] section.
 	}
 
@@ -35,6 +36,7 @@ class BASS_class
 			LogEntry("NOTICE: 3rd party library bass.dll not found. Sound support OFF. See Sound.txt.`n")
 
 			this._active := 0
+			this._available := 0
 			return
 		}
 
@@ -147,6 +149,9 @@ class BASS_class
 
 	Play(soundToPlay)
 	{
+		if (this._active == 0 || this._available == 0)
+			return
+
 		Switch soundToPlay
 		{
 			case "error":
@@ -155,7 +160,7 @@ class BASS_class
 				BASS_ChannelPlay := DllCall(this._play, "UInt", this._channel_menu, "Int", 1)
 		}
 
-		if (this._active == 0 || !g_guiselect_loaded || !g_guiselect_visible)
+		if (!g_guiselect_loaded || !g_guiselect_visible)
 			return
 
 		Switch soundToPlay 
@@ -197,10 +202,10 @@ class BASS_class
 	GetInfo()
 	{
 		idx := 0
-		soundInfo := Array()
+		aSoundInfo := Array()
 		info := Buffer(500)
 
-		if (this._active == 0)
+		if (this._active == 0 || this._available == 0)
 			return
 
 		Loop 
@@ -209,26 +214,26 @@ class BASS_class
 			if (BASS_dev == 0)
 				break
 
-			deviceInfo := Map()
+			mDeviceInfo := Map()
 
 			name := NumGet(info, 0, "Ptr")
 			driver := NumGet(info, A_PtrSize, "Ptr")
 			flags := NumGet(info, A_PtrSize*2, "UInt")
 			
-			deviceInfo["device"] := idx
-			deviceInfo["name"] := StrGet(name,"UTF-8")
-			deviceInfo["driver"] := driver == 0 ? "" : StrGet(driver,"UTF-8")
+			mDeviceInfo["device"] := idx
+			mDeviceInfo["name"] := StrGet(name,"UTF-8")
+			mDeviceInfo["driver"] := driver == 0 ? "" : StrGet(driver,"UTF-8")
 
-			soundInfo.Push(deviceInfo)
+			aSoundInfo.Push(mDeviceInfo)
 			idx++
 		}
 
-		return soundInfo
+		return aSoundInfo
 	}
 
 	GetVolume()
 	{
-		if (this._active == 0)
+		if (this._active == 0 || this._available == 0)
 			return
 
 		BASS_vol := DllCall(this._getvol, "Float")
@@ -239,7 +244,7 @@ class BASS_class
 
 	SetVolume(val)
 	{
-		if (this._active == 0)
+		if (this._active == 0 || this._available == 0)
 			return
 
 		BASS_vol:= DllCall(this._setvol, "Float", val, "UInt")
@@ -250,7 +255,7 @@ class BASS_class
 
 	SetDevice(dev)
 	{
-		if (this._active == 0)
+		if (this._active == 0 || this._available == 0)
 			return
 
 		BASS_dev := DllCall(this._setdev, "UInt", dev, "UInt")
@@ -261,7 +266,7 @@ class BASS_class
 
 	GetDevice()
 	{
-		if (this._active == 0)
+		if (this._active == 0 || this._available == 0)
 			return
 
 		BASS_dev := DllCall(this._getdev, "UInt")

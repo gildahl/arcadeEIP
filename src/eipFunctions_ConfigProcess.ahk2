@@ -13,6 +13,7 @@ ReadConfig()
         return false
 
     ;[General]
+    gCfg.delimiter := IniRead(config_file, "General", "delimiter", ",") ;use legacy comma if no entry
     gCfg.show_license := Integer(IniRead(config_file, "General", "show_license", 1))
     gCfg.idle_log := Integer(IniRead(config_file, "General", "idle_log", 0))
     gCfg.seed_rom := IniRead(config_file, "General", "seed_rom", "mame galaga.zip")
@@ -33,12 +34,12 @@ ReadConfig()
     
     if (gCfg.debug_mode)
     {
-        use_log := gCfg.status_beeps := 1
+        gCfg.use_log := gCfg.status_beeps := 1
     }
     else
     {
         gCfg.status_beeps := Integer(IniRead(config_file, "General", "status_beeps", 0))
-        use_log := Integer(IniRead(config_file, "General", "use_log", 1))
+        gCfg.use_log := Integer(IniRead(config_file, "General", "use_log", 1))
     }
 
     ;[Marquee]
@@ -112,7 +113,7 @@ ProcessIniLists()
     local list_list_key, list_proper_name, list_sort_prefix
     local list_sections
     
-    oLists := Array()
+    mLists := Array()
  
     list_sections := oConfigFile.GetGroupSections("List")
     for i, config_section in list_sections
@@ -121,10 +122,10 @@ ProcessIniLists()
         list_proper_name := IniRead(config_file, config_section, "proper_name", A_Space)
         list_sort_prefix := IniRead(config_file, config_section, "sort_prefix", A_Space)
         
-        oLists.Push({})
-        oLists[A_Index].list_key := list_list_key
-        oLists[A_Index].proper_name := list_proper_name
-        oLists[A_Index].sort_prefix := list_sort_prefix
+        mLists.Push({})
+        mLists[A_Index].list_key := list_list_key
+        mLists[A_Index].proper_name := list_proper_name
+        mLists[A_Index].sort_prefix := list_sort_prefix
     }
 }
 
@@ -303,30 +304,32 @@ ProcessIni()
 ;Sub function called in ProcessIni() and FrontEndStartup()
 ProcessIniApplications()
 {
-    global applications
+    global mApplications
 
     local app_app_key, app_exe_full_path, app_profile, app_param_list
-    local app_fe_skip, app_exit_cmd, app_sections
+    local app_fe_skip, app_exit_cmd, app_sections, app_run_options
     
-    applications := Map()
+    mApplications := Map()
  
     app_sections := oConfigFile.GetGroupSections("Application")
     for i, config_section in app_sections
     {
         app_app_key := IniRead(config_file, config_section, "app_key", A_Space)
         app_exe_full_path := IniRead(config_file, config_section, "exe_full_path", A_Space)
+        app_run_options := IniRead(config_file, config_section, "run_options", A_Space)
         app_profile := IniRead(config_file, config_section, "profile", A_Space)
         app_param_list := ReadIniFile(config_file, config_section, "param_list", A_Space)
         app_fe_skip := IniRead(config_file, config_section, "fe_skip", A_Space)
         app_exit_cmd := IniRead(config_file, config_section, "exit_cmd", A_Space)
         
-        applications[A_Index] := {}
-        applications[A_Index].app_key := app_app_key
-        applications[A_Index].exe_full_path := app_exe_full_path
-        applications[A_Index].profile := app_profile
-        applications[A_Index].param_list := app_param_list
-        applications[A_Index].fe_skip := app_fe_skip
-        applications[A_Index].exit_cmd := app_exit_cmd
+        mApplications[A_Index] := {}
+        mApplications[A_Index].app_key := app_app_key
+        mApplications[A_Index].exe_full_path := app_exe_full_path
+        mApplications[A_Index].run_options := app_run_options
+        mApplications[A_Index].profile := app_profile
+        mApplications[A_Index].param_list := app_param_list
+        mApplications[A_Index].fe_skip := app_fe_skip
+        mApplications[A_Index].exit_cmd := app_exit_cmd
     }
 }
 

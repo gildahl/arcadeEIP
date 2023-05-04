@@ -20,32 +20,22 @@ class DetectInactivity_Class
 
 	ActionCount
 	{
-		set {
-			this._action_count := value
-			return
-		}
-		get {
-			return this._action_count
-		}
+		get => this._action_count
+		set => this._action_count := value
 	}
 
     delay
 	{
-		set {
-			this._delay := value
-			return
-		}
-		get {
-			return this._delay
-		}
+		get => this._delay
+		set => this._delay := value
 	}
 	
 	Activate()
 	{
 		global
-		local id, joylist, state, fInactivityTest, numButtons
+		local id, mJoylist, mState, fInactivityTest, numButtons
 
-		joylist := Map()
+		mJoylist := Map()
 
 		;delay must be >= 20 seconds, otherwise delay
 		;is considered set to infinity
@@ -58,12 +48,12 @@ class DetectInactivity_Class
 			{	
 				id := A_Index
 				
-				state := Map()
-				state["id"] := id
-				state["X"] := GetKeyState(id "JoyX")
-				state["Y"] := GetKeyState(id "JoyY")
+				mState := Map()
+				mState["id"] := id
+				mState["X"] := GetKeyState(id "JoyX")
+				mState["Y"] := GetKeyState(id "JoyY")
 				
-				joylist[id] := state	
+				mJoylist[id] := mState	
 
 				numButtons := GetKeyState(id "JoyButtons")
 				if (numButtons > 16) ;ahk can't seem to handle more than 16 buttons
@@ -76,7 +66,7 @@ class DetectInactivity_Class
 			}
 		}
 		
-		this._joylist := joylist
+		this._joylist := mJoylist
 		
 		this._last_idle_time := A_TimeIdlePhysical 
 		fInactivityTest := this._fInactivityTest
@@ -134,32 +124,28 @@ class DetectInactivity_Class
 	;Obtain joystick state
 	GetJoyState()
 	{
-		global
-
-		local n, horiz, vert, joylist, state
-
-		JoyX := Map()
-		JoyY := Map()
+		mJoyX := Map()
+		mJoyY := Map()
 
 		horiz := gCfg.joy_horiz == "all" ? 1 : 0
     	vert := gCfg.joy_vert == "all" ? 1 : 0
 
-		joylist := this._joylist
+		mJoylist := this._joylist
 
-		for n, state in joylist
+		for n, mState in mJoylist
 		{
-			id := state["id"]
+			id := mState["id"]
 
-			JoyX[id] := GetKeyState(id "JoyX")
-			JoyY[id] := GetKeyState(id "JoyY")
+			mJoyX[id] := GetKeyState(id "JoyX")
+			mJoyY[id] := GetKeyState(id "JoyY")
 
-			if (JoyX[id] - state["X"] > 20 && horiz)
+			if (mJoyX[id] - mState["X"] > 20 && horiz)
 				return "r"
-			if (JoyX[id] - state["X"] < -20 && horiz)
+			if (mJoyX[id] - mState["X"] < -20 && horiz)
 				return "l"
-			if (JoyY[id] - state["Y"] > 20 && vert)
+			if (mJoyY[id] - mState["Y"] > 20 && vert)
 				return "d"
-			if (JoyY[id] - state["Y"] < -20 && vert)
+			if (mJoyY[id] - mState["Y"] < -20 && vert)
 				return "u"
 		}
 
@@ -168,15 +154,12 @@ class DetectInactivity_Class
 	
 	_inactivity_test(theHotkey:="")
 	{
-		global
-		local n, id, x, y, joylist, sound_set, joy_test, logEntry, JoyX, JoyY
-
-		joylist := this._joylist
+		mJoylist := this._joylist
 		sound_set := false
 		joy_test := "None detected"
 		logEntry := ""
-		JoyX := Map()
-		JoyY := Map()
+		mJoyX := Map()
+		mJoyY := Map()
 
 		;Whenever idle time drops below 1000, it must have been reset
 		;by the press of a keyboard or mouse button.
@@ -197,14 +180,14 @@ class DetectInactivity_Class
 			}
 		}
 		
-		for n, state in joylist
+		for n, mState in mJoylist
 		{
-			id := state["id"]
+			id := mState["id"]
 
-			x := JoyX[id] := GetKeyState(id "JoyX")
-			y := JoyY[id] := GetKeyState(id "JoyY")
+			x := mJoyX[id] := GetKeyState(id "JoyX")
+			y := mJoyY[id] := GetKeyState(id "JoyY")
 		
-			if ((Abs(JoyX[id] - state["X"]) > 20) || Abs(JoyY[id] - state["Y"]) > 20)
+			if ((Abs(mJoyX[id] - mState["X"]) > 20) || Abs(mJoyY[id] - mState["Y"]) > 20)
 			{
 				this._action_count++
 				this._last_idle_time := A_TimeIdlePhysical

@@ -3,6 +3,212 @@
 ; https://github.com/evilC/AHK-Random-Musings/blob/master/MouseDelta/MouseDelta.ahk  (MouseDelta)
 ; File: eipClass_MouseDelta.ahk2
 
+; From https://www.autohotkey.com/boards/viewtopic.php?t=10159
+
+; Instantiate this class and pass it a func name or a Function Object
+; The specified function will be called with the delta move for the X and Y axes
+; Normally, there is no windows message "mouse stopped", so one is simulated.
+; After 10ms of no mouse movement, the callback is called with 0 for X and Y
+Class MouseDelta {
+	State := 0
+	__New(callback) 
+	{
+		this.MouseMovedFn := this.MouseMoved.Bind(this)
+		this.Callback := callback
+	}
+
+	Start() 
+	{
+		static DevSize := 8 + A_PtrSize, RIDEV_INPUTSINK := 0x00000100
+		
+		; Register mouse for WM_INPUT messages.
+		RAWINPUTDEVICE := BUFFER(DevSize)
+		NumPut("UShort", 1, RAWINPUTDEVICE, 0)
+		NumPut("UShort", 2, RAWINPUTDEVICE, 2 )
+		NumPut("UInt", RIDEV_INPUTSINK, RAWINPUTDEVICE, 4)
+
+		; WM_INPUT needs a hwnd to route to, so get the hwnd of the AHK Gui.
+		; It doesn't matter if the GUI is showing, it still exists
+		hwnd := A_ScriptHwnd
+		NumPut("UInt", hwnd, RAWINPUTDEVICE, 8) 
+		this.RAWINPUTDEVICE := RAWINPUTDEVICE
+		DllCall("RegisterRawInputDevices", "Ptr", RAWINPUTDEVICE, "UInt", 1, "UInt", DevSize )
+		OnMessage(0x00FF, this.MouseMovedFn)
+		this.State := 1
+		return this	; allow chaining
+	}
+	
+	Stop()
+	{
+		static RIDEV_REMOVE := 0x00000001
+		static DevSize := 8 + A_PtrSize
+		OnMessage(0x00FF, this.MouseMovedFn, 0)
+		RAWINPUTDEVICE := this.RAWINPUTDEVICE
+		NumPut("Uint", RIDEV_REMOVE, RAWINPUTDEVICE, 4)
+		DllCall("RegisterRawInputDevices", "Ptr", RAWINPUTDEVICE, "UInt", 1, "UInt", DevSize )
+		this.State := 0
+		return this	; allow chaining
+	}
+	
+	SetState(state)
+	{
+		if (state && !this.State)
+		{
+			this.Start()
+			;OutputDebug "Start`n"
+		}
+		else if (!state && this.State)
+		{
+			this.Stop()
+			;OutputDebug "Stop`n"
+		}
+		return this	; allow chaining
+	}
+
+	Delete(){
+		this.Stop()
+		this.MouseMovedFn := ""
+	}
+	
+	; Called when the mouse moved.
+	; Messages tend to contain small (+/- 1) movements, and happen frequently (~20ms)
+	MouseMoved(wParam, lParam, msg, hwnd) 
+	{
+		Critical
+
+		;RawInput statics
+		static DeviceSize := 2 * A_PtrSize, iSize := 0, sz := 0, pcbSize:=8+2*A_PtrSize, offsets := {x: (20+A_PtrSize*2), y: (24+A_PtrSize*2)}, uRawInput
+		static axes := {x: 1, y: 2}
+ 
+		; Get hDevice from RAWINPUTHEADER to identify which mouse this data came from
+		header := BUFFER(pcbSize, 0)
+
+		try {
+			if (!DllCall("GetRawInputData", "Ptr", lParam, "Uint", 0x10000005, "Ptr", header, "Uint*", pcbSize, "Uint", pcbSize))
+				Return 0
+		}
+		catch {	
+			Return 0
+		}
+
+		ThisMouse := NumGet(header, 8, "UPtr")
+
+		;Discovered an issue when switching certain Visual Pinball games (such as Medieval Madness to STNG)
+		;That would result in the menu scrolling several places by itself. When traced, these mouse events were
+		;coming from device 0, so this code prevents device 0 from being able to scroll the list.  I don't know
+		;where these events are coming from, but suspect VP may be generating them.
+		if (ThisMouse == 0)
+			return
+
+		; Find size of rawinput data - only needs to be run the first time.
+		if (!iSize){
+			r := DllCall("GetRawInputData", "UInt", lParam, "UInt", 0x10000003, "Ptr", 0, "UInt*", &iSize, "UInt", 8 + (A_PtrSize * 2))
+			uRawInput := BUFFER(iSize)
+		}
+		sz := iSize	; param gets overwritten with # of bytes output, so preserve iSize
+
+		; Get RawInput data
+		r := DllCall("GetRawInputData", "UInt", lParam, "UInt", 0x10000003, "Ptr", uRawInput, "UInt*", &sz, "UInt", 8 + (A_PtrSize * 2))
+		x := 0, y := 0	; Ensure we always report a number for an axis. Needed?
+		x := NumGet(uRawInput, offsets.x, "Int")
+		y := NumGet(uRawInput, offsets.y, "Int")
+		f := NumGet(uRawInput, A_PtrSize * 2 + 8, "UShort") ;flags 0=relative, 1=absolute
+
+		IsRelativeMovement := (x || y) && !(f & 0x01)
+		IsAbsoluteMovement := f & 0x01
+		IsMovement := x || y || f & 0x01
+        
+		;OutputDebug " x: " x " y: " y " relative: " IsRelativeMovement " absolute: " IsAbsoluteMovement " movement: " IsMovement "`n"
+		;this.Callback.(ThisMouse, x, y)
+		
+		this.Callback(x, y)
+	}
+}
+
+/*
+;Sample code follows (for OnMouseEvent class)
+;************************************************************************************
+;#include <OnMouseEvent>
+; #include <Flags>
+; Pretty-print an integer as a |-separated string of flag names
+; warning: assumes each flag is only a single bit
+class Flags
+{
+	; construct from pairs of (string, integer)
+	__New(args*)
+	{
+		this.flags := args
+		; Loop args.Length
+			; this.%args[A_Index]% := ++A_Index ; use A_Index, increment, use A_Index
+	}
+	
+	Call(value)
+	{
+		out := ""
+		Loop this.flags.Length
+			if (value & this.flags[++A_Index])
+				value ^= this.flags[A_Index], out && out .= " | ", out .= this.flags[A_Index - 1]
+		if value
+			(out && out .= " | ", out .= value)
+		return out ? out : "0"
+	}
+}
+*/
+
+/*
+MouseStateFlags := Flags(
+	; "MOUSE_MOVE_RELATIVE", 0x00,
+	"MOUSE_MOVE_ABSOLUTE", 0x01,
+	"MOUSE_VIRTUAL_DESKTOP", 0x02,
+	"MOUSE_ATTRIBUTES_CHANGED", 0x04,
+	"MOUSE_MOVE_NOCOALESCE", 0x08)
+
+TransitionStateFlags := Flags(
+	"RI_MOUSE_BUTTON_1_DOWN", 0x0001,
+	"RI_MOUSE_BUTTON_1_UP", 0x0002,
+	"RI_MOUSE_BUTTON_2_DOWN", 0x0004,
+	"RI_MOUSE_BUTTON_2_UP", 0x0008,
+	"RI_MOUSE_BUTTON_3_DOWN", 0x0010,
+	"RI_MOUSE_BUTTON_3_UP", 0x0020,
+	"RI_MOUSE_BUTTON_4_DOWN", 0x0040,
+	"RI_MOUSE_BUTTON_4_UP", 0x0080,
+	"RI_MOUSE_BUTTON_5_DOWN", 0x0100,
+	"RI_MOUSE_BUTTON_5_UP", 0x0200,
+	"RI_MOUSE_WHEEL", 0x0400,
+	"RI_MOUSE_HWHEEL", 0x0800)
+
+Persistent
+OnMouseEvent(MouseTest)
+
+MouseTest(RawInputWrapper)
+{
+	ToolTip(
+		"ThisMouse " RawInputWrapper.ThisMouse
+		"`nusFlags " MouseStateFlags(RawInputWrapper.Flags)
+		; "`npadding " RawInputWrapper.Padding
+		"`nusButtonFlags " TransitionStateFlags(RawInputWrapper.ButtonFlags)
+		"`nusButtonData " RawInputWrapper.ButtonData
+		; "`nulRawButtons " RawInputWrapper.RawButtons
+		"`nlLastX " RawInputWrapper.LastX
+		"`nlLastY " RawInputWrapper.LastY
+		"`nulExtraInformation " RawInputWrapper.ExtraInformation
+		; "`nlParam " RawInputWrapper.lParam
+		
+		"`nIsRelativeMovement " RawInputWrapper.IsRelativeMovement
+		"`nIsAbsoluteMovement " RawInputWrapper.IsAbsoluteMovement
+		"`nIsMovement " RawInputWrapper.IsMovement
+		"`nIIsButtons " RawInputWrapper.IsButtons
+		"`nIsWheel " RawInputWrapper.IsWheel
+		"`nIsHWheel " RawInputWrapper.IsHWheel
+		"`nGetAbsolutePosition " (RawInputWrapper.GetAbsolutePosition(&x, &y), x " " y)
+	)
+}
+*/
+
+;**********************************************************************************************
+;**********************************************************************************************
+
+;Consider the code below as possible future replacement for MouseDelta
 
 /*
 OnMouseEvent emitter.
@@ -97,6 +303,7 @@ TODO:
 
 */
 
+/*
 ;https://www.autohotkey.com/boards/viewtopic.php?f=83&t=104629
 ; #include <Event>
 class Event
@@ -271,214 +478,5 @@ class OnMouseEvent
 	}
 	
 	static Exit(ExitReason, ExitCode) => this.Event.Listeners.Length && this.Stop()
-}
-
-; From https://www.autohotkey.com/boards/viewtopic.php?t=10159
-
-; Instantiate this class and pass it a func name or a Function Object
-; The specified function will be called with the delta move for the X and Y axes
-; Normally, there is no windows message "mouse stopped", so one is simulated.
-; After 10ms of no mouse movement, the callback is called with 0 for X and Y
-Class MouseDelta {
-	State := 0
-	__New(callback) {
-		;~ this.TimeoutFn := this.TimeoutFunc.Bind(this)
-		this.MouseMovedFn := this.MouseMoved.Bind(this)
-
-		this.Callback := callback
-	}
-
-	Start() {
-		static DevSize := 8 + A_PtrSize, RIDEV_INPUTSINK := 0x00000100
-		
-		; Register mouse for WM_INPUT messages.
-		RAWINPUTDEVICE := BUFFER(DevSize)
-		NumPut("UShort", 1, RAWINPUTDEVICE, 0)
-		NumPut("UShort", 2, RAWINPUTDEVICE, 2 )
-		NumPut("UInt", RIDEV_INPUTSINK, RAWINPUTDEVICE, 4)
-		; WM_INPUT needs a hwnd to route to, so get the hwnd of the AHK Gui.
-		; It doesn't matter if the GUI is showing, it still exists
-		;Gui +hwndhwnd
-		hwnd := A_ScriptHwnd
-		NumPut("UInt", hwnd, RAWINPUTDEVICE, 8) 
-		this.RAWINPUTDEVICE := RAWINPUTDEVICE
-		DllCall("RegisterRawInputDevices", "Ptr", RAWINPUTDEVICE, "UInt", 1, "UInt", DevSize )
-		OnMessage(0x00FF, this.MouseMovedFn)
-		this.State := 1
-		return this	; allow chaining
-	}
-	
-	Stop(){
-		static RIDEV_REMOVE := 0x00000001
-		static DevSize := 8 + A_PtrSize
-		OnMessage(0x00FF, this.MouseMovedFn, 0)
-		RAWINPUTDEVICE := this.RAWINPUTDEVICE
-		NumPut("Uint", RIDEV_REMOVE, RAWINPUTDEVICE, 4)
-		DllCall("RegisterRawInputDevices", "Ptr", RAWINPUTDEVICE, "UInt", 1, "UInt", DevSize )
-		this.State := 0
-		return this	; allow chaining
-	}
-	
-	SetState(state){
-		if (state && !this.State)
-		{
-			this.Start()
-			;OutputDebug "Start`n"
-		}
-		else if (!state && this.State)
-		{
-			this.Stop()
-			;OutputDebug "Stop`n"
-		}
-		return this	; allow chaining
-	}
-
-	Delete(){
-		this.Stop()
-		;~ this.TimeoutFn := ""
-		this.MouseMovedFn := ""
-	}
-	
-	; Called when the mouse moved.
-	; Messages tend to contain small (+/- 1) movements, and happen frequently (~20ms)
-	MouseMoved(wParam, lParam, msg, hwnd) 
-	{
-		Critical
-
-		;RawInput statics
-		static DeviceSize := 2 * A_PtrSize, iSize := 0, sz := 0, pcbSize:=8+2*A_PtrSize, offsets := {x: (20+A_PtrSize*2), y: (24+A_PtrSize*2)}, uRawInput
-		static axes := {x: 1, y: 2}
- 
-		; Get hDevice from RAWINPUTHEADER to identify which mouse this data came from
-		header := BUFFER(pcbSize, 0)
-
-		try {
-			if (!DllCall("GetRawInputData", "Ptr", lParam, "Uint", 0x10000005, "Ptr", header, "Uint*", pcbSize, "Uint", pcbSize))
-				Return 0
-		}
-		catch {	
-			Return 0
-		}
-
-		ThisMouse := NumGet(header, 8, "UPtr")
-
-		;Discovered an issue when switching certain Visual Pinball games (such as Medieval Madness to STNG)
-		;That would result in the menu scrolling several places by itself. When traced, these mouse events were
-		;coming from device 0, so this code prevents device 0 from being able to scroll the list.  I don't know
-		;where these events are coming from, but suspect VP may be generating them.
-		if (ThisMouse == 0)
-			return
-
-		; Find size of rawinput data - only needs to be run the first time.
-		if (!iSize){
-			r := DllCall("GetRawInputData", "UInt", lParam, "UInt", 0x10000003, "Ptr", 0, "UInt*", &iSize, "UInt", 8 + (A_PtrSize * 2))
-			uRawInput := BUFFER(iSize)
-		}
-		sz := iSize	; param gets overwritten with # of bytes output, so preserve iSize
-
-		; Get RawInput data
-		r := DllCall("GetRawInputData", "UInt", lParam, "UInt", 0x10000003, "Ptr", uRawInput, "UInt*", &sz, "UInt", 8 + (A_PtrSize * 2))
-		;try guiBackground.Opt("-AlwaysOnTop")
-        ;try guiSelect.Opt("-AlwaysOnTop")
-        ;try guiAlpha.Opt("-AlwaysOnTop")
-        ;try guiExit.Opt("-AlwaysOnTop")
-        ;try guiStart.Opt("-AlwaysOnTop")
-		x := 0, y := 0	; Ensure we always report a number for an axis. Needed?
-		x := NumGet(uRawInput, offsets.x, "Int")
-		y := NumGet(uRawInput, offsets.y, "Int")
-		f := NumGet(uRawInput, A_PtrSize * 2 + 8, "UShort") ;flags 0=relative, 1=absolute
-
-		IsRelativeMovement := (x || y) && !(f & 0x01)
-		IsAbsoluteMovement := f & 0x01
-		IsMovement := x || y || f & 0x01
- ;OutputDebug " x: " x " y: " y " relative: " IsRelativeMovement " absolute: " IsAbsoluteMovement " movement: " IsMovement "`n"
-		;this.Callback.(ThisMouse, x, y)
-		this.Callback(x, y)
- 
-		;~ ; There is no message for "Stopped", so simulate one
-		;~ fn := this.TimeoutFn
-		;~ SetTimer, % fn, -50
-	}
- 
-	;~ TimeoutFunc(){
-		;~ this.Callback.("", 0, 0)
-	;~ }
-}
-
-;Sample code follows (for OnMouseEvent class)
-;************************************************************************************
-;#include <OnMouseEvent>
-; #include <Flags>
-; Pretty-print an integer as a |-separated string of flag names
-; warning: assumes each flag is only a single bit
-class Flags
-{
-	; construct from pairs of (string, integer)
-	__New(args*)
-	{
-		this.flags := args
-		; Loop args.Length
-			; this.%args[A_Index]% := ++A_Index ; use A_Index, increment, use A_Index
-	}
-	
-	Call(value)
-	{
-		out := ""
-		Loop this.flags.Length
-			if (value & this.flags[++A_Index])
-				value ^= this.flags[A_Index], out && out .= " | ", out .= this.flags[A_Index - 1]
-		if value
-			(out && out .= " | ", out .= value)
-		return out ? out : "0"
-	}
-}
-
-/*
-MouseStateFlags := Flags(
-	; "MOUSE_MOVE_RELATIVE", 0x00,
-	"MOUSE_MOVE_ABSOLUTE", 0x01,
-	"MOUSE_VIRTUAL_DESKTOP", 0x02,
-	"MOUSE_ATTRIBUTES_CHANGED", 0x04,
-	"MOUSE_MOVE_NOCOALESCE", 0x08)
-
-TransitionStateFlags := Flags(
-	"RI_MOUSE_BUTTON_1_DOWN", 0x0001,
-	"RI_MOUSE_BUTTON_1_UP", 0x0002,
-	"RI_MOUSE_BUTTON_2_DOWN", 0x0004,
-	"RI_MOUSE_BUTTON_2_UP", 0x0008,
-	"RI_MOUSE_BUTTON_3_DOWN", 0x0010,
-	"RI_MOUSE_BUTTON_3_UP", 0x0020,
-	"RI_MOUSE_BUTTON_4_DOWN", 0x0040,
-	"RI_MOUSE_BUTTON_4_UP", 0x0080,
-	"RI_MOUSE_BUTTON_5_DOWN", 0x0100,
-	"RI_MOUSE_BUTTON_5_UP", 0x0200,
-	"RI_MOUSE_WHEEL", 0x0400,
-	"RI_MOUSE_HWHEEL", 0x0800)
-
-Persistent
-OnMouseEvent(MouseTest)
-
-MouseTest(RawInputWrapper)
-{
-	ToolTip(
-		"ThisMouse " RawInputWrapper.ThisMouse
-		"`nusFlags " MouseStateFlags(RawInputWrapper.Flags)
-		; "`npadding " RawInputWrapper.Padding
-		"`nusButtonFlags " TransitionStateFlags(RawInputWrapper.ButtonFlags)
-		"`nusButtonData " RawInputWrapper.ButtonData
-		; "`nulRawButtons " RawInputWrapper.RawButtons
-		"`nlLastX " RawInputWrapper.LastX
-		"`nlLastY " RawInputWrapper.LastY
-		"`nulExtraInformation " RawInputWrapper.ExtraInformation
-		; "`nlParam " RawInputWrapper.lParam
-		
-		"`nIsRelativeMovement " RawInputWrapper.IsRelativeMovement
-		"`nIsAbsoluteMovement " RawInputWrapper.IsAbsoluteMovement
-		"`nIsMovement " RawInputWrapper.IsMovement
-		"`nIIsButtons " RawInputWrapper.IsButtons
-		"`nIsWheel " RawInputWrapper.IsWheel
-		"`nIsHWheel " RawInputWrapper.IsHWheel
-		"`nGetAbsolutePosition " (RawInputWrapper.GetAbsolutePosition(&x, &y), x " " y)
-	)
 }
 */

@@ -31,7 +31,9 @@ ProcessRules()
             {
                 LogEntry("INFO: Processing custom rule: <" fnc ">`n")
                 filename := A_ScriptDir "\vars.txt"
-                FileDelete(filename)		
+
+                if (FileExist(filename))
+                    FileDelete(filename)		
                 
                 try
                 {	
@@ -83,7 +85,8 @@ ProcessRules()
                     
                     BuildEmuArgs()	;rebuild Emu_Args from param_list	
                     
-                    FileDelete filename
+                    if (FileExist(filename))
+                        FileDelete(filename)
                 }
                 catch as e
                 {		
@@ -263,7 +266,7 @@ ProcessRules()
 			policy := this_rule.policy
 			arg_2 := this_rule.arg_2
 			
-			bValidVector := false
+			bDoRuleVector := false
 			
 			;if arg_1 in %sys_key_list%
 			if (oEmulators.IsValidKey(arg_1))
@@ -282,7 +285,7 @@ ProcessRules()
 					if (FileExist(this_rom_full_path))
 					{	
 						vector_args := arg_1 " " Trim(this_rom_full_path, omitchars := "`"")
-						bValidVector := true
+						bDoRuleVector := true
 					}
 				}
 				;Uses same rom in same folder as the original passed in on the cl, but in
@@ -301,7 +304,7 @@ ProcessRules()
 							else
 								vector_args := arg_1 " " Trim(gCfg.rom_name, omitchars := "`"")
 							
-							bValidVector := true
+							bDoRuleVector := true
 							
 							break
 						}
@@ -319,9 +322,9 @@ ProcessRules()
 				ExitApp
 			}
 			
-			if (bValidVector)
+			if (bDoRuleVector)
 			{
-				LogEntry("INFO: " fnc ": Vectoring as: " vector_args "`n")
+				LogEntry("INFO: " fnc ": Vectoring by a vector_ rule as: " vector_args "`n")
 				VectorNow(vector_args)
 			}
 			
@@ -357,15 +360,12 @@ ProcessRules()
             {
                 proxy_type := ""
                 proxy_contents := Array()
-                ;idx := 1
                 
                 try
                 {
                     Loop Read proxy_full_path
                     {
                         proxy_contents.Push(A_LoopReadLine)
-                        ;proxy_contents[idx] := A_LoopReadLine
-                        ;idx := idx+1
                     }
                 }
                 catch as e
@@ -452,7 +452,7 @@ ProcessRules()
                     ;place this rule last in the rule list.  Applications for the originally specified
                     ;emulator still apply.
                 }
-                else if (proxy_type = "Vector")
+                else if (proxy_type == "Vector")
                 {
                     ;Vector aborts processing of the current emulator/game combination and effectively restarts
                     ;processing under the newly specified emulator/game.  Whatever applications/rule specified
@@ -464,6 +464,8 @@ ProcessRules()
                         ExitApp
                     }
                     
+                    LogEntry("INFO: " fnc ": Vectoring by a use_proxy vector rule as: " vector_args "`n")
+                    bDoRuleVector := true
                     VectorNow(proxy_contents[1]) 
                 }
             }

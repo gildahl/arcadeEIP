@@ -67,11 +67,19 @@ GetHighScores(hiFile)
     ;These first three lines (and the later FreeConsole and ProcessClose)
     ;are needed to hide the console. Without this, a console window will
     ;flash briefly on screen during startup.
-    Run A_ComSpec,, "Hide", &com_pid
-    WinWait "ahk_pid " com_pid
-    DllCall("AttachConsole", "UInt", com_pid)
-   
-    WshShell := ComObject("WScript.Shell")
+    try 
+    {
+        Run A_ComSpec,, "Hide", &com_pid
+        WinWait "ahk_pid " com_pid
+        DllCall("AttachConsole", "UInt", com_pid)
+    
+        WshShell := ComObject("WScript.Shell")
+    }
+    catch as e
+    {		
+        LogEntry("ERROR: Attaching console for GetHighScores(): " FormatErrorMessage(e) "`n")
+        ExitApp
+    }
 
     try ;added try block after an occurrence of an invalid memory read/write error crash on the WshShell.Exec line
     {

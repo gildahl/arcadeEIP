@@ -2,6 +2,36 @@
 ; © 2023 David G. Dahlstrom
 ; File: eip.ahk2
 
+;arcadeEIP main thread
+;
+;Use this module to compile as either eip.exe or util.exe
+;
+;eip.exe  - Compile with no changes to the source code to create main arcadeEIP executable.
+;util.exe - Compile with the following two changes to create the command line executable
+;           1. Uncomment ";@Ahk2Exe-ConsoleApp" under compiler directives below.
+;           2. set console_mode := true below.
+;
+;Currently I use Microsoft Visual Studio Code with the following extenstions to develop arcadeEIP.
+; * AutoHotkey Plus Plus
+; * AutoHotkey v2 Language Support
+; * vscode-autohotkey-debug
+;
+;Note about "vectors" (since this is a fundamental construct and it may not be obvious what it is)
+;=================================================================================================
+;A vector is simply a two-part space-separated pointer to an emulator rom. The form is
+;
+;        <key> <rom>
+;
+;Where <key> is the sys_key for one of the systems defined in arcadeEIP.ini (like "mame" ) and <rom>
+;is the name of some rom on that system. This may be anything ranging from a full path to the rom 
+;such as "D:\Emulators\MAME\roms\zaxxon.zip" to simply a part of the name such as "zaxx", in which 
+;case fuzzy logic will identify a best match when attempting to run the game. 
+;
+;Vectors can be used on the command line to run games, but are also used in rules, hotstrings, and
+;passed around internally to specify a game.
+;
+;See the "Command line reference guide.pdf" for more information about vectors. 
+
 #Requires AutoHotkey v2.0
 
 ;#Warn All, Off
@@ -31,14 +61,19 @@ global CodeVersion := "0.4.0.0"
 ; ;@Ahk2Exe-ConsoleApp
 ;***********************************************************
 ;---------------------------------------------------------------------------------
-;Set test_mode=true for testing *instead* of debug_mode when there is a need
-;to actually run the emulator and applications as part of the build testing.
-;*** Especially needed when testing in the IDE ***
+;Set test_mode=true for development testing. It's main purpose is to suppress
+;AlwaysOnTop and keeps the mouse cursor turned on to allow IDE debugging to work.
+;(You may also want to disable window_name= lines in the ini file).
+;Note that certain effects (like Alpha) may not work quite right in test mode.
+;This is different than debug_mode which is a special simulation mode that runs 
+;arcadeEIP and logs its actions without actually launching any emulators or applications.
 ;Among other things, keeps mouse on and suppresses always on top methods
 ;to enable access to the debugger (most of the time) during runtime.
 ;Also recommended to disable window_name= lines in the ini file.
-;Note that certain effects (like Alpha) may not work quite right in test mode.
-global test_mode := false                               
+;Finally, diag_mode adds some diagnostic info to the logs. Since this is pretty 
+;lightweight, it is currently left on all the time.
+
+global test_mode := false     ;set to true to suppress AlwaysOnTop and keep the mouse cursor on.                         
 global diag_mode := true      ;do diagnostic tests (normally true)
 global console_mode := false  ;to compile console app, set to true and uncomment @Ahk2Exe-ConsoleApp above
 ;---------------------------------------------------------------------------------
@@ -58,7 +93,8 @@ global oConsoleOnlyOptions := [ "-createproxy", "-find", "-f", "-findall", "-fa"
 bValidConsoleOption := false
 for n, opt in oConsoleOptions
 {
-    try {
+    try 
+    {
         if (A_Args[1] == opt)
         {
             bValidConsoleOption := true
@@ -70,7 +106,8 @@ for n, opt in oConsoleOptions
 bValidConsoleOnlyOption := false
 for n, opt in oConsoleOnlyOptions
 {
-    try {
+    try 
+    {
         if (A_Args[1] == opt)
         {
             bValidConsoleOnlyOption := true
@@ -105,33 +142,33 @@ else
 ; File Includes
 ;---------------------------------------------------------------------------------
 #include eipClass_BASS.ahk2                     ;Support for the BASS sound library
-#include eipClass_DetectInactivity.ahk2         ;Detects inactivity supporting attract switching
-#include eipClass_Emulators.ahk2                ;Emulator management class
+#include eipClass_DetectInactivity.ahk2         ;Supports auto game switching after a period of inactivity
+#include eipClass_Emulators.ahk2                ;Emulator management and information class
 #include eipClass_FadeWindow.ahk2               ;Fades a window in and out
 #include eipClass_Gdip.ahk2                     ;Graphics library (GDI+)
-#include eipClass_History.ahk2                  ;Game history management and serialization
-#include eipClass_LaunchBox.ahk2                ;Support for LaunchBox/BigBox
+#include eipClass_History.ahk2                  ;Game history management and file serialization
+#include eipClass_LaunchBox.ahk2                ;Support LaunchBox/BigBox content management
 #include eipClass_LVColors.ahk2                 ;Support colors in ListView control
-#include eipClass_MameData.ahk2                 ;Get and process Mame game data
+#include eipClass_MameData.ahk2                 ;Get and process Mame history and info
 #include eipClass_MouseDelta.ahk2               ;Mouse raw input processing
 #include eipClass_PauseControl.ahk2             ;Support for pause screens
 #include eipClass_Schedule.ahk2                 ;Support for attract mode scheduling
 #include eipClass_SelectListControl.ahk2        ;Game select screen
 #include eipClasses.ahk2                        ;Miscellaneous classes
 #include eipFunction_CheckLicense.ahk2          ;checkLicense & Hash functions
-#include eipFunction_ConfigCreate.ahk2          ;Creates arcadeEIP.ini files
-#include eipFunction_ConfigValidate.ahk2        ;Validate arcadeEIP.ini settings
-#include eipFunction_GetHighScores.ahk2         ;Support for hi2txt
-#include eipFunction_ProcessRules.ahk2		    ;Rules processor
-#include eipFunctions_AttractMode.ahk2          ;Attract switching functions
+#include eipFunction_ConfigCreate.ahk2          ;Creates default arcadeEIP.ini files
+#include eipFunction_ConfigValidate.ahk2        ;Validate several arcadeEIP.ini settings
+#include eipFunction_GetHighScores.ahk2         ;Support for hi2txt and high score display in marquee
+#include eipFunction_ProcessRules.ahk2		    ;Custom rules processor
+#include eipFunctions_AttractMode.ahk2          ;Attract mode game switching functions
 #include eipFunctions_Attributed.ahk2           ;Attributed/Public domain functions from the web
 #include eipFunctions_ConfigProcess.ahk2        ;Functions supporting config file processing
-#include eipFunctions_CreateGui.ahk2            ;Create gui screens
+#include eipFunctions_CreateGui.ahk2            ;Create the main gui screens
 #include eipFunctions_ProcessDirectives.ahk2    ;Process command line directives
 #include eipFunctions_ProcessHotkeys.ahk2       ;Hotkey management and functions
 #include eipFunctions_TimerThreads.ahk2         ;Major thread functions launched by timers
 #include eipFunctions_Utility.ahk2		        ;Library of general utility functions
-#include eipFunctions.ahk2                      ;Miscellaneous pplication-specific functions
+#include eipFunctions.ahk2                      ;Miscellaneous functions
 
 ;---------------------------------------------------------------------------------
 ; Global Flags
@@ -146,23 +183,25 @@ else
 ;  6. g_directswitch_args  : if this contains a game vector, arcadeEIP will switch to that game on next exit
 ;  7. g_cycle              : tracks the number of games launched in this session
 
-global g_guiselect_visible := false, g_guiselect_loaded := false, g_pause_state := false
-global g_guipause_visible := false, g_exit_code := "", g_directswitch_args := "", g_cycle := 0
+global g_guiselect_visible := g_guiselect_loaded := g_pause_state := g_guipause_visible := false
+global g_exit_code := "", g_directswitch_args := "", g_cycle := 0
 
 ;Miscellaneous global state flags and handles
 global bSearchGlobal := false ;true if only the rom (and no emu) is specified on the command line
-global pid_emulator := 0, emu_hwnd := 0, cur_emu := 0, fe_pid := 0, pid_screen := 0, marquee_pid := 0
-global exit_key_off := false, pause_key_off := false, magic_key_off := false
-global emu_running := false, bEmuWindowActive := false, original_taskbar_state
-global bSuppressLogging := false, use_log := 0
+global bEmuRunning := bEmuWindowActive := bSuppressLogging := bDoRuleVector := false
+global exit_key_off := pause_key_off := magic_key_off := false
+global pid_emulator := emu_hwnd := cur_emu := fe_pid := pid_screen := marquee_pid := 0
+global original_taskbar_state
 ;---------------------------------------------------------------------------------
 
 ;Initialize the global configuration structure
 global gCfg := {}
 
 ;[General]
-gCfg.debug_mode := "" ;Set to "os" or front-end fe_key to be simulated
+gCfg.debug_mode := ""  ;Set to "os" or front-end fe_key to be simulated
+gCfg.delimiter:= "|"
 gCfg.idle_log := 0
+gCfg.use_log := 1
 gCfg.fast_load := 0
 gCfg.status_beeps := false
 gCfg.alpha_effect := 1
@@ -277,6 +316,7 @@ gCfg.proper_name := ""
 gCfg.rom_name := ""
 gCfg.root_folder := ""
 gCfg.exe_full_path := ""
+gCfg.run_options := ""
 gCfg.rom_full_path := ""
 gCfg.rom_file := ""
 gCfg.rom_folder := ""
@@ -293,11 +333,11 @@ gCfg.map_pause := ""
 global gGui := {}
 
 ;Miscellaneous object inits and declarations
-global oLists := Map()
-global applications := Map()
 global Emu_Args := Array()
-global play_log := Map()
-global oMapExit := Array()
+global mLists := Map()  
+global mApplications := Map()
+global mPlayLog := Map()
+global aMapExit := Array()
 global rules := ""
 global oDom := "", oDetectInactivity, oSelectListControl := "", oMameData := ""
 
@@ -422,8 +462,8 @@ platform_logo  := oLaunchBox.GetCurrentPlatformLogoFile()
 */
 
 ;initialize play log
-play_log["log"] := Array()
-play_log["index"] := 1
+mPlayLog["log"] := Array()
+mPlayLog["index"] := 1
 
 ;Create a raw mouse handler
 global oMouseDelta := MouseDelta(MouseEvent)
@@ -471,9 +511,12 @@ g_idx := g_idx_temp
 emu := emu_temp
 
 ;Now process the initially specified (or logically specified) sys_key
-pList := oEmulators.Emulators[gCfg.sys_key].param_list
-pList := ProcessPassthroughArgs(&A_Args, pList)
-oEmulators.Emulators[gCfg.sys_key]._default_settings["param_list"] := pList
+if (gCfg.sys_key) ;might be empty if we are doing a -createcfg
+{
+    pList := oEmulators.Emulators[gCfg.sys_key].param_list
+    pList := ProcessPassthroughArgs(&A_Args, pList)
+    oEmulators.Emulators[gCfg.sys_key]._default_settings["param_list"] := pList
+}
 
 ;For display in log only
 args_postprocess := ArgArrayToParamString(A_Args)
@@ -482,20 +525,14 @@ args_postprocess := ArgArrayToParamString(A_Args)
 
 ProcessDirectives(&A_Args)  ;process command line directives
 
-if (FileExist(log_file))
-    FileDelete(log_file) 
-
-if (FileExist(idle_log_file))
-    FileDelete(idle_log_file)
+DeleteAndLog("F", log_file)
+DeleteAndLog("F", idle_log_file)
 
 ;Do initial read of the configuration file (arcadeEIP.ini)
 if (!ReadConfig())
 {
     ;since there was evidently no config file to read this setting, just set to true
-    use_log := true 
-
-    ;But note that we can't report a missing config-file here since logging
-    ;isn't initialized yet.
+    gCfg.use_log := 1 
 }
 
 if (gCfg.status_beeps)
@@ -518,76 +555,29 @@ LogEntry("INFO: DPI: " A_ScreenDPI ", DPI Width: " nScreenWidth ", DPI Height: "
 ; Remove legacy files if they exist 
 ;---------------------------------------------------------------------------------
 
-if (FileExist(A_ScriptDir "\runlast.bat"))
-    FileDelete(A_ScriptDir "\runlast.bat")
-    
-if (FileExist(A_ScriptDir "\launchlast.bat"))
-    FileDelete(A_ScriptDir "\launchlast.bat")
+DeleteAndLog("F", A_ScriptDir "\runlast.bat")
+DeleteAndLog("F", A_ScriptDir "\launchlast.bat")
 
 ;---------------------------------------------------------------------------------
 ; Create sub-folders if they don't exist
 ;---------------------------------------------------------------------------------
 
-CreateDirectSwitchFolder()
+CreateDirAndLog(directswitch_folder)
+PopulateDirectSwitchFolder()
 
-if (!InStr(FileExist(directswitch_folder), "D"))
-{
-    try 
-        DirCreate directswitch_folder
-    catch
-        LogEntry("NOTICE: Failed to create folder, " directswitch_folder ".`n")
-    else
-        LogEntry("INFO: Created folder, " directswitch_folder ".`n")     
-}
+CreateDirAndLog(favorites_folder)
+CreateDirAndLog(gCfg.attract_folder "\suppress")
+CreateDirAndLog(lists_folder)
+CreateDirAndLog(A_ScriptDir "\Assets\MAME\Controls\System")
 
-if (!InStr(FileExist(favorites_folder), "D"))
-{
-    try
-        DirCreate favorites_folder
-    catch
-        LogEntry("NOTICE: Failed to create folder, " favorites_folder ".`n")
-    else
-        LogEntry("INFO: Created folder, " favorites_folder ".`n")     
-}
-
-if (!InStr(FileExist(gCfg.attract_folder), "D"))
-{
-    try
-        DirCreate gCfg.attract_folder . "\suppress"
-    catch
-        LogEntry("NOTICE: Failed to create folder, " gCfg.attract_folder ".`n")
-    else
-        LogEntry("INFO: Created folder, " gCfg.attract_folder ".`n")      
-}
-
-if (!InStr(FileExist(lists_folder), "D"))
-{
-    try
-        DirCreate lists_folder
-    catch
-        LogEntry("NOTICE: Failed to create folder, " lists_folder ".`n")
-    else
-        LogEntry("INFO: Created folder, " lists_folder ".`n")     
-}
-
-emptyControlsFolder := A_ScriptDir "\Assets\MAME\Controls\System"
-if (!InStr(FileExist(emptyControlsFolder), "D"))
-{
-    DirCreate emptyControlsFolder
-    ;LogEntry("INFO: Created folder, " . emptyControlsFolder . ".`n")
-}
-
-;---------------------------------------------------------------------------------
-;****  LOGGING MAY OCCUR AFTER THIS POINT ***
-
-;If the script is run with just one argument, then it *might be* a configuration startup.
-if (A_Args.Length = 1)
+;If the script is run with just one argument...
+if (A_Args.Length == 1)
 {
     ;If Front-End launch is executed, then exit the script when done.
     ;Otherwise, allow script to continue with normal operation...
 
     ;Show configuration wizard
-    ;*** This is temporarily removed (WIP) ***
+    ;*** This is (possibly permanently) removed (WIP) ***
     if (A_Args[1] == "-config")  
     {
         ;ConfigStartup()
@@ -601,46 +591,30 @@ if (A_Args.Length = 1)
         {
             LogEntry("INFO: " cProductName " called with -clean.`n")
 
-            FileDelete(A_ScriptDir "\.history")
-            LogEntry("INFO: Deleted: " A_ScriptDir "\.history.`n")
+            DeleteAndLog("F", A_ScriptDir "\.history")
+            DeleteAndLog("F", A_ScriptDir "\.state")
 
-            FileDelete(A_ScriptDir "\.state")
-            LogEntry("INFO: Deleted: " A_ScriptDir "\.state.`n")
+            DeleteAndLog("D", directswitch_folder)
+            DeleteAndLog("D", favorites_folder)
+            DeleteAndLog("D", gCfg.attract_folder)
+            DeleteAndLog("D", lists_folder)
 
-            DirDelete(directswitch_folder, 1)
-            LogEntry("INFO: Deleted: " directswitch_folder "`n")
+            CreateDirAndLog(directswitch_folder)
+            PopulateDirectSwitchFolder() 
 
-            DirDelete(favorites_folder, 1)
-            LogEntry("INFO: Deleted: " favorites_folder "`n")
-
-            DirDelete(gCfg.attract_folder, 1)
-            LogEntry("INFO: Deleted: " gCfg.attract_folder "`n")
-
-            DirDelete(lists_folder, 1)
-            LogEntry("INFO: Deleted: " lists_folder "`n")
-
-            CreateDirectSwitchFolder() 
-
-            DirCreate(favorites_folder)
-            LogEntry("INFO: Created folder, " favorites_folder ".`n")
-           
-            DirCreate(gCfg.attract_folder "\suppress")
-            LogEntry("INFO: Created folder, " gCfg.attract_folder ".`n")
+            CreateDirAndLog(favorites_folder)
+            CreateDirAndLog(gCfg.attract_folder "\suppress")
+            CreateDirAndLog(lists_folder)
         
-            DirCreate(lists_folder)
-            LogEntry("INFO: Created folder, " lists_folder ".`n")
-
             for n, emulator in oEmulators.Emulators
             {
                 assetspec := emulator.asset_name
-                FileDelete(A_ScriptDir "\Assets\" assetspec "\Settings\favorites.ini")
-                FileDelete(A_ScriptDir "\Assets\" assetspec "\Settings\ratings.ini")
-            }
-
-            ExitApp
+                DeleteAndLog("F", A_ScriptDir "\Assets\" assetspec "\Settings\favorites.ini")
+                DeleteAndLog("F", A_ScriptDir "\Assets\" assetspec "\Settings\ratings.ini")
+            }          
         }
-        else
-            ExitApp
+        
+        ExitApp
     }
     else if (A_Args[1] == "-createcfg" && FileExist(config_file))
     {
@@ -662,20 +636,20 @@ if (A_Args.Length = 1)
 ;---------------------------------------------------------------------------------
 ; Store the original taskbar state, then hide it
 ;---------------------------------------------------------------------------------
-original_taskbar_state := GetTaskbarState()
-if (original_taskbar_state == 0)
+original_taskbar_state := GetTaskbarState() ;true means hidden
+if (original_taskbar_state == false)
     LogEntry("INFO: Original taskbar state is: visible`n")
 else
     LogEntry("INFO: Original taskbar state is: hidden`n")
 
-if (!GetTaskbarState()) ;if taskbar visible
+if (!original_taskbar_state) ;if taskbar visible
 {
     HideShowTaskbar(true)  ;hide it
     LogEntry("INFO: Hiding the taskbar.`n")
 } 
 
 ;---------------------------------------------------------------------------------
-; Make sure config file (arcadeEIP.ini) exists
+; Make sure config file (arcadeEIP.ini) exists. Write error otherwise.
 ;---------------------------------------------------------------------------------
 if !FileExist(config_file)
 {
@@ -694,20 +668,27 @@ if !FileExist(config_file)
 
 ValidateConfig()
 
-;Initialize sound (via bass.dll)
+;Initialize 3rd party sound 
+;(via bass.dll)
 global oBASS := BASS_class()
 oBASS.Init()
 
 ;A few unit tests for oBASS
-;oSoundInfo := oBASS.GetInfo()
+;aSoundInfo := oBASS.GetInfo()
 ;oBASS.Play("browse")
 ;s := oBASS.GetDevice()
 ;j := oBASS.SetVolume(.30)
 ;i := oBASS.GetVolume()
 
-;---------------------------------------------------------------------------------
+;----------------------------------------------------------------------------------
 ; debug mode initialization
-;---------------------------------------------------------------------------------
+; debug mode is a special simulation mode that causes arcadeEIP to do everything
+; normally *except* that it will suppress the launching of any execuatables, 
+; including any emulators or applications. Instead, the launching of these will
+; merely be logged. The purpose of this mode is to allow a user to launch arcadeEIP
+; and examine the log file to discover (or diagnose) possible problems, especially
+; in cases where emulators or applications might be locking-up or black-screening. 
+;----------------------------------------------------------------------------------
 ;Pre-processing for debug mode
 if (gCfg.debug_mode)
 {
@@ -749,7 +730,7 @@ if (gCfg.debug_mode)
 ; Command-line preprocessor
 ;---------------------------------------------------------------------------------
 
-;These log entry values were collected earlier, but presented to the user here
+;These log entry values were collected earlier, but output to the log here.
 true_word := ""
 LogEntry("INFO: Original argument list: " args_original "`n")
 if (args_original != args_postprocess)
@@ -830,12 +811,12 @@ if (A_Args.Length = 1)
     }
 }
 
-;Startup the auto-switch mode (a.k.a. attract mode) inactivity monitor
+;Startup the auto-switch (a.k.a. attract mode) inactivity monitor
 fnc := AttractSwitch.Bind()
 oDetectInactivity := DetectInactivity_Class(fnc, gCfg.attract_delay, gCfg.attract_mute)
 oDetectInactivity.Activate()
 
-;Startup the schedule class  
+;Startup the schedule class 
 fAction := ScheduleAction.Bind("") ;this callback function is not actually used at this time
 oSchedule := Schedule_Class(gCfg.attract_timer, gCfg.attract_delay, fAction)
 
@@ -857,7 +838,13 @@ if (gCfg.marquee_active && gCfg.marquee_autostart)
     If (!ProcessExist("marquee.exe"))
     {
         LogEntry("INFO: Starting marquee.exe (autostart).`n")
-        Run "marquee.exe -quiet", A_ScriptDir, marquee_pid
+        try {
+            Run "marquee.exe -quiet", A_ScriptDir, marquee_pid
+        }
+        catch as e {
+
+            LogEntry("ERROR: Starting marquee.exe: " FormatErrorMessage(e) "`n")
+        }
 
         ProcessWait(marquee_pid, 5)
     }
@@ -940,9 +927,17 @@ Vector:
     ; Run rules engine 
     ;---------------------------------------------------------------------------------
     ProcessRules()
+    if (bDoRuleVector) 
+    {
+        ;Goto can only be called from the main thread in AHK2, so if a rule wants to
+        ;vector to an alternate game it sets bDoRuleVector to true, calls VectorNow() to
+        ;to rebuild A_Args, then returns here (the main thread) to execute the Goto. 
+        bDoRuleVector := false
+        Goto Vector
+    }
 
     ;---------------------------------------------------------------------------------
-    ; Add Hot Keys (do here since some may be added/modified by rules) 
+    ; Add Hot Keys (do here since some may have been added/modified by rules) 
     ;---------------------------------------------------------------------------------
     AddHotKeys()
 
@@ -983,7 +978,7 @@ Vector:
         }
         catch as e
         {		
-            LogEntry("ERROR: Processing marquee mode: " FormatErrorMessage(e) "`n")
+            LogEntry("ERROR: Updating marquee: " FormatErrorMessage(e) "`n")
             ExitApp
         }
     }
@@ -1004,7 +999,7 @@ Vector:
     }
 
     ;Add game to the play log
-    play_log["log"].Push(gCfg.sys_key " " gCfg.rom_name)
+    mPlayLog["log"].Push(gCfg.sys_key " " gCfg.rom_name)
 
     ;support for magic_key delay
     if (gCfg.magic_delay > 0)
@@ -1012,7 +1007,7 @@ Vector:
         LogEntry("INFO: Starting keyboard strobe for magic_key support.`n")
 
         ;doing inits to 0 here is important to make sure keyboardstrobe state is
-        ;consistent if started while the magic_key is being held down.
+        ;consistent in case started while the magic_key is being held down.
         magic_timer := 0
         magicKeyState := 0
         if (gCfg.kiosk_mode)
@@ -1344,11 +1339,13 @@ Vector:
         if (gCfg.attract_mute > 0) 
             oMasterSound.Off() ;mute audio
 
-        LogEntry("INFO: Vectoring under automation to new game: " g_directswitch_args ".`n")
+        LogEntry("INFO: Vectoring to new game: " g_directswitch_args ".`n")
         
         VectorNow(g_directswitch_args)
         Goto Vector
     }
+
+;end Vector: 
     
 ExitApp
 ;*********************************************************************************************
@@ -1382,10 +1379,9 @@ ExitFunction(ExitReason, ExitCode)
             Sleep 100
             FileSetAttrib "+H", marqueePipeFile
         }
-        catch Error
+        catch as e
         {		
-            LogEntry("ERROR: Processing marquee mode: " FormatErrorMessage(e) "`n")
-            ExitApp
+            LogEntry("ERROR: Closing marquee mode: " FormatErrorMessage(e) "`n")
         }
     }
 
@@ -1415,7 +1411,7 @@ ExitFunction(ExitReason, ExitCode)
         cfg_time := FileGetTime("cfg", "C")
         cfg_time := DateDiff(cfg_time, start_time, "seconds") 
         if (cfg_time > 0) ;i.e. if cfg_time is after start_time
-            DirDelete "cfg", 1
+            try DirDelete "cfg", 1
     }
     
     if (FileExist("help.txt"))
@@ -1423,7 +1419,7 @@ ExitFunction(ExitReason, ExitCode)
         help_time := FileGetTime("help.txt", "C")
         help_time := DateDiff(help_time, start_time, "seconds")
         if (help_time > 0)
-            DirDelete "help.txt", 1
+            try DirDelete "help.txt", 1
     }
     
     if (gCfg.debug_mode)
@@ -1450,7 +1446,8 @@ ExitFunction(ExitReason, ExitCode)
         }
     }
 
-    if (diag_mode)
+    ;diagnostic mode is normally on
+    if (diag_mode) 
     {
         if (ut_runwait_cycle == 0)
             ut_runwait_avg := 0

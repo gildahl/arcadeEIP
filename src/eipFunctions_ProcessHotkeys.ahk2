@@ -327,12 +327,12 @@ ExitKey(internal, theHotkey:="")
         PauseKey("Up")
     }
 	
-	oMapExit := StrSplit(gCfg.map_exit, "|")
+	aMapExit := StrSplit(gCfg.map_exit, "|")
 	
-	if (oMapExit.Length > 2 || StrLen(oMapExit[1]) == 0)
+	if (aMapExit.Length > 2 || StrLen(aMapExit[1]) == 0)
 	    return
 	
-	exit_cmd := oMapExit[1]
+	exit_cmd := aMapExit[1]
 	
 	if (InStr(exit_cmd, "{CloseTop}"))
 	{
@@ -382,10 +382,10 @@ ExitKeyUp(theHotkey:="")
     if (!bEmuWindowActive)
         return
 	
-	if (oMapExit.Length == 1 || StrLen(oMapExit[2]) == 0)
+	if (aMapExit.Length == 1 || StrLen(aMapExit[2]) == 0)
 		return		
 	
-	exit_cmd := oMapExit[2]
+	exit_cmd := aMapExit[2]
 	
 	if (InStr(exit_cmd, "{CloseTop}"))
 	{
@@ -575,248 +575,6 @@ ShowControls(guiName)
         gGui.guiExit_Label.Visible := true
         gGui.guiExit_Rom.Visible := true
         gGui.guiExit_Logo.Visible := true
-    }
-}
-
-;Enable hotkeys for specified windows.
-;EnableControls is called by ShowControls() above.
-EnableControls(guiName)
-{
-    global
-
-    if (guiName == "guiPause")
-    {
-        ;Turn on the left/right keys for navigation
-        Loop Parse gCfg.left_key, "CSV"
-            Hotkey A_LoopField, "On"
-
-        Loop Parse gCfg.right_key, "CSV"
-            Hotkey A_LoopField, "On"
-
-        ;Turn off the next and previous game controls
-        Loop Parse gCfg.next_key, "CSV"
-            Hotkey A_LoopField, "Off"
-
-        Loop Parse gCfg.previous_key, "CSV"
-            Hotkey A_LoopField, "Off"
-    }
-
-    if (guiName == "guiSelect")
-    {
-        Loop Parse gCfg.left_key, "CSV"
-            Hotkey A_LoopField, "On"
-
-        Loop Parse gCfg.right_key, "CSV"
-            Hotkey A_LoopField, "On"
-
-        Loop Parse gCfg.up_key, "CSV"
-            Hotkey A_LoopField, "On"
-
-        Loop Parse gCfg.down_key, "CSV"
-            Hotkey A_LoopField, "On"
-        
-        Loop Parse gCfg.launch_key, "CSV"
-            Hotkey A_LoopField, "On"
-        
-        Loop Parse gCfg.pgdn_key, "CSV"
-            Hotkey A_LoopField, "On"
-
-        Loop Parse gCfg.pgup_key, "CSV"
-            Hotkey A_LoopField, "On"
-
-        Loop Parse gCfg.home_key, "CSV"
-            Hotkey A_LoopField, "On"
-        
-        Loop Parse gCfg.end_key, "CSV"
-            Hotkey A_LoopField, "On"
-
-        Loop Parse gCfg.list_mode_key, "CSV"
-            Hotkey A_LoopField, "On"
-        
-        Loop Parse gCfg.edit_mode_key, "CSV"
-            Hotkey A_LoopField, "On"
-
-        Loop Parse gCfg.all_key, "CSV"
-            Hotkey A_LoopField, "On"
-
-        Loop Parse gCfg.genre_key, "CSV"
-            Hotkey A_LoopField, "On"
-
-        Loop Parse gCfg.year_key, "CSV"
-            Hotkey A_LoopField, "On"
-
-        Loop Parse gCfg.publisher_key, "CSV"
-            Hotkey A_LoopField, "On"
-
-        Loop Parse gCfg.developer_key, "CSV"
-            Hotkey A_LoopField, "On"
-
-        Loop Parse gCfg.players_key, "CSV"
-            Hotkey A_LoopField, "On"
-
-        Loop Parse gCfg.rating_key, "CSV"
-            Hotkey A_LoopField, "On"
-
-        Loop Parse gCfg.favorite_key, "CSV"
-            Hotkey A_LoopField, "On"
-
-        Loop Parse gCfg.star5_key, "CSV"
-            Hotkey A_LoopField, "On"
-
-        Loop Parse gCfg.star4_key, "CSV"
-            Hotkey A_LoopField, "On"
-
-        Loop Parse gCfg.star3_key, "CSV"
-            Hotkey A_LoopField, "On"
-
-        Loop Parse gCfg.star2_key, "CSV"
-            Hotkey A_LoopField, "On"
-
-        Loop Parse gCfg.star1_key, "CSV"
-            Hotkey A_LoopField, "On"
-
-        Loop Parse gCfg.star0_key, "CSV"
-            Hotkey A_LoopField, "On"
-
-        Loop Parse gCfg.star_key, "CSV"
-            Hotkey A_LoopField, "On"
-
-        Loop Parse gCfg.favorites_key, "CSV"
-            Hotkey A_LoopField, "On"
-        
-        Loop Parse gCfg.add_remove_key, "CSV"
-            Hotkey A_LoopField, "On"
-
-        ;Turn off the next and previous game controls
-        Loop Parse gCfg.next_key, "CSV"
-            Hotkey A_LoopField, "Off"
-
-        Loop Parse gCfg.previous_key, "CSV"
-            Hotkey A_LoopField, "Off"
-    }
-}
-
-;Disable hotkeys for specified windows.
-;DisableControls is called by HideControls() above
-DisableControls(guiName)
-{
-    global
-
-    if (guiName == "guiPause")
-    {
-        Loop Parse gCfg.left_key, "CSV"
-            Hotkey A_LoopField, "Off"
-
-        Loop Parse gCfg.right_key, "CSV"
-            Hotkey A_LoopField, "Off"
-
-        ;Turn the next and previous game controls back on
-        Loop Parse gCfg.next_key, "CSV"
-            Hotkey A_LoopField, "On"
-
-        Loop Parse gCfg.previous_key, "CSV"
-            Hotkey A_LoopField, "On"
-    }
-
-    if (guiName == "guiSelect")
-    {
-        if (!g_pause_state) ;if pause is off
-        {
-            ;pause uses these keys to cycle between images, so we only 
-            ;turn them off if pause is off
-            Loop Parse gCfg.left_key, "CSV"
-                Hotkey A_LoopField, "Off"
-
-            Loop Parse gCfg.right_key, "CSV"
-                Hotkey A_LoopField, "Off"
-
-            ;Turn the next and previous game controls back on, but if pause
-            ;is still on, we don't want them turned back on yet since exiting pause
-            ;will do that.
-            Loop Parse gCfg.next_key, "CSV"
-                Hotkey A_LoopField, "On"
-
-            Loop Parse gCfg.previous_key, "CSV"
-                Hotkey A_LoopField, "On"
-        }
-
-        Loop Parse gCfg.up_key, "CSV"
-            Hotkey A_LoopField, "Off"
-
-        Loop Parse gCfg.down_key, "CSV"
-            Hotkey A_LoopField, "Off"
-
-        Loop Parse gCfg.launch_key, "CSV"
-            Hotkey A_LoopField, "Off"
-    
-        Loop Parse gCfg.pgdn_key, "CSV"
-            Hotkey A_LoopField, "Off"
-
-        Loop Parse gCfg.pgup_key, "CSV"
-            Hotkey A_LoopField, "Off"
-
-        Loop Parse gCfg.home_key, "CSV"
-            Hotkey A_LoopField, "Off"
-        
-        Loop Parse gCfg.end_key, "CSV"
-            Hotkey A_LoopField, "Off"
-
-        Loop Parse gCfg.list_mode_key, "CSV"
-            Hotkey A_LoopField, "Off"
-       
-        Loop Parse gCfg.edit_mode_key, "CSV"
-            Hotkey A_LoopField, "Off"
-
-        Loop Parse gCfg.all_key, "CSV"
-            Hotkey A_LoopField, "Off"
-
-        Loop Parse gCfg.genre_key, "CSV"
-            Hotkey A_LoopField, "Off"
-
-        Loop Parse gCfg.year_key, "CSV"
-            Hotkey A_LoopField, "Off"
-
-        Loop Parse gCfg.publisher_key, "CSV"
-            Hotkey A_LoopField, "Off"
-
-        Loop Parse gCfg.developer_key, "CSV"
-            Hotkey A_LoopField, "Off"
-
-        Loop Parse gCfg.players_key, "CSV"
-            Hotkey A_LoopField, "Off"
-
-        Loop Parse gCfg.rating_key, "CSV"
-            Hotkey A_LoopField, "Off"
-
-        Loop Parse gCfg.favorite_key, "CSV"
-            Hotkey A_LoopField, "Off"
-
-        Loop Parse gCfg.star5_key, "CSV"
-            Hotkey A_LoopField, "Off"
-
-        Loop Parse gCfg.star4_key, "CSV"
-            Hotkey A_LoopField, "Off"
-
-        Loop Parse gCfg.star3_key, "CSV"
-            Hotkey A_LoopField, "Off"
-
-        Loop Parse gCfg.star2_key, "CSV"
-            Hotkey A_LoopField, "Off"
-
-        Loop Parse gCfg.star1_key, "CSV"
-            Hotkey A_LoopField, "Off"
-
-        Loop Parse gCfg.star0_key, "CSV"
-            Hotkey A_LoopField, "Off"
-
-        Loop Parse gCfg.star_key, "CSV"
-            Hotkey A_LoopField, "Off"
-
-        Loop Parse gCfg.favorites_key, "CSV"
-            Hotkey A_LoopField, "Off"
-        
-        Loop Parse gCfg.add_remove_key, "CSV"
-            Hotkey A_LoopField, "Off"
     }
 }
 
@@ -1647,7 +1405,7 @@ AttractNext(theHotkey:="")
 }
 
 ;Switch to the previously played game. Unlike AttractNext(), this function uses 
-;the main play_log rather than the attract list since this seems more like what one
+;the main mPlayLog rather than the attract list since this seems more like what one
 ;would expect to happen when stepping back.
 AttractPrevious(theHotkey:="")
 {
@@ -1664,18 +1422,18 @@ AttractPrevious(theHotkey:="")
     if (bEmuWindowActive)
     {
         ;can't go back past the first played game
-        if (play_log["log"].Length == 1)
+        if (mPlayLog["log"].Length == 1)
             return
 
-        if (play_log["log"][play_log["log"].Length] == play_log["log"][play_log["log"].Length-1])
-            play_log["log"].Pop() ;pop off any duplicate predecessors
+        if (mPlayLog["log"][mPlayLog["log"].Length] == mPlayLog["log"][mPlayLog["log"].Length-1])
+            mPlayLog["log"].Pop() ;pop off any duplicate predecessors
         
-        if (play_log["log"].Length > 1)
-            play_log["log"].Pop() ;pop off the current game
+        if (mPlayLog["log"].Length > 1)
+            mPlayLog["log"].Pop() ;pop off the current game
         else
             return ;we must be back at the beginning
         
-        vct := play_log["log"][play_log["log"].Length]
+        vct := mPlayLog["log"][mPlayLog["log"].Length]
 
         LogEntry("INFO: Hotkey: Autoswitch mode go to previous game.`n")
 

@@ -1,3 +1,15 @@
+; arcadeEIP Marquee (marquee.exe)
+; © 2023 David G. Dahlstrom
+; File: eipMarquee.ahk2
+
+;This file implements the arcadeEIP marquee (complile as marquee.exe).
+;This is intended to put a marquee image on an independent marquee monitor. 
+;The marquee image should automatically ;scale and display at its native aspect 
+;ratio.  The image filename and some ;metadata, including current high score,
+;are delivered to the marquee via a pseudo ;pipe file. Whenever this file is
+;updated the image will change. Any high score data will be displayed at the 
+;bottom of the marquee monitor.
+
 ;Compiler directives
 ;***********************************************************
 global CodeVersion := "0.4.0.0"
@@ -17,8 +29,8 @@ Persistent
 SendMode "Input"
 SetWorkingDir A_ScriptDir
 
-#include eipClass_Gdip.ahk2
 #include eipClass_FadeWindow.ahk2
+#include eipClass_Gdip.ahk2
 #include eipFunctions_Utility.ahk2
 
 OnExit(ExitFunction)
@@ -65,7 +77,10 @@ pipeFile := {}
 if (FileExist(g_pipe_filename))
 {
     if (!debug)
-        FileDelete(g_pipe_filename)    
+    {
+        if (FileExist(g_pipe_filename))
+            FileDelete(g_pipe_filename)  
+    }  
 }
 
 ;Get the relative bounds of the monitor we will be using for the marquee
@@ -281,7 +296,7 @@ Move_MsgBox(wParam, lParam, msg, hwnd)
     global Window_W, Window_H
     global Window_L, Window_T
     
-	if (wParam == 1027) 					; Make sure it is a AHK dialog
+	if (wParam == 1027)  ; Make sure it is an AHK dialog
 	{
 		;Get the Process PID
         ThisProcessPID := ProcessExist()
@@ -329,7 +344,10 @@ CheckSwitchTimer()
             pipeFile.Close
             Sleep 100
             if (!debug)
-                FileDelete(g_pipe_filename)
+            {
+                if (FileExist(g_pipe_filename))
+                    FileDelete(g_pipe_filename)
+            }
 
             image_file := A_ScriptDir ".\Assets\Default\Marquee\default.png"
             if (FileExist(image_file))
@@ -346,7 +364,10 @@ CheckSwitchTimer()
             pipeFile.Close
             Sleep 100
             if (!debug)
-                FileDelete(g_pipe_filename)
+            {
+                if (FileExist(g_pipe_filename))
+                    FileDelete(g_pipe_filename)
+            }
             Sleep 500
 
             ExitApplication()
@@ -360,7 +381,10 @@ CheckSwitchTimer()
         Sleep 100
 
         if (!debug)
-            FileDelete(g_pipe_filename)
+        {
+            if (FileExist(g_pipe_filename))
+                FileDelete(g_pipe_filename)
+        }
     }
     catch as e
 	{		

@@ -12,19 +12,19 @@ class emulators_class
 	{		
 		global
 
-		local configFile, globalAssets, metaArray, n, asset
+		local configFile, aGlobalAssets, mMetaMap, n, asset
 		local aLine, emu_sections, i, thisSysKey, system, aSystem
-		local systemArray, systemSetting, exeName, rootFolder
+		local mSystemMap, systemSetting, exeName, rootFolder
 		local r, q, global_q, metaItem, found, systemItem
 
 		configFile := configObj.ConfigFile		
 		
 		;Read the [Global_Assets] section
-		globalAssets := Array()
-		try globalAssets := StrSplit(IniRead(configFile, "Global_Assets"), "`n", " ")
+		aGlobalAssets := Array()
+		try aGlobalAssets := StrSplit(IniRead(configFile, "Global_Assets"), "`n", " ")
 
-		metaArray := Map()
-		for n, asset in globalAssets
+		mMetaMap := Map()
+		for n, asset in aGlobalAssets
 		{
 			aLine := StrSplit(asset, "=", " ")
 
@@ -32,7 +32,7 @@ class emulators_class
 			if (SubStr(aLine[2], 1, 1) == ".")
 				aLine[2] := A_ScriptDir . SubStr(aLine[2], 2)
 
-			metaArray[aLine[1]] := aLine[2]
+			mMetaMap[aLine[1]] := aLine[2]
 		}	
 
 		;Read the [System_*] sections
@@ -48,7 +48,7 @@ class emulators_class
 			;read all other settings
 			system := IniRead(configFile, configSection)
 			aSystem := StrSplit(system, "`n", " ")
-			systemArray := Map()
+			mSystemMap := Map()
 			for n, systemSetting in aSystem
 			{
 				aLine := StrSplit(systemSetting, "=", " ", 2)
@@ -56,18 +56,18 @@ class emulators_class
 				systemValue := aLine[2] 
 				
 				if (IsInteger(systemValue))
-					systemArray[systemKey] := Integer(systemValue)
+					mSystemMap[systemKey] := Integer(systemValue)
 				else if (IsFloat(systemValue))
-					systemArray[systemKey] := Float(systemValue)
+					mSystemMap[systemKey] := Float(systemValue)
 				else
-					systemArray[systemKey] := systemValue
+					mSystemMap[systemKey] := systemValue
 
 				;special case 1 - create root_folder out of exe_full_path
 				if (systemKey == "exe_full_path")
 				{
 					SplitPath systemValue, &exeName, &rootFolder
-					systemArray["root_folder"] := rootFolder 
-					systemArray["exe_name"] := exeName
+					mSystemMap["root_folder"] := rootFolder 
+					mSystemMap["exe_name"] := exeName
 				}
 
 				;special case 2 - create global_asset_name out of asset_name
@@ -76,36 +76,36 @@ class emulators_class
 					asset_names := StrSplit(systemValue, ",", " ")
 					if (asset_names.Length == 2)
 					{
-						systemArray["asset_name"] := asset_names[1]
-						systemArray["global_asset_name"] := asset_names[2]
+						mSystemMap["asset_name"] := asset_names[1]
+						mSystemMap["global_asset_name"] := asset_names[2]
 					}
 					else
 					{
-						systemArray["global_asset_name"] := systemValue
+						mSystemMap["global_asset_name"] := systemValue
 					}
 				}
 			}
 
 			;Now add any meta items that are in [Global_Assets],
 			;but not in the emulator section
-			for q, metaItem in metaArray
+			for q, metaItem in mMetaMap
 			{
 				found := false
-				for r, systemItem in systemArray 
+				for r, systemItem in mSystemMap 
 					if (r == q)
 						found := true
 				if (!found)
 				{
-					systemArray[q] := metaItem
+					mSystemMap[q] := metaItem
 				}
 				else
 				{
 					global_q := "global_" . q
-					systemArray[global_q] := metaArray[q]
+					mSystemMap[global_q] := mMetaMap[q]
 				}
 			}
 
-			this.Emulators[thisSysKey].AddSystem(systemArray)
+			this.Emulators[thisSysKey].AddSystem(mSystemMap)
 			this.Emulators[thisSysKey].UpdateSystem() ;fills in templated fields
 		}	
 	}
@@ -179,17 +179,17 @@ class emulators_class
 			}
 		}
 
-		AddSystem(systemArray)
+		AddSystem(mSystemMap)
 		{
-			;Deep copy the systemArray.
+			;Deep copy the mSystemMap.
 			;This copy will always hold the original still-templated fields.
 			;This will be used to update settings.
-			for n, value in systemArray
+			for n, value in mSystemMap
 				this._default_settings[n] := value
 
 			;The systemArray initially contains raw, templated fields
 			;These can now be filled in by the client calling UpdateSystem()
-			this._settings := systemArray 
+			this._settings := mSystemMap 
 		}
 
 		config_file

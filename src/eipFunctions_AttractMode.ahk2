@@ -64,7 +64,8 @@ UpdateAutoAttractList()
         if (attract_list && attract_list.Length > 0)
         {
             ;clear the existing list
-            FileDelete(attract_pattern)
+            if (FileExist(attract_pattern))
+                FileDelete(attract_pattern)
 
             ;create vector files from the count-sorted attract_list
             for n, item in attract_list
@@ -124,7 +125,6 @@ AttractSwitch(update:=false, add_vector:="")
         originalList := Array()
         Loop Files attract_pattern
         {
-            ;FileReadLine, vector, %A_LoopFileFullPath%, 1
             Loop Read A_LoopFileFullPath
             {
                 vector := A_LoopReadLine 
@@ -185,9 +185,6 @@ AttractSwitch(update:=false, add_vector:="")
                     ;    ^
 
                     attractList.RemoveAt(tempIdx)
-                    ;OutputDebug removed: %vec% at idx: %tempIdx%`n
-                    ;if (tempIdx == size) ;not sure this is needed
-                    ;    idx--
                     size--
 
                     ;There are two things we don't want:
@@ -359,6 +356,7 @@ AttractSwitch(update:=false, add_vector:="")
         vector := attractList[1]
     else
         vector := ""
+
     /*
     ;output list for debug purposes
     c:=attractList.Count()
@@ -455,7 +453,6 @@ MouseEvent(MouseID, x := 0, y := 0)
     ;speed values of 5 & 5 work good for a trackball
     static yu := 0, yd := 0, ymaxspeed := 5
     static xr := 0, xl := 0, xmaxspeed := 20
-    ;static xLast := yLast := 0
 
     ;OutputDebug " x: " x " y: " y "`n"
 

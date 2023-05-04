@@ -8,8 +8,8 @@
 ;was running. This information is primarily used to manage the auto-switch list.
 class history_manager_class
 {
-	_oHistory := Map()
-	_oCountPriority := Array()
+	_mHistory := Map()
+	_aCountPriority := Array()
 
 	__New()
 	{
@@ -19,16 +19,16 @@ class history_manager_class
 	;returns the list of vectors in count priority order
 	GetAttractList()
 	{
-		return this._oCountPriority
+		return this._aCountPriority
 	}
 
 	Delete(vector)
 	{
-		for n, item in this._oHistory
+		for n, item in this._mHistory
 		{
 			if (item["vector"] == vector)
 			{
-				this._oHistory.Delete(n)
+				this._mHistory.Delete(n)
 
 				this._serialize()
 				this._update_count_priority()
@@ -49,7 +49,7 @@ class history_manager_class
 		{
 			manual := 1
 			highest_count := 1
-			for n, item in this._oHistory
+			for n, item in this._mHistory
 			{
 				if (item["play_count"] > highest_count)
 					highest_count += item["play_count"]
@@ -60,10 +60,10 @@ class history_manager_class
 			highest_count++ 
 		}
 		
-		if (this._oHistory.Count > 0)
+		if (this._mHistory.Count > 0)
 		{
 			;find index of entry if it already exists
-			for i, item in this._oHistory
+			for i, item in this._mHistory
 			{
 				if (item["vector"] == vector)
 				{
@@ -76,30 +76,30 @@ class history_manager_class
  		;we didn't find it so initialize at the next available index
 		if (n == 0)
 		{
-			n := this._oHistory.Count + 1 ;add new item to list
+			n := this._mHistory.Count + 1 ;add new item to list
 
-			this._oHistory[n] := Map()
-			this._oHistory[n]["vector"] := vector
-			this._oHistory[n]["play_count"] := 0
-			this._oHistory[n]["first_play"] := now
+			this._mHistory[n] := Map()
+			this._mHistory[n]["vector"] := vector
+			this._mHistory[n]["play_count"] := 0
+			this._mHistory[n]["first_play"] := now
 		}
 		
-		this._oHistory[n]["manual"] := manual
-		this._oHistory[n]["most_recent"] := now
+		this._mHistory[n]["manual"] := manual
+		this._mHistory[n]["most_recent"] := now
 
 		if (manual)
-			this._oHistory[n]["play_count"] := highest_count
+			this._mHistory[n]["play_count"] := highest_count
 		else
-			this._oHistory[n]["play_count"]++
+			this._mHistory[n]["play_count"]++
 
-		first_play := this._oHistory[n]["first_play"]
+		first_play := this._mHistory[n]["first_play"]
 		first_play := DateDiff(now, first_play, "Days")
 
 		period := first_play > 0 ? first_play : 1
 
-		this._oHistory[n]["frequency"] := this._oHistory[n]["play_count"]/period
+		this._mHistory[n]["frequency"] := this._mHistory[n]["play_count"]/period
 
-		freq := this._oHistory[n]["frequency"]
+		freq := this._mHistory[n]["frequency"]
 
 		;write the fnew history file
 		this._serialize()
@@ -111,12 +111,12 @@ class history_manager_class
 	{
 		local n_temp := 0
 
-		hiscnt := this._oHistory.Count
+		hiscnt := this._mHistory.Count
 
 		fState := FileOpen(history_file, "w")
 
 		;write tab-delimited lines to the file
-		for n, h in this._oHistory
+		for n, h in this._mHistory
 		{
 			;first play
 			fp := h["first_play"]
@@ -162,7 +162,7 @@ class history_manager_class
 
         ;read whole file into an object
 		hf := FileRead(history_file)
-		this._oHistory := Map() ;initialize history object
+		this._mHistory := Map() ;initialize history object
 
 		;parse each line in the file object
 		Loop Parse hf, "`n"		
@@ -171,22 +171,22 @@ class history_manager_class
 				break
 
 			list_idx := A_Index
-			this._oHistory[list_idx] := Map()
+			this._mHistory[list_idx] := Map()
 
 			;parse through each tab delimited item in the line
 			Loop Parse A_LoopField, "`t"
 			{
 				if (A_Index == 1)
-					this._oHistory[list_idx]["first_play"] := A_LoopField
+					this._mHistory[list_idx]["first_play"] := A_LoopField
 				else if (A_Index == 2)
-					this._oHistory[list_idx]["most_recent"] := A_LoopField
+					this._mHistory[list_idx]["most_recent"] := A_LoopField
 				else if (A_Index == 3)
 				{				
 					play_count := A_LoopField
-					this._oHistory[list_idx]["play_count"] := play_count
+					this._mHistory[list_idx]["play_count"] := play_count
 
-					first_play := this._oHistory[list_idx]["first_play"]
-					most_recent := this._oHistory[list_idx]["most_recent"]
+					first_play := this._mHistory[list_idx]["first_play"]
+					most_recent := this._mHistory[list_idx]["most_recent"]
 
 					;To keep frequencies "fresh", the algorithm always ensures that the first_play and most_recent timestamps
 					;are alway "pulled-up" to the greater of X or Y as shown in this diagram.
@@ -202,13 +202,13 @@ class history_manager_class
 					first_play := DateDiff(most_recent, first_play, "Hours") ;put gap between first_play and most_recent and put in first_play
 					period := first_play > 0 ? first_play : 1
 					freq := play_count/period ;calculate the frequency
-					this._oHistory[list_idx]["frequency"] := freq
+					this._mHistory[list_idx]["frequency"] := freq
 				}
 				else if (A_Index == 4)
-					this._oHistory[list_idx]["manual"] := A_LoopField
+					this._mHistory[list_idx]["manual"] := A_LoopField
 				else if (A_Index == 5)
 				{
-					this._oHistory[list_idx]["vector"] := A_LoopField
+					this._mHistory[list_idx]["vector"] := A_LoopField
 				}
 			}
 		}
@@ -221,39 +221,39 @@ class history_manager_class
 	;crete a count priority list from current history list
 	_update_count_priority()
 	{
-		this._oCountPriority := Array()
+		this._aCountPriority := Array()
 
 		;fill and order the count priority object
-		for n, history_item in this._oHistory
+		for n, history_item in this._mHistory
 		{
-			item := Map()
-			item["play_count"] := history_item["play_count"]
-			item["manual"] := history_item["manual"]
-			item["vector"] := history_item["vector"]
+			mItem := Map()
+			mItem["play_count"] := history_item["play_count"]
+			mItem["manual"] := history_item["manual"]
+			mItem["vector"] := history_item["vector"]
 
-			thisSys := SplitVector(item["vector"])["sys_key"]
+			thisSys := SplitVector(mItem["vector"])["sys_key"]
 
 			;only auto add games from systems having autoswitch=1 or manually added
 			try 
 			{
-				if (oEmulators.Emulators[thisSys].autoswitch || item["manual"] == 1)
+				if (oEmulators.Emulators[thisSys].autoswitch || mItem["manual"] == 1)
 				{
 					if (n == 1)
-						this._oCountPriority.Push(item)
+						this._aCountPriority.Push(mItem)
 					else
 					{
 						inserted := false
-						for i, count_item in this._oCountPriority
+						for i, count_item in this._aCountPriority
 						{
 							if (history_item["play_count"] >= count_item["play_count"])
 							{						
-								this._oCountPriority.InsertAt(i, item)
+								this._aCountPriority.InsertAt(i, mItem)
 								inserted := true
 								break
 							}
 						}
 						if (!inserted)					
-							this._oCountPriority.Push(item)
+							this._aCountPriority.Push(mItem)
 					}
 				}
 			}	

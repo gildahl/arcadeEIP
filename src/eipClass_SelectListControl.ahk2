@@ -116,7 +116,6 @@ class select_list_control_class
 
 	__Delete()
 	{
-		;this.Hide()
 		this._serializeState()
 	}
 
@@ -237,46 +236,54 @@ class select_list_control_class
 			return			
 		}
 
-		fState := FileOpen(state_file, "w")
-
-		for n, s in this._state
+		try
 		{
-			if (s)
+			fState := FileOpen(state_file, "w")
+
+			for n, s in this._state
 			{
-				;index
-				fState.write(n . "`n") 
-
-				;name
-				if (n > this._maxSystems)
+				if (s)
 				{
-					try
-						sys := this._playlists[n-this._maxSystems]["name"] . "-fav"
-					catch
-						continue
+					;index
+					fState.write(n . "`n") 
+
+					;name
+					if (n > this._maxSystems)
+					{
+						try
+							sys := this._playlists[n-this._maxSystems]["name"] . "-fav"
+						catch
+							continue
+					}
+					else
+						sys := this._playlists[n]["name"]
+					fState.write(sys . "`n") 
+
+					;count
+					cnt := s["count"]
+					fState.write(cnt . "`n")
+
+					;selected row
+					row := s.Get("selectedRow","")
+					fState.write(row . "`n")  
+
+					;toggle state
+					tog := s.Get("sublist","")
+					fState.write(tog . "`n") 
+
+					nVal := n
 				}
-				else
-					sys := this._playlists[n]["name"]
-				fState.write(sys . "`n") 
-
-				;count
-				cnt := s["count"]
-				fState.write(cnt . "`n")
-
-				;selected row
-				row := s.Get("selectedRow","")
-				fState.write(row . "`n")  
-
-				;toggle state
-				tog := s.Get("sublist","")
-				fState.write(tog . "`n") 
-
-				nVal := n
 			}
+
+			fState.write("EOF")
+
+			fState.Close()
 		}
-
-		fState.write("EOF")
-
-		fState.Close()
+		catch as e
+		{		
+			LogEntry("ERROR: Attempting to write to state file, " state_file ": " FormatErrorMessage(e) "`n")
+			ExitApp
+		}
 
 		LogEntry("INFO: Serialized " nVal " states to .state file.`n")
 	}
@@ -595,14 +602,14 @@ class select_list_control_class
 		}
 
 		orderedCustomLists := ""
-		for n, customList in oLists
+		for n, customList in mLists
 		{
 			if (customList.proper_name)
 				orderedCustomLists := orderedCustomLists . customList.sort_prefix . customList.proper_name . "`t" . customList.proper_name
 			else
 				orderedCustomLists := orderedCustomLists . customList.sort_prefix . customList.proper_name . "`t" . customList.list_key
 
-			if (A_Index != oLists.Length)
+			if (A_Index != mLists.Length)
 				orderedCustomLists := orderedCustomLists . "`n"
 		}
 
@@ -611,7 +618,7 @@ class select_list_control_class
 
 		Loop Parse orderedCustomLists, "`n"
 		{
-			for n, cstLists in oLists 
+			for n, cstLists in mLists 
 			{
 				fields := StrSplit(A_LoopField, "`t")
 				if (cstLists.proper_name == fields[2])
@@ -712,7 +719,7 @@ class select_list_control_class
 			for n, searchPath in aSearchPaths
 			{							
 				SplitPath searchPath,,&romPath,&romExt,&searchRomName
-				romExt_decomp := StrSplit(romExt, ",", " ")	
+				romExt_decomp := StrSplit(romExt, gCfg.delimiter, " ")	
 				
 				for n, romExt in romExt_decomp
 				{	
@@ -863,7 +870,7 @@ class select_list_control_class
 
 							isFav := false
 
-							for n, customList in oLists
+							for n, customList in mLists
 							{
 								filename := lists_folder "\" customList.list_key "\" emulator.sys_key " " romFile ".txt"	
 								
@@ -1051,8 +1058,9 @@ class select_list_control_class
 		this._current_playlist := initial_list
 		this._current_count := this._state[initial_list]["count"]
 
-		;this._current_object := this._playlists[initial_list]["playlist"].Get(1, Map())  
-		this._current_object := this._playlists[initial_list]["playlist"][1]  ;this._state[1]["selectedObject"]  
+	    if (this._current_count > 0)
+			this._current_object := this._playlists[initial_list]["playlist"][1]  ;this._state[1]["selectedObject"]  
+		
 		this._AddSystemItems() 
 
 		;We may have loaded states, so activate the star on any
@@ -1092,7 +1100,6 @@ class select_list_control_class
 		}
 		else
 			HideControls("guiSelect")
-			;EnableControls("guiSelect")
 
 		return
 	}
@@ -1125,7 +1132,7 @@ class select_list_control_class
 		;Color the "Picks" column yellow
 		oLVC := LV_Colors(gGui.guiSelect_ListViewPlaylist)
 		if (IsObject(oLVC))
-			oLVC.Cell(1, oLists.Length + 1, , color_yellow)
+			oLVC.Cell(1, mLists.Length + 1, , color_yellow)
 		else
 			LogEntry("WARNING: Could not create LV_Colors object.`n")
 
@@ -1513,8 +1520,8 @@ class select_list_control_class
 			
 		;Create bottom bar playlist scroller
 		guiSelect.SetFont("s" . systemname_font_size)
-		hi := oEmulators.Emulators.Count + oLists.Length + 1 
-		systemViewWidth := systemLabelWidth * (oEmulators.Emulators.Count + oLists.Length + 1)
+		hi := oEmulators.Emulators.Count + mLists.Length + 1 
+		systemViewWidth := systemLabelWidth * (oEmulators.Emulators.Count + mLists.Length + 1)
 
 		gGui.guiSelect_ListViewPlaylist := guiSelect.AddListView("Hidden x0 y" . bottombar_ypos . " w" . systemViewWidth . " cWhite Background" . color_dark . " -E0x200 -Hdr Center R1 vListViewPlaylist +LV0x2", ["Name"])
 		gGui.guiSelect_ListViewPlaylist.GetPos(&smposX, &smposY, &smposW, &smposH)
@@ -1860,12 +1867,20 @@ class select_list_control_class
 								if (cmd == "tog")
 								{
 									;move vector file to the suppress folder
-									DirCreate lists_folder "\" listName "\suppress"  ;in case it doesn't exist
+									CreateDirAndLog(lists_folder "\" listName "\suppress") ;in case it doesn't exist
 									filedest := lists_folder "\" listName "\suppress\" vector ".txt"
-									FileMove filename, filedest
+									try {
+										FileMove filename, filedest
+									}
+									catch {
+										LogEntry("NOTICE: Failed to move file: " filename " to folder: " filedest ".`n")
+									}
 								}
-								Else
-									FileDelete filename
+								else
+								{
+									if (FileExist(filename))
+										FileDelete(filename)
+								}
 							}
 
 							;true parameter doesn't switch, but updates live attract mode with the changes
@@ -1873,14 +1888,16 @@ class select_list_control_class
 						}
 						else
 						{
-							FileDelete filename
+							if (FileExist(filename))
+								FileDelete(filename)
 						}
 
 						;delete any corresponding files from favorites folder associated with this list
 						sysKey := this._playlists[ct]["name"]
 						filename := favorites_folder "\" sysKey "\" vector ".txt"
-						try
-							FileDelete filename
+						
+						if (FileExist(filename))
+							FileDelete(filename)
 
 						this._deleteFromMasterFavorites(vector)
 
@@ -2070,7 +2087,9 @@ class select_list_control_class
 						}
 
 						filename := favorites_folder "\" sysKey "\" vector ".txt"
-						FileDelete filename
+
+						if (FileExist(filename))
+							FileDelete(filename)
 
 						if (sysKey != favorites_listname)		
 							this._deleteFromMasterFavorites(vector)
@@ -2311,7 +2330,7 @@ class select_list_control_class
 				favoritesFile := favoritesPath "\favorites.ini"
 		
 				if (!FileExist(favoritesFile))
-					DirCreate(favoritesPath)
+					CreateDirAndLog(favoritesPath)
 
 				bFavorite := IniRead(favoritesFile, "Favorites", romspec, 0)
 
@@ -2359,7 +2378,7 @@ class select_list_control_class
 				ratingsFile := ratingsPath "\ratings.ini"
 		
 				if (!FileExist(ratingsFile))
-					DirCreate(ratingsPath)
+					CreateDirAndLog(ratingsPath)
 				
 				if (cmd == "star")
 				{
@@ -2464,9 +2483,14 @@ class select_list_control_class
 		}
 
 		;create proxy file
-		DirCreate filedir
+		CreateDirAndLog(filedir)
 		filename := filedir "\" vector ".txt"
-		FileAppend vector, filename
+		try {
+			FileAppend vector, filename
+		}
+		catch {
+			LogEntry("NOTICE: Could not create proxy file, " filename ".`n")
+		}
 
 		if (targType == "customList")
 		{
@@ -2483,7 +2507,9 @@ class select_list_control_class
 
 					;Also delete from \suppress folder if it exists there
 					filedest := filedir . "\suppress\" vector ".txt"
-					try FileDelete(filedest)
+
+					if (FileExist(filedest))
+						FileDelete(filedest)
 				}
 
 				;true parameter doesn't switch, but updates live attract mode with the changes
@@ -2704,7 +2730,8 @@ class select_list_control_class
 
 				sysKey := this._playlists[base_pl]["name"]
 				filename := favorites_folder "\" sysKey "\" vector ".txt"
-				try
+				
+				if (FileExist(filename))
 					FileDelete(filename)
 
 				if (this._state[fl]["count"] > 0)

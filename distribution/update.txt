@@ -5,12 +5,19 @@ Arcade Emulator Integration Player
 Update Log
 ========================================
 
-0.4.0.0 Major refactor and port to AHK 2.
+0.4.0.0 Major code refactor and port to AHK 2.0
 * Ported arcadeEIP from AHK 1.1 to 2.0, while also performing some major
   refactoring, regression testing, and bug fixing. Should remain fully
-  compatible with prior version, so this should work as a drop in update.
+  compatible with prior versions, so this should work as a drop in update.
 * Released source code to GitHub (https://github.com/gildahl/arcadeEIP).
-* Removed "change_root" rule from default MAME configuration.
+* Removed "change_root" rule from default MAME configuration. To use this
+  feature, refer to the Rules Reference Guide.
+* The [General] section now supports a delimiter= option that is set to a
+  pipe character ("|") in the new default configuration. This defines the 
+  character used to separate options in the exe_full_path and search_path 
+  settings. You may continue to use legacy arcadeEIP configurations having
+  commas if you omit this setting or set it to a comma, but use of the 
+  comma for these settings is considered deprecated with this release.
 
 0.3.3.3 Small feature update
 * Added discrete quit_key= option to [Key Map]. Same as exit_key except it is

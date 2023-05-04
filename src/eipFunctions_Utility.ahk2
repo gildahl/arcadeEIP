@@ -202,7 +202,7 @@ FormatErrorMessage(e)
 	return retValue
 }
 
-Suspend(bAction, pid)
+SuspendProc(bAction, pid)
 {
     hnd := DllCall("OpenProcess", "uInt", 0x1F0FFF, "Int", 0, "Int", pid)
     if (!hnd)
@@ -233,4 +233,28 @@ IsWindowValid(oTestWindow)
 	try bIsWindowValid := WinExist(oTestWindow)
     
 	return bIsWindowValid
+}
+
+;Returns an array split by a delimiter that may be a
+;multi-character string
+SplitByStringDelimiter(sTarget, sDelimiter)
+{
+	aPathList := Array()
+
+	loop 
+	{
+		dPos := InStr(sTarget, sDelimiter, 1, 1)
+		if (dPos)
+		{
+			aPathList.Push(Trim(SubStr(sTarget, 1, dPos-1)))
+			sTarget := SubStr(sTarget, dPos+2)
+		}
+		else
+		{
+			aPathList.Push(Trim(sTarget))
+			break
+		}
+	}
+
+	return aPathList
 }

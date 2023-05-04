@@ -39,6 +39,9 @@ RunWaitTimer()
     global
     ;local zCheck
 
+    if (!pid_emulator)
+        return
+
     if (diag_mode)
     {
         ut_runwait_cycle++
@@ -54,6 +57,8 @@ RunWaitTimer()
         bEmuWindowActive := false
     }
     cur_emu := pid_emulator
+
+
     
     oPauseProc.SetPid(cur_emu)
 
@@ -94,9 +99,9 @@ RunWaitTimer()
     }
 
     ;Check if the process is running.
-    emu_running := ProcessExist(pid_emulator)
+    bEmuRunning := ProcessExist(pid_emulator)
     
-    if (emu_running && !bHotkeysOn)
+    if (bEmuRunning && !bHotkeysOn)
     {
         ActivateHotKeys()
         bHotkeysOn := true
@@ -104,7 +109,7 @@ RunWaitTimer()
 
     ;the g_exit_code check prevents Windows from beeping if user is exiting manually.
     ;(this can happen if user is still holding down the exit key when the keys get deactivated)
-    if (!emu_running && bHotkeysOn && g_exit_code != 1)
+    if (!bEmuRunning && bHotkeysOn && g_exit_code != 1)
     {
         InactivateHotKeys()
         bHotkeysOn := false
@@ -113,7 +118,7 @@ RunWaitTimer()
     ;if user clicks on screen while select screen is shown
     ;then return focus to the emulator
     ;Also handle the joystick in here
-    if (emu_running)
+    if (bEmuRunning)
     {
         if (g_guiselect_visible)
         {
@@ -198,7 +203,7 @@ KeepActive()
 
     emu_pid := "ahk_pid " . pid_emulator
 
-    if (emu_running) ; && !g_guiselect_visible)
+    if (bEmuRunning) ; && !g_guiselect_visible)
     {
         windowName := oEmulators.Emulators[gCfg.sys_key].window_name
 
@@ -292,7 +297,7 @@ KeepActive()
             DllCall("SetMenu", "Uint", act_win, "UInt", 0)   ;removes menu
             
 
-            ;*** Be sure to add any new winset styles to ParseRTParams_recursive ***
+            ;*** Be sure to add any new winset styles to ParseRTParams ***
             if winset_style == "winset_B" or winset_style == "winset_C"  ;currently for Demul (Naomi) and Supermodel
             {
                 ;Note WinMaximize works, but will compromise the aspect ratio on some games/monitors.

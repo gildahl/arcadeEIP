@@ -151,6 +151,18 @@
 			},
 
 			{
+				"name": "eip -createcfg",
+				"request": "launch",
+				"type": "autohotkey",
+				"runtime_v1": "AutoHotkey.exe",
+				"runtime_v2": "v2/AutoHotkey.exe",
+				"program": "${file}",
+				"args": ["-createcfg"],
+				"stopOnEntry": false,
+				"maxChildren": 10000
+			},
+
+			{
 				"name": "eip -start_screen=3,Navy",
 				"request": "launch",
 				"type": "autohotkey",

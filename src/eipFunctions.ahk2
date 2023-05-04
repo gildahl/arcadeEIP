@@ -4,18 +4,10 @@
 
 ;Miscellaneous functions
 
-CreateDirectSwitchFolder()
+;Add contents to the directswitch_folder.
+;Used during initialization and -clean operations
+PopulateDirectSwitchFolder()
 {
-    if (!InStr(FileExist(directswitch_folder), "D"))
-    {
-        try
-            DirCreate directswitch_folder
-        catch
-            LogEntry("NOTICE: Failed to create folder, " directswitch_folder ".`n")
-        else        
-            LogEntry("INFO: Created folder, " directswitch_folder ".`n")            
-    }
-
     if (InStr(FileExist(directswitch_folder), "D") && !FileExist(directswitch_folder "\readme.txt"))
     {
         try 
@@ -383,90 +375,56 @@ VectorNow(args)
     return
 }
 
+;Parse a decorated command line and return the base command line along 
+;with any specified runtime options.
 ParseRTParams(cl, &runStyle, &runOption, &windowStyle, &winset_style)
 {
-    ;This function has two parts.  This first part just does initialization
-    ;and then calls the recursive function, ParseRTParams_recursive to do the work.
-    
-    runStyle := runOption := windowStyle := "" ;init
+    ;Split the exe path and retun along with any options specified.
 
-    ParseRTParams_recursive(&cl, &runStyle, &runOption, &windowStyle, &winset_style) ;recursive call
-    
-    return cl
-}
+    runStyle := runOption := windowStyle := winset_style := "" ;init
 
-ParseRTParams_recursive(&cl, &runStyle, &runOption, &windowStyle, &winset_style)
-{
-    global
-
-    ;This algorithm extracts runtime parameters attached to the 
-    ;end of a commandline, starting from the end and working backward.
-    ;It returns the commandline with the parameters stripped, and
-    ;the settings as ByRef values.
-    
     ;Four options supported
     ; runStyle = "RunWait" (default) or "Run" (if "nowait" specified on cl)
     ; runOption = "" (default) or "Min" (if "min" specified on cl)
     ; windowStyle = "" (default) or "NoHide" (if "nohide" specified on cl)
     ; noTitle = false (default) or true (if "notitle" specified on cl)
-    
-    winSetStyleValue := ""
 
-    if (runStyle = "")
+    if (runStyle == "")
         runStyle := "RunWait"
-    
-    Loop
-    {
-        bNoWaitFound := false
-        bMinFound := false
-        bNoHideFound := false
-        bwinSetStyleFound := false
-        
-        ;process last value
-        parsed_cl := StrSplit(cl, ",", " ")				
-        if (parsed_cl[parsed_cl.Length] = "nowait") 
-            bNoWaitFound := true
-        else if (parsed_cl[parsed_cl.Length] = "min")
-            bMinFound := true
-        else if (parsed_cl[parsed_cl.Length] = "nohide")
-            bNoHideFound := true
-        else if (SubStr(parsed_cl[parsed_cl.Length], 1, 6) = "winset")
-        {
-            winSetStyleValue := parsed_cl[parsed_cl.Length]
 
-            ;for valid values of winset_style, see KeepActive() function
-            if winSetStyleValue == "winset" or winSetStyleValue == "winset_A" or winSetStyleValue == "winset_B" or winSetStyleValue ==  "winset_C" or winSetStyleValue == "winset_D"
-                bwinSetStyleFound := true
-        }
-        
-        if (bNoWaitFound == true || bMinFound == true || bNoHideFound == true || bwinSetStyleFound == true)
-        {
-            cl := SubStr(cl,1,InStr(cl, ",",,,-1)-1) ;strip last field	
-            
-            if (bNoWaitFound) 
-                runStyle := "Run"
-            if (bMinFound)
-                runOption := "Min"
-            if (bNoHideFound)
-                windowStyle := "NoHide" ;Window gets hidden by bookend screens
-            if (bwinSetStyleFound)
-                winset_style := winSetStyleValue
-            
-            ParseRTParams_recursive(&cl, &runStyle, &runOption, &windowStyle, &winset_style) ;recursive call
-        }
-        else
-        {
-            if (parsed_cl.Length > 1)
-            {
-                LogEntry("Error: Illegal run option, " parsed_cl[parsed_cl.Length] ", specified with command line: " parsed_cl[1] "`n")
-                ExitApp
-            }
-            
-            break ;exits recursive loop when no remaining valid value is found
-        }
+    ;Get path and options
+    if (InStr(cl, gCfg.delimiter))
+    {
+        cl_path := SubStr(cl, 1, InStr(cl, gCfg.delimiter,,1,1)-1)
+        cl_options := SubStr(cl, StrLen(cl_path)+1)
     }
-    
-    return cl
+    else
+    {
+        cl_path := cl    
+        cl_options := ""   
+    }
+
+    if (InStr(cl_options, "nowait"))
+        runStyle := "Run"
+
+    if (InStr(cl_options, "min"))
+        runOption := "Min"
+
+    if (InStr(cl_options, "nohide"))
+        windowStyle := "NoHide" ;Window gets hidden by bookend screens
+
+    if (InStr(cl_options, "winset"))
+        winset_style := "winset"
+    if (InStr(cl_options, "winset_A"))
+        winset_style := "winset_A"
+    if (InStr(cl_options, "winset_B"))
+        winset_style := "winset_B"
+    if (InStr(cl_options, "winset_C"))
+        winset_style := "winset_C"
+    if (InStr(cl_options, "winset_D"))
+        winset_style := "winset_D"
+
+    return cl_path
 }
 
 ;build Emu_Args parameter array from param_list string
@@ -524,9 +482,7 @@ BuildEmuArgs()
     }
 }
 
-;---------------------------------
 ; Rebuild param_list from Emu_Args
-;---------------------------------
 BuildParamList()
 {    
     global
@@ -629,7 +585,7 @@ RunApps(assetName, romName, appList, appFilter:="")
         }
        
         ;lookup the app in the applications list to find out how to run it
-        for n, param in applications
+        for n, param in mApplications
         {
             if (param.app_key == this_app)
             {
@@ -1178,7 +1134,7 @@ GetFuzzyRom(sysKey, romFileName, &oRoms)
     for n, searchPath in aSearchPaths
     {
         SplitPath searchPath,,&searchFolder, &searchExt, &searchRomName
-        romExtensions := StrSplit(searchExt, ",", " ")
+        romExtensions := StrSplit(searchExt, gCfg.delimiter, " ")
         
         for n, romExt in romExtensions
         {
@@ -1410,7 +1366,7 @@ ParseSearchPath(sysKey)
     rootFolder := oEmulators.Emulators[sysKey].root_folder
     
     bIsRootSearch := InStr(searchPath, "*",,-2, -2)
-    if (bIsRootSearch && !InStr(searchPath, ";"))
+    if (bIsRootSearch && !InStr(searchPath, "||"))
     {
         searchPattern := SubStr(searchPath, 1, bIsRootSearch)
         romSegment := StrReplace(searchPath, searchPattern, "")
@@ -1430,7 +1386,7 @@ ParseSearchPath(sysKey)
         ReverseArray(&aSearchPaths)
     }
     else	
-        aSearchPaths := StrSplit(searchPath, ";", " ")
+        aSearchPaths := SplitByStringDelimiter(searchPath, "||")
     
     return aSearchPaths
 }
@@ -1548,6 +1504,61 @@ IsEmulatorActive()
         return false
 }
 
+;Create a directory and log the activity
+CreateDirAndLog(d)
+{
+    if (!InStr(FileExist(d), "D"))
+    {
+        try
+            DirCreate d
+        catch
+            LogEntry("NOTICE: Failed to create folder, " d ".`n")
+        else        
+            LogEntry("INFO: Created folder, " d ".`n")            
+    }
+
+    return
+}
+
+;Delete a file or folder and log the activity
+;@t is "D" (directory) or "F" (file)
+;@f is full name and path of the file or folder/directory. 
+DeleteAndLog(t, f)
+{
+    if (t == "F")
+    {
+        if (FileExist(f)) 
+        {
+            try {
+                FileDelete(f)
+            }
+            catch as e {
+                LogEntry("INFO: File could not be deleted: " f ". Error was: " FormatErrorMessage(e) "`n")
+            }
+            else {
+                LogEntry("INFO: Deleted file: " f ".`n")
+            }
+        }
+    }
+    if (t == "D")
+    {
+        if (FileExist(f)) 
+        {
+            try {
+                DirDelete(f, 1)
+            }
+            catch as e {
+                LogEntry("INFO: Folder could not be deleted: " f ". Error was: " FormatErrorMessage(e) "`n")
+            }
+            else {
+                LogEntry("INFO: Deleted folder: " f ".`n")
+            }
+        }
+    }
+
+    return
+}
+
 LogEntry(logString, continueLine:=false)
 {
     global
@@ -1570,7 +1581,7 @@ LogEntry(logString, continueLine:=false)
     elapsedTime := Format(formatString, elapsedTime)
     elapsedTime := SubStr(elapsedTime,1,StrLen(elapsedTime)-3) . "." . SubStr(elapsedTime, StrLen(elapsedTime)-2, 3)
 
-    if (use_log)
+    if (gCfg.use_log)
     { 
         if (continueLine)
             FileAppend logString, log_file
@@ -1584,7 +1595,7 @@ LogEntry(logString, continueLine:=false)
         
         if (!gCfg.debug_mode)
         {
-            if (use_log && (gCfg.fe_key = "os" || gCfg.fe_key = ""))
+            if (gCfg.use_log && (gCfg.fe_key = "os" || gCfg.fe_key = ""))
                 ShowLog()
         }
     }
