@@ -13,7 +13,7 @@ ReadConfig()
         return false
 
     ;[General]
-    gCfg.delimiter := IniRead(config_file, "General", "delimiter", ",") ;use legacy comma if no entry
+    gCfg.path_delimiter := IniRead(config_file, "General", "path_delimiter", ",") ;use legacy comma if no entry
     gCfg.show_license := Integer(IniRead(config_file, "General", "show_license", 1))
     gCfg.idle_log := Integer(IniRead(config_file, "General", "idle_log", 0))
     gCfg.seed_rom := IniRead(config_file, "General", "seed_rom", "mame galaga.zip")

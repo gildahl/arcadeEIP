@@ -16,7 +16,7 @@
 ; * AutoHotkey v2 Language Support
 ; * vscode-autohotkey-debug
 ;
-;Note about "vectors" (since this is a fundamental construct and it may not be obvious what it is)
+;Note about "vectors" (since may not be obvious what this is)
 ;=================================================================================================
 ;A vector is simply a two-part space-separated pointer to an emulator rom. The form is
 ;
@@ -25,9 +25,9 @@
 ;Where <key> is the sys_key for one of the systems defined in arcadeEIP.ini (like "mame" ) and <rom>
 ;is the name of some rom on that system. This may be anything ranging from a full path to the rom 
 ;such as "D:\Emulators\MAME\roms\zaxxon.zip" to simply a part of the name such as "zaxx", in which 
-;case fuzzy logic will identify a best match when attempting to run the game. 
+;case a best match will be sought when attempting to run the game. 
 ;
-;Vectors can be used on the command line to run games, but are also used in rules, hotstrings, and
+;Vectors can be used on the command line to run games, but are also used in proxy files, hotstrings, and
 ;passed around internally to specify a game.
 ;
 ;See the "Command line reference guide.pdf" for more information about vectors. 
@@ -199,7 +199,7 @@ global gCfg := {}
 
 ;[General]
 gCfg.debug_mode := ""  ;Set to "os" or front-end fe_key to be simulated
-gCfg.delimiter:= "|"
+gCfg.path_delimiter:= ","
 gCfg.idle_log := 0
 gCfg.use_log := 1
 gCfg.fast_load := 0

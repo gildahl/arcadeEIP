@@ -1,8 +1,4 @@
 extra/
-*.bat
-*.bak
-*.exe
-*.log
-*.pdf
-*.png
+runlast_eip.bat
+runlast_native.bat
 ~*

@@ -123,7 +123,7 @@ FILE MANIFEST
 =============
 eip.exe                      : main arcadeEIP executable
 marquee.exe                  : marquee player supporting dynamic marquees
-util.exe                     : command line utility
+util.exe                     : command line/console utility
 license.txt                  : terms of the license.
 readme.txt                   : this file
 update.txt                   : version update information

@@ -719,7 +719,7 @@ class select_list_control_class
 			for n, searchPath in aSearchPaths
 			{							
 				SplitPath searchPath,,&romPath,&romExt,&searchRomName
-				romExt_decomp := StrSplit(romExt, gCfg.delimiter, " ")	
+				romExt_decomp := StrSplit(romExt, gCfg.path_delimiter, " ")	
 				
 				for n, romExt in romExt_decomp
 				{	

@@ -393,9 +393,9 @@ ParseRTParams(cl, &runStyle, &runOption, &windowStyle, &winset_style)
         runStyle := "RunWait"
 
     ;Get path and options
-    if (InStr(cl, gCfg.delimiter))
+    if (InStr(cl, gCfg.path_delimiter))
     {
-        cl_path := SubStr(cl, 1, InStr(cl, gCfg.delimiter,,1,1)-1)
+        cl_path := Trim(SubStr(cl, 1, InStr(cl, gCfg.path_delimiter,,1,1)-1))
         cl_options := SubStr(cl, StrLen(cl_path)+1)
     }
     else
@@ -1134,7 +1134,7 @@ GetFuzzyRom(sysKey, romFileName, &oRoms)
     for n, searchPath in aSearchPaths
     {
         SplitPath searchPath,,&searchFolder, &searchExt, &searchRomName
-        romExtensions := StrSplit(searchExt, gCfg.delimiter, " ")
+        romExtensions := StrSplit(searchExt, gCfg.path_delimiter, " ")
         
         for n, romExt in romExtensions
         {
