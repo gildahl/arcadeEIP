@@ -16,7 +16,7 @@
 ; * AutoHotkey v2 Language Support
 ; * vscode-autohotkey-debug
 ;
-;Note about "vectors" (since may not be obvious what this is)
+;Note about the term "vector" (since it may not be obvious from the comments what this is)
 ;=================================================================================================
 ;A vector is simply a two-part space-separated pointer to an emulator rom. The form is
 ;
@@ -338,7 +338,7 @@ global mLists := Map()
 global mApplications := Map()
 global mPlayLog := Map()
 global aMapExit := Array()
-global rules := ""
+global mRules := ""
 global oDom := "", oDetectInactivity, oSelectListControl := "", oMameData := ""
 
 ;Miscellaneous inits and declarations

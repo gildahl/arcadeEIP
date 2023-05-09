@@ -154,8 +154,6 @@ ProcessPassthroughArgs(&oArgs, sParamList)
 ;assetTypes are "logo", "marquee", and "controls" (i.e. control panel layouts)
 SetAssetFullPath(assetType, romName, assetFolder, systemAsset, globalAssetName)
 {
-    global
-
     ;Look in the asset folder for a png or jpg based on the rom file name.
     if (romName && assetFolder)
     {
@@ -225,11 +223,6 @@ SetAssetFullPath(assetType, romName, assetFolder, systemAsset, globalAssetName)
 ;Mainly here for LaunchBox/BigBox support
 GetRegionalAsset(assetPath, sysKey:="")
 {
-    global
-
-    local n, OutNameNoExt, OutFileName, OutDir, OutExtension, OutNameNoExt, OutDrive
-    local oRegionPriorities
-
     if (!assetPath)
         return
 
@@ -430,7 +423,7 @@ ParseRTParams(cl, &runStyle, &runOption, &windowStyle, &winset_style)
 ;build Emu_Args parameter array from param_list string
 BuildEmuArgs() 
 {
-    global ;Emu_Args
+    global Emu_Args
 
     idx := 1
     startString := false ;used in processing double-quoted items having spaces
@@ -486,7 +479,7 @@ BuildEmuArgs()
 BuildParamList()
 {    
     global
-    local n
+    local n, param
 
     gCfg.param_list := ""
     for n, param in Emu_Args ; For each parameter:
@@ -903,28 +896,6 @@ Launch(runStyle, fullPath, paramList, typeApp, runOption:="", windowStyle:="", a
     return success
 }
 
-/*
-Run(targ,opt,&pid_id:="")
-{
-    Run(targ,,opt,&pid_id)
-    
-return
-}
-
-RunWait(targ,opt,&pid_id:="")
-{
-    ;Note that while RunWait is blocking, the pid_id is set and
-    ;can be accessed in another timer thread.  Because pid_id is a
-    ;ByRef value, the global value pid_emulator (from Launch) also gets set here.
-
-    ;SetTimer, RunWaitTimer, 100
-    RunWait targ,,opt,&pid_id	
-    ;SetTimer, RunWaitTimer, Off
-    
-return
-}
-*/
-
 ProcessParamListTemplates()
 {
     global    
@@ -1182,8 +1153,7 @@ ProcessEmulatorSettings(config_section)
 {
     global
 
-    local rule, idx, config_item, romFileDecomp
-    local hot_key
+    local rule, idx, config_item, romFileDecomp, hot_key
     
     ProcessEmulatorOverrides()
     
@@ -1191,7 +1161,7 @@ ProcessEmulatorSettings(config_section)
     
     ;Fill the rule structure
     ;rule = [function] arg_1 [policy] arg_2
-    rules := Map()
+    mRules := Map()
     Loop 
     {
         config_item := "rule_" . A_Index
@@ -1203,34 +1173,34 @@ ProcessEmulatorSettings(config_section)
             break
         }
         
-        rules[A_Index] := {}
+        mRules[A_Index] := {}
         idx := A_Index
 
         Loop Parse rule, "<>", A_Space  
         {
             if (A_Index == 2) 
-                rules[idx].function := A_LoopField	
+                mRules[idx].function := A_LoopField	
             
             else if (A_Index == 3)
             {
-                rules[idx].arg_1 := A_LoopField
+                mRules[idx].arg_1 := A_LoopField
                 
                 ;<change_root> rule supports [root_folder] in arg_1
-                if rules[idx].function = "change_root"
-                    rules[idx].arg_1 := StrReplace(A_LoopField, "[root_folder]", gCfg.root_folder)
+                if mRules[idx].function = "change_root"
+                    mRules[idx].arg_1 := StrReplace(A_LoopField, "[root_folder]", gCfg.root_folder)
             }
             
             else if (A_Index == 4)
-                rules[idx].policy := A_LoopField
+                mRules[idx].policy := A_LoopField
             
             else if (A_Index == 5)
-                rules[idx].arg_2 := A_LoopField
+                mRules[idx].arg_2 := A_LoopField
             
             else if (A_Index == 6)
-                rules[idx].case_1 := A_LoopField
+                mRules[idx].case_1 := A_LoopField
             
             else if (A_Index == 7)
-                rules[idx].arg_3 := A_LoopField
+                mRules[idx].arg_3 := A_LoopField
         }        				
     }	
 }
@@ -1264,7 +1234,7 @@ ProcessOverrideArgs(&argList, typeArgs:="A_Args")
     cl_run_apps := ""
     cl_fast_load_index := ""
     emu_arg := ""
-    ;newArgList := Array()
+ 
     newArgList := argList.Clone()
     
     for n, input_arg in argList

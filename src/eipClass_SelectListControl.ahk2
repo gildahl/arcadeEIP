@@ -418,6 +418,9 @@ class select_list_control_class
 	{
 		global
 
+		if (!g_guiselect_visible)
+			return
+
 		if (!g_guiselect_loaded)
 		{
 			gGui.guiSelect_InitProgress.Visible := true
@@ -457,6 +460,9 @@ class select_list_control_class
 	{	
 		global
 		local n, pl, pl_count
+
+		if (g_guiselect_visible)
+			return
 
 		this._oGraphicsOverlay.HideGraphics()
 
@@ -1088,18 +1094,19 @@ class select_list_control_class
 
 		this.ScrollHorizontal("index",initial_list)
 
+		;loading completed
 		g_guiselect_loaded := true
-
 		picker_load_timer := (A_TickCount - picker_load_timer)//1000
 		LogEntry("INFO: Completed loading picker menu (" picker_load_timer " seconds).`n")
 
+		;if guiSelect is visible then switch from progress bar to main interactive screen
 		if (g_guiselect_visible)
 		{
-			this.Show() ;Just changes which controls are visible from progress bar to interactive
+			this.Show() 
 			ControlActivationState.EnableSelectControls()
 		}
-		else
-			HideControls("guiSelect")
+		;else
+		;	HideControls("guiSelect")
 
 		return
 	}
@@ -1527,7 +1534,7 @@ class select_list_control_class
 		gGui.guiSelect_ListViewPlaylist.GetPos(&smposX, &smposY, &smposW, &smposH)
 		y_center := bottombar_ypos + (barHeight/2) - (smposH / 2) ;centers ListView (which is dynamically sized based on font) over the progress bar background
 		gGui.guiSelect_ListViewPlaylist.Move(systemLabelWidth, y_center)
-		
+
 		return
 	}
 

@@ -1,15 +1,19 @@
-The \Assets\[asset_name] folders are intended as a location for default asset 
-data, where [asset_name] is the value assigned to the asset_name= key in
+The \Assets\[asset_name] folders are intended as a location for various emulator
+asset files where [asset_name] is the value assigned to the asset_name= key in
 arcadeEIP.exe for the given system. The \Assets\MAME folder is provided as
 an example.
 
-********************************************************************************
-While these folder can be used as a convenient location for your own asset 
+***********************************************************************************
+While these folders can be used as a convenient location for your own asset 
 data files as well, it is perfectly appropriate to keep them in a location  
 separate from this folder and mapped-to using the [Global_Assets] section in  
 arcadeEIP.ini (or via system specific keys in the [System] sections) in order
-to maintain independence (and non-duplication) of your resource files.  
-********************************************************************************
+to maintain independence (and non-duplication) of your resource files.
+
+Also, keep in mind that if you specify a LaunchBox image folder as an asset for
+a system, LaunchBox will automatically be used for that system's metadata as well.
+(see LaunchBox.txt in the ..\Docs\[Fron_End] examples folder for more information).  
+***********************************************************************************
 
 The \Controls\Rom folder should be used to store control panel map png files 
 corresponding to individual games for the given system. These files should be named

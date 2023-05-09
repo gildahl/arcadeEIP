@@ -8,7 +8,7 @@ emulator that you want to support carefully.
 Keep in mind that arcadeEIP's game-picker menu is an overlay menu, and so is a bit
 more picky about the emulators that will work with it than conventional front ends.
 In general, be sure to always use your emulator's fullscreen windowed mode rather than its 
-exclusive fullscreen mode otherwise the picker menu will not be visible.ccAll the examples
+exclusive fullscreen mode otherwise the picker menu will not be visible. All the examples
 in this folder have been tested to work well with the menu.
 
 Emulators that either (a) do not offer a fullscreen windowed mode and/or (b) which

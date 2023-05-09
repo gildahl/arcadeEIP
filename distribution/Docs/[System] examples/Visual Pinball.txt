@@ -24,7 +24,8 @@ map_exit=!{F4 2}
 Note: Use of window_name (such as window_name=Visual Pinball Player) is not recommended for 
       Visual Pinball if you use tables in which the VPinMAME DMD overlays the table. 
 
-Note: VPX works a bit different than VP9 (different file extensions, different executable,
+Note: This example shows how two different versions of Visual Pinball can be combined.
+      VPX works a bit different than VP9 (different file extensions, different executable,
       for example).  However, because it is preferrable to have all tables in one "system",
       the above example achieves this by setting up a master [System_vpinball] section with a 
       search_path to all the "roms" (i.e. vpx and vpt files), but with a <vector_to> rule that

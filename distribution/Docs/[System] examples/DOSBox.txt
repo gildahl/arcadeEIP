@@ -15,13 +15,13 @@ Note: This example assumes [Application] sections for ultramap and joytokey exis
 
 Note: The technique for supporting DOSBox in arcadeEIP is to first setup your
       games so that they can be launched successfully by a standard Windows
-      shortcut. Then point the search_path at the folder containing these
-      links, and point the exe_full_path at the link (using the [rom_name]
+      shortcut. Then point the arcadeEIP.ini search_path at the folder containing 
+      these links, and point the exe_full_path at the link (using the [rom_name]
       template).  arcadeEIP will now launch these links just as if they were
       any other emulated game.
 
-      For example, to launch Novastorm (great classic DOS arcade game BTW), configure
-      dosbox.conf similar to this:
+      For example, to launch Novastorm (a great classic DOS arcade game BTW),
+      configure dosbox.conf similar to this:
 
       [autoexec]
       # Lines in this section will be run at startup.
@@ -31,8 +31,8 @@ Note: The technique for supporting DOSBox in arcadeEIP is to first setup your
       novastrm.exe
       exit
 
-      Then create a shortcut in a dedicated folder somewhere (in this case its in
-      D:\Assets\Microsoft_DOS\Software\) with these settings:
+      Then create a ‌Windows shortcut in a dedicated folder somewhere (in this case
+      in D:\Assets\Microsoft_DOS\Software\) with these settings:
 
       Target:   "C:\Program Files (x86)\DOSBox-0.74\DOSBox.exe" -noconsole
       Start in: D:\Assets\Microsoft_DOS\Software\Novastorm

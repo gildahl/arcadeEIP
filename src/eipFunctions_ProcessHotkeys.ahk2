@@ -63,8 +63,9 @@ MagicKey(option, theHotkey:="")
         }
 
         oBASS.Play("menu")
-        g_guiselect_visible := true ;must be above ShowControls
         guiSelect.Opt("+AlwaysOnTop")
+
+        g_guiselect_visible := true ;must be above ShowControls
         ShowControls("guiSelect") ;ShowControls should always follow a guiSelect +AlwaysOnTop directive          
     }
     else ;guiSelect is visible, so let's hide it.
@@ -86,10 +87,10 @@ MagicKey(option, theHotkey:="")
         {
             ControlFocus(WinGetID("ahk_pid " . pid_emulator))
         }
-        
-        g_guiselect_visible := false
 
         mouse_clicks_off := 0
+
+        g_guiselect_visible := false
         HideControls("guiSelect")  
 
         ;Wait for apps to reload

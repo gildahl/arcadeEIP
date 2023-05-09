@@ -18,7 +18,7 @@ ProcessRules()
     local foundRom, param_is_quoted, search_pattern, rom_subfolder, current_folder
     local tempArgs, partial_config_file, partial_config_section    
 
-    for n, this_rule in rules
+    for n, this_rule in mRules
     {
         ;*** custom function ***
         ;A custom function is implemented in a separate executable

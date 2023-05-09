@@ -86,12 +86,13 @@ Here is a list of key defaults.
 
 Basic controls - available while a game is playing
 -------------------------------------------------------------------------------
-Menu:             '                Toggle game selection menu
-Pause:            , (comma)        Pause emulator.
-Exit:             . (period)       Exit emulator.
-Magic Key:        . (period)       Hold 2-3 seconds to display the game selection menu 
-Previous Game:    [   or q         Go back to previous game in autoplay list
-Next Game:        ]   or w         Advance to next game in autoplay list
+Menu:                 '                Toggle game selection menu
+Pause:                , (comma)        Pause emulator.
+Exit (normal):        . (period)       Exits emulator, then arcadeEIP.
+Magic Key:            . (period)       Hold 2-3 seconds to display the game selection menu 
+Previous Game:        [   or q         Go back to previous game in autoplay list
+Next Game:            ]   or w         Advance to next game in autoplay list
+Exit (panic):         Ctrl-Alt-k       (Use RIGHT Ctrl-Alt) Exit (during hang, black screen, etc.)
 
 Quick-Switch game picker menu controls (only used when in the menu)
 --------------------------------------------------------------------------------
@@ -114,9 +115,8 @@ Add/Remove publisher     u        Add/remove all games having the same publisher
 Add/Remove developer     d        Add/remove all games having the same developer as selected game.
 Add/Remove players       n        Add/remove all games having the same number of players as selected game.
 
-Special keys
-----------------------------------------------------------------------------------
-Panic             Ctrl-Alt-k       Emergency exit arcadeEIP if it or a game hangs 
+Marquee
+---------------------------------------------------------------------------------- 
 Exit Marquee      Ctrl-Alt-x       Exit Marquee application (if in use)
 
 FILE MANIFEST

@@ -4,16 +4,17 @@ asset_name=Magnavox_Odyssey_2
 proper_name=Odyssey 2
 exe_full_path=D:\Emulators\MAME\mame.exe,min
 ;window_name=[odyssey2]
-search_path=[root_folder]_*\software\odyssey2\*.bin
+;search_path=[root_folder]_*\software\odyssey2\*.bin
+search_path=D:\Emulators\MAME\software\odyssey2\*.bin
 param_list=odyssey2 -cart "[rom]" -ui_active -joy -now -skip_gameinfo -keyboardprovider dinput <-video,1>
 run_apps=ultramap,winipac
-rule_1=<change_root> [root_folder]_* <if_rom_in_subfolder> \software\odyssey2
-rule_2=<use_proxy> [rom_name].txt <if_in_folder> [root_folder]\software\odyssey2
+;rule_1=<change_root> [root_folder]_* <if_rom_in_subfolder> \software\odyssey2
+;rule_2=<use_proxy> [rom_name].txt <if_in_folder> [root_folder]\software\odyssey2
 map_pause={toggle}p
 map_exit={Event}{Esc}
 
 
-Note: -us_active parameter is used here for MAME to avoid mapping conflicts.
+Note: -ui_active parameter is used here for MAME to avoid mapping conflicts.
 
 Note: This example assumes [Application] sections for ultramap and winipac exist.
 

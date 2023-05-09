@@ -13,22 +13,22 @@ map_exit={Event}{Esc}
 
 Note: This configuration example requires you to create a text file for each game
       in your collection.  These are simply text (.txt) files whose name matches the rom
-      and whose contents is the full command-line for that game.  These act as rom proxies.
+      and whose contents is the full command-line for that game.  These files act as rom proxies.
 
-      To obtain a command line to place into the proxy file, run DaphneLoader and first 
+      To obtain a command line to place into the rom proxy file, run DaphneLoader and first 
       make sure the game is working properly via Daphne's configuration settings.  Once you have
       done so, press the Configure button and, in the Advanced Tab, enable "Display Command Line".
       The next time you run the game from DaphneLoader you will see the command line which you 
       can then copy into the proxy (text) file. 
 
       When saving to the proxy file, it is recommended that you edit the -x and -y values
-      to the resolution of your screen instead of the values set by Daphne. This will ensure 
+      to be the resolution of your screen instead of the values set by Daphne. This will ensure 
       that arcadeEIP's overlay menu is displayed at the correct resolution.
 
       *** Be sure to fully exit DaphneLoader before testing in arcadeEIP ***
 
       As an example, to create a proxy file for Dragon's Lair (Enhancement v2.1), I created a file
-      named file lair.txt, placed it in my Daphne proxy file folder, "D:\Assets\Daphne\Proxies",
+      named lair.txt, placed it in my Daphne proxy file folder, "D:\Assets\Daphne\Proxies",
       and then copied/pasted this Daphne-generated commandline into the file (with x and y changed
       to my monitor's resolution):
 
@@ -38,16 +38,15 @@ Note: This configuration example requires you to create a text file for each gam
       -fullscreen -x 1600 -y 1200 
 
       (Note that your file may differ somewhat, and also note that the lair.txt file referenced
-       in this command line example is not proxy file, but a "framefile" that Daphne generates
-       which just happens to have the same name.)
+       in this command line example is not the rom proxy file noted above, but a "framefile" that
+       Daphne generates which just happens to have the same name.)
 
       Once this is done, arcadeEIP will list and be capable of launching Dragon's Lair just
-      like any other rom, when running from either from game menu or at the command prompt
-      such as
+      like any other rom when running from either the game menu or at the command prompt such as:
 
         >eip.exe daphne lair
 
-      Setup the rest of your games the same way.
+      Set up the rest of your games the same way.
 
 
 Note: This example assumes [Application] sections for ultramap and joytokey exist.

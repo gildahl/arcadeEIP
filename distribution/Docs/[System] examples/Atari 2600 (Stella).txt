@@ -20,7 +20,7 @@ Note: This example assumes [Application] sections for ultramap and winipac exist
 
 Note: Test first, before uncommenting window_name for enhanced focus control.
 
-Note: Testing shows that sometime exiting a game sometimes doesn't work until a few seconds 
+Note: Testing shows that exiting a game sometimes doesn't work until a few seconds 
       after loading a game. I believe this is due to Stella itself.
 
 Note: Testing shows that the [ and ] keys, which move to the next and previous games, 

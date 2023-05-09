@@ -5,12 +5,12 @@ proper_name=MAME
 attract=1
 exe_full_path=D:\Emulators\MAME\mame.exe,min
 ;window_name=[[rom_name]]
-search_path=[root_folder]_*\roms\*.zip
-;search_path=D:\Emulators\MAME\roms\*.zip
+;search_path=[root_folder]_*\roms\*.zip
+search_path=D:\Emulators\MAME\roms\*.zip
 param_list=[rom_name] -nowindow -joy -skip_gameinfo -autosave -nosleep -priority 1 -keyboardprovider dinput <-video,1>
 run_apps=ultramap,winipac
-rule_1=<change_root> [root_folder]_* <if_rom_in_subfolder> \roms
-rule_2=<use_proxy> [rom_name].txt <if_in_folder> [root_folder]\roms
+;rule_1=<change_root> [root_folder]_* <if_rom_in_subfolder> \roms
+;rule_2=<use_proxy> [rom_name].txt <if_in_folder> [root_folder]\roms
 ;rule_3=<remove_param> -autosave <if_rom_in_list> paperboy,eyes,blitz,pong
 map_pause={toggle}p
 map_exit={Event}{Esc}
@@ -21,8 +21,8 @@ meta_names=C:\GameEx\DATA\MAME.map
 ;system_logo=D:\Assets\MAME\System_Logo\system_logo.png
 
 
-Note: Commented lines are examples of optional variations. For example, the first search path is one that supports
-      the <change_root> rule (rule_2) for handling multiple parallel versions of MAME (see Rules Reference.pdf for more
+Note: Commented lines are examples of optional variations. For example, the first search_path is one that supports
+      the <change_root> rule (rule_1) for handling multiple parallel versions of MAME (see Rules Reference.pdf for more
       about that). The second search path is a simple direct path to the roms (*.zip files in this case).
 
 Note: The <-video,1> parameter is an option to allow passthrough of the -video MAME parameter from the arcadeEIP 

@@ -3,11 +3,11 @@ sys_key=vectrex
 asset_name=GCE_Vectrex
 proper_name=Vectrex
 exe_full_path=D:\Emulators\MAME\mame.exe,min
-search_path=[root_folder]_*\software\vectrex\*.*	
-;search_path=D:\Emulators\MAME\software\vectrex\*.*		
+;search_path=[root_folder]_*\software\vectrex\*.*	
+search_path=D:\Emulators\MAME\software\vectrex\*.*		
 param_list=vectrex -cart "[rom]" -joy -now -skip_gameinfo -view "[rom_name]" -keyboardprovider dinput <-video,1>
 run_apps=ultramap,winipac
-rule_1=<change_root> [root_folder]_* <if_rom_in_subfolder> \software\vectrex
+;rule_1=<change_root> [root_folder]_* <if_rom_in_subfolder> \software\vectrex
 map_pause={Toggle}p
 map_exit={Event}{Esc}
 

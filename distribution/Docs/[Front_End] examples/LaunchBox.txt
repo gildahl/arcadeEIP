@@ -7,7 +7,7 @@ configured, tested, and working outside of LaunchBox for every system that you
 will use it with first.
 **********************************************************************************
 
-arcadeEIP doesn't have any built-in capability for downloading images or any UI 
+arcadeEIP doesn't have any built-in capability for downloading images or UI 
 support for curating rom collections and their metadata.  However, arcadeEIP does 
 integrate nicely and quite easily with LaunchBox (which does these things very
 well), making it simple to use that product as a content manager for arcadeEIP.
@@ -15,7 +15,7 @@ in fact, you could regard arcadeEIP as being as a kind of "loose" plug-in for th
 product.
 
 At the most basic level, if you already have LaunchBox and want arcadeEIP to use 
-LB's media files and metadata for a particular platform in arcadeEIP, you may just 
+its media files and metadata for a particular platform in arcadeEIP, you may just 
 add these lines to the appropriate (and already configured/working) [System] section
 in arcadeEIP.ini (with the paths adjusted to your machine, of course), to have 
 arcadeEIP begin to use LB's assets.
