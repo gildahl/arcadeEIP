@@ -34,7 +34,7 @@
 ; ;Important list state, current state, and LV list item settings
 ;---------------------------------------------------------------------------------
 ;this._state[base_pl]["sublist"]   ;which sublist is currently selected (0=base or 1=picks)
-;this._state[pl]["selectedItem"]   ;== this._current_game == column 2 in LV list
+;this._state[pl]["selectedItem"]   ;== this._current_game == column 2 in LV list -- deprecated
 ;this._state[pl]["selectedObject"] ;== this._current_object == column 3 in LV list
 
 ;this._state[pl]["selectedRow"]    ;== this._current_row)
@@ -58,6 +58,9 @@
 ;Class implementing the game selection screen in arcadeEIP.
 class select_list_control_class
 {	
+	static fav_idx := 0
+	;static suppressNameUpdate := 0
+	
 	_current_object := Map()
 	_current_playlist := ""
 	_current_target := 0
@@ -65,11 +68,12 @@ class select_list_control_class
 	_current_game := ""
 	_current_game_name := ""
 	_current_row := 0
-	_state := Map()         
+	_state := Map()   
+	_suppressNameUpdate := 0      
 
 	__New(maxRows, maxRowsB, lstFontType, lstFontSize, lstGameFontSize, lstSysFontSize, lstListMargin)
 	{
-		global 
+		;global 
 
 		;initialize the GDI+ (gdip) library (in gdip.ahk)
 		If !pToken := Gdip_Startup()
@@ -127,10 +131,10 @@ class select_list_control_class
 	;Read in prior states from state file
 	_deserializeState()
 	{
-		global
-		local loop_idx, sf, oSf, val, idx := 0, sys, listName, cnt, sel, tog
+		;global
+		;local loop_idx, sf, oSf, val, idx := 0, sys, listName, cnt, sel, tog
 
-		loop_idx := 0
+		loop_idx := 0, idx := 0
 
 		if (!FileExist(state_file))
 		{
@@ -203,7 +207,7 @@ class select_list_control_class
 					tog := oSf[++loop_idx]
 					if (tog == 1)
 					{
-						this._state[idx]["sublist"] := tog
+						this._state[idx]["sublist"] := Integer(tog)
 					}
 
 					this._initializing := false
@@ -227,8 +231,10 @@ class select_list_control_class
 
 	_serializeState()
 	{
-		global
-		local fState, n, s, sys, cnt, row, tog, nVal := 0
+		;global
+		;local fState, n, s, sys, cnt, row, tog, nVal := 0
+
+		nVal := 0
 
 		if (!g_guiselect_loaded)
 		{
@@ -290,8 +296,8 @@ class select_list_control_class
 
 	Init(this_pl)
 	{
-		global
-		local orig_object, orig_pl
+		;global
+		;local orig_object, orig_pl
 
 		;This line is for cases where the function is called
 		;from outside the default gui process (like RefreshAttractList())
@@ -318,7 +324,12 @@ class select_list_control_class
 
 	UpdateMetaTags(pl)
 	{
-		global
+		global gGui
+
+		;update of the meta tags may be suppressed if we are doing
+		;a bulk list add or delete operation.
+		if (this._suppressNameUpdate)
+			return
 
 		;Make sure rom filename label remains set to current game
 		v := this._current_object.Get("vector", "")
@@ -389,8 +400,8 @@ class select_list_control_class
 
 	SwitchGame()
 	{
-		global
-		local ob, vector
+		;global
+		;local ob, vector
 
 		ob := this._current_object
 		vector := ob["vector"]
@@ -416,7 +427,7 @@ class select_list_control_class
 	;the global variables, which can lead to an incoherent state
 	_ShowAll()
 	{
-		global
+		global gGui
 
 		if (!g_guiselect_visible)
 			return
@@ -458,8 +469,8 @@ class select_list_control_class
 
 	_HideAll()
 	{	
-		global
-		local n, pl, pl_count
+		global gGui
+		;local n, pl, pl_count
 
 		if (g_guiselect_visible)
 			return
@@ -501,7 +512,7 @@ class select_list_control_class
 
 	_ShowMeta()
 	{
-		global
+		global gGui
 
 		gGui.guiSelect_RomNameLabel.Visible := true
 		gGui.guiSelect_MetaLabelRight.Visible := true
@@ -513,7 +524,7 @@ class select_list_control_class
 
 	_HideMeta()
 	{
-		global
+		global gGui
 
 		gGui.guiSelect_RomNameLabel.Visible := false
 		gGui.guiSelect_MetaLabelRight.Visible := false
@@ -525,7 +536,7 @@ class select_list_control_class
 
 	HidePlaylist(pl)
 	{
-		global
+		global gGui
 
 		if (g_guiselect_loaded)
 		{
@@ -542,7 +553,7 @@ class select_list_control_class
 
 	ShowPlaylist(pl)
 	{
-		global
+		global gGui
 
 		if (g_guiselect_loaded)
 		{
@@ -559,7 +570,8 @@ class select_list_control_class
 
 	HidePolygons()
 	{
-		global
+		global gGui
+
 		gGui.guiTriangleLeft.Hide()
 		gGui.guiTriangleRight.Hide()
 		gGui.guiMinusLeft.Hide()
@@ -571,14 +583,15 @@ class select_list_control_class
 	;This is the main system/list initialization routine
 	_AddEmulatorItems()
 	{
-		global
+		global gGui, fav_idx, g_guiselect_loaded
 
-		local fv_idx, n, vector, vec, filename, emulators, emulator ;, test_filename,idx, item
-		local cleanLists, cleanedProperName, sysKey, systemKey, catver_file, cstList
-		local logo_folder, logo_file, system_logo_file, rom_category
+		;local pl_idx, fv_idx, n, vector, vec, filename, emulators, emulator ;, test_filename,idx, item
+		;local cleanLists, cleanedProperName, sysKey, systemKey, catver_file, cstList
+		;local logo_folder, logo_file, system_logo_file, rom_category, aSearchPaths
+		;local picker_load_timer, orderedEmulatorList, orderedCustomLists, customList
 
-		local pl_idx_map := Map()
-		local cl_idx_map := Map()
+		pl_idx_map := Map()
+		cl_idx_map := Map()
 
 		this._playlists := Map()
 
@@ -752,7 +765,7 @@ class select_list_control_class
 						;skip if this is a duplicate rom or if there is no enty for this item in the metafile
 						;Note that the metafile check will only fail if there actually is a metafile.
 						;if (duplicate_test[vec] != 1 && properName != "missing_from_metafile" && !orphaned_rom)
-						if (duplicate_test.Get(vec,"") != 1 && properName != "missing_from_metafile" && !orphaned_rom)
+						if (!duplicate_test.Has(vec) && properName != "missing_from_metafile" && !orphaned_rom)
 						{	
 							gm_idx++
 
@@ -999,7 +1012,7 @@ class select_list_control_class
 			this._state[n]["count"] := !o ? 0 : o
 			if (this._state[n]["count"] == 0)
 				gGui.guiSelect_GameName%n%.Text := "Empty"
-			this._state[n]["sublist"] := 0 ;0 is all games, 1 is the favorites (this is only an attribute of the base list)
+			this._state[n]["sublist"] := 0 ;0 is all games, 1 is the picks list (this is only an attribute of the base list)
 
 			;initialize favorites
 			this._state[f]["count"] := fc
@@ -1114,8 +1127,8 @@ class select_list_control_class
 	;called by _AddPlaylistItems
 	_AddSystemItems()
 	{
-		global
-		local c, n, SysItem, column 
+		global gGui
+		;local c, n, SysItem, column 
 
 		;Column 1 is there by default, so modify (rather than add) the first 
 		;system to it separately.
@@ -1173,7 +1186,7 @@ class select_list_control_class
 	;Might be nice to replace these with image/icons at some point.
 	_CreatePolygonOverlay()
 	{		
-		global
+		global gGui
 
 		leftMargin := this._systemLabelWidth
 		verticalCenter := this._bottombar_ypos + this._barHeight + this._barHeight/4
@@ -1373,12 +1386,12 @@ class select_list_control_class
 	;This is where we create the basic screen elements for the picker
 	_CreateBaseControl()
 	{
-		global ;gGui, guiSelect
+		global gGui 
 
-		local font, playlist_font_size, barHeight, topbar_ypos, bottombar_ypos, x, y, ho, hi, yo, h, pw, slw, sw
-		local systemViewWidth, y_center, systemLabelWidth, areaT, areaB, listT, listB, w_adj, x_adj, l_adjy
-		local init_text_y, right_start, test_y, prog_h, prog_w, prog_x, prog_y, prog_text_y
-		local Gradient_1, Gradient_2, fav_offset, metaLabelWidth, systemname_font_size, centerLabelWidth, sideLabelWidth
+		;local font, playlist_font_size, barHeight, topbar_ypos, bottombar_ypos, x, y, ho, hi, yo, h, pw, slw, sw
+		;local systemViewWidth, y_center, systemLabelWidth, areaT, areaB, listT, listB, w_adj, x_adj, l_adjy
+		;local init_text_y, right_start, test_y, prog_h, prog_w, prog_x, prog_y, prog_text_y
+		;local Gradient_1, Gradient_2, fav_offset, metaLabelWidth, systemname_font_size, centerLabelWidth, sideLabelWidth
 
 		font := this._font
 		playlist_font_size := this._playlistFontSize 
@@ -1540,8 +1553,8 @@ class select_list_control_class
 
 	SetListRows(pl, list_count)
 	{
-		global
-		local actual_rows, actual_rowsB
+		;global
+		;local actual_rows, actual_rowsB
 
 		;for top list control *************************************************
 		if (list_count <= this._maxRows)
@@ -1573,11 +1586,11 @@ class select_list_control_class
 
 	_CreateGameListControl(pl)
 	{
-		global
-		local list_count, dr, actual_rows, actual_rowsB
-		local SM_CXVSCROLL, barHeight, topbar_ypos, bottombar_ypos
-		local colwtop, new_lv_w, new_lv_y, new_lv_x, lvb_y
-		local playlist_font_size
+		global gGui
+		;local list_count, dr, actual_rows, actual_rowsB
+		;local SM_CXVSCROLL, barHeight, topbar_ypos, bottombar_ypos
+		;local colwtop, new_lv_w, new_lv_y, new_lv_x, lvb_y
+		;local playlist_font_size
 
 		playlist_font_size := this._playlistFontSize
 		gamename_font_size := this._gameNameFontSize
@@ -1653,8 +1666,8 @@ class select_list_control_class
 
 	_getAttractPlaylistID()
 	{
-		global
-		local pl, n := 0, n_temp := 0
+		;global
+		n := 0, n_temp := 0
 
 		for n, pl in this._playlists
 		{
@@ -1669,7 +1682,7 @@ class select_list_control_class
 	;Method to refresh the attract mode list when it is in auto mode
 	UpdateAttractListView()
 	{
-		global
+		global gGui
 
 		;confirm that we're in auto mode, otherwise exit
 		if (gCfg.attract_auto < 1)
@@ -1760,7 +1773,7 @@ class select_list_control_class
 	;ct is the list index
 	SetEmptyListLabel(ct)
 	{
-		global
+		global gGui
 			
 		fsz := this._gameNameFontSize
 		fnt := this._font
@@ -1785,13 +1798,13 @@ class select_list_control_class
 	 */
 	SublistCommand(cmd)
 	{
-		global
+		global gGui
 
-		local cnt := 0, pl, cr, sr, i, r, v, fsz, fnt, gm
-		local progLimit, oDeletedRows, oDeletedRowsEntry, sourceValue, items, prog, selectedObject
-		local vector, listName, thisValue, sysKey, filename, base_pl, propName, labelText
-		local new_state, new_playlist, romspec, sysspec, assetspec, favoritesPath, favoritesFile
-		local bFavorite, newValue, p_pl, p_gm, ratingsPath, ratingsFile, nRating
+		;local cnt := 0, pl, cr, sr, i, r, v, fsz, fnt, gm
+		;local progLimit, oDeletedRows, oDeletedRowsEntry, sourceValue, items, prog, selectedObject
+		;local vector, listName, thisValue, sysKey, filename, base_pl, propName, labelText
+		;local new_state, new_playlist, romspec, sysspec, assetspec, favoritesPath, favoritesFile
+		;local bFavorite, newValue, p_pl, p_gm, ratingsPath, ratingsFile, nRating
 
 		pl := this._current_playlist ;local var for the current playlist
 
@@ -1802,7 +1815,7 @@ class select_list_control_class
 			Case "tog", "all", "genre", "year", "publisher", "developer" ,"players" ,"favorites" ,"rating":
 
 				;Delete from a custom list
-				if (this._current_target && this._current_target == pl)
+				if (this._current_target == pl)
 				{
 					ControlActivationState.DisableSelectControls()
 
@@ -1832,7 +1845,7 @@ class select_list_control_class
 
 					oBASS.Play("remove")
 					
-					items := cmd == "tog" ? 1 : guiSelect_ListViewBottom%ct%.GetCount()
+					items := cmd == "tog" ? 1 : gGui.guiSelect_ListViewBottom%ct%.GetCount()
 
 					;This loop deletes all appropriate vector files
 					Loop items
@@ -1974,13 +1987,6 @@ class select_list_control_class
 				;Add games from a source to a custom list
 				If (this._current_target && this._current_target != pl)
 				{
-					
-					try guiBackground.Opt("-AlwaysOnTop")
-					try guiSelect.Opt("-AlwaysOnTop")
-					try guiAlpha.Opt("-AlwaysOnTop")
-					try guiExit.Opt("-AlwaysOnTop")
-					try guiStart.Opt("-AlwaysOnTop")
-					
 					ControlActivationState.DisableSelectControls()
 
 					oBASS.Play("add")
@@ -2003,7 +2009,7 @@ class select_list_control_class
 						sourceValue := this._getSourceValue(cmd, cr, pl)
 					}
 
-					items := cmd == "tog" ? 1 : guiSelect_ListViewBottom%pl%.GetCount()
+					items := cmd == "tog" ? 1 : gGui.guiSelect_ListViewBottom%pl%.GetCount()
 
 					Loop items
 					{
@@ -2011,7 +2017,10 @@ class select_list_control_class
 						gGui.guiSelect_ActionProgress.Value := prog
 
 						cr := cmd == "tog" ? cr : A_Index
+
+						this._suppressNameUpdate := 1
 						this._copyToTarget(pl, ct, cr, cmd, sourceValue)
+						this._suppressNameUpdate := 0
 					}
 
 					this.Init(ct)
@@ -2098,8 +2107,12 @@ class select_list_control_class
 						if (FileExist(filename))
 							FileDelete(filename)
 
-						if (sysKey != favorites_listname)		
+						if (sysKey != favorites_listname)
+						{		
+							this._suppressNameUpdate := 1 ;suppress game name and meta tag updates
 							this._deleteFromMasterFavorites(vector)
+							this._suppressNameUpdate := 0
+						}
 
 						;maintain an list of the items we will next need to 
 						;remove from the onscreen list.  Not needed if cmd == "all".
@@ -2186,7 +2199,10 @@ class select_list_control_class
 						gGui.guiSelect_FavoritesProgress.Value := prog
 
 						cr := cmd == "tog" ? cr : A_Index
+
+						this._suppressNameUpdate := 1
 						this._copyToTarget(pl, fl, cr, cmd, sourceValue, "favoritesList")
+						this._suppressNameUpdate := 0
 					}
 
 					this.Init(fl)
@@ -2210,7 +2226,7 @@ class select_list_control_class
 				else
 					base_pl := pl
 
-				;the list is in favorites mode, so switch back to main list first
+				;the list is in favorites mode, so switch back to base list first
 				if (this._playlists[base_pl]["type"] == "list" && this._state[base_pl]["sublist"] == 1)
 				{
 					oBASS.Active := 0 ;turn off sound effects
@@ -2276,9 +2292,9 @@ class select_list_control_class
 
 				base_pl := pl
 
-				if (pl > this._maxSystems) 
+				if (pl > this._maxSystems) ;must be a picks list
 				{
-					base_pl := pl - this._maxSystems
+					base_pl := pl - this._maxSystems ;set base_pl to the base list
 					oBASS.Play("master")
 				}
 				else
@@ -2286,7 +2302,9 @@ class select_list_control_class
 					oBASS.Play("picks")
 				}
 
-				new_state := this._state[base_pl]["sublist"] ? 0 : 1
+				;"sublist" indicates which sublist is currently selected (0=base or 1=picks)
+				;(this is only an attribute of the base list)
+				new_state := this._state[base_pl]["sublist"] == 1 ? 0 : 1
 				new_playlist := new_state == 1 ? this._current_playlist + this._maxSystems : this._current_playlist - this._maxSystems
 
 				if (this._state[new_playlist]["count"] == 0)
@@ -2318,7 +2336,7 @@ class select_list_control_class
 
 				this._SwitchPlaylist(pl) ;execute the list change
 
-				this.UpdateMetaTags(pl)
+				this.UpdateMetaTags(new_playlist)
 
 				return
 			
@@ -2409,7 +2427,7 @@ class select_list_control_class
 
 	_exitListEditMode()
 	{
-		global
+		global gGui
 
 		LV_SetColumnIcon(gGui.guiSelect_ListViewPlaylist.Hwnd, 1, this._current_target, 1)
 		this._current_target := 0
@@ -2433,7 +2451,7 @@ class select_list_control_class
 	;calling function should call this.Init(ct) after any batch
 	_copyToTarget(pl, ct, cr, cmd, value:="", targType:="customList")
 	{
-		global
+		global gGui
 		
 		vector := ""
 		try {
@@ -2527,9 +2545,6 @@ class select_list_control_class
 		cleanLists := oEmulators.Emulators[systemKey].clean_lists
 		cleanedProperName := StripEnclosures(properName, cleanLists)
 
-		;There is no need to add playlist items to the local favorites list since items in
-		;the local favorites lists are effectively just references to the corresponding base list items,
-		;and share the base list's game index (stored in column 2 of the LV)
 		if (targType == "favoritesList")
 		{
 			;add the item to this system's favorites list
@@ -2557,7 +2572,7 @@ class select_list_control_class
 			}
 
 			;Add a playlist item stub. This provides our index keys and a reference
-			;back to the parent item (for use by favorites and ratings)
+			;back to the parent item (for use by favorites and ratings) - deprecated
 			;new_idx := this._playlists[fav_idx]["playlist"].Count + 1
 			;this._playlists[fav_idx]["playlist"][new_idx] := oObject
 
@@ -2597,7 +2612,7 @@ class select_list_control_class
 	;if pl is a base playlist, it also clears the associated favorites list.
 	_clearList(pl)
 	{
-		global
+		global gGui
 	
 		;clear the base list
 		gGui.guiSelect_ListViewTop%pl%.Delete()
@@ -2606,6 +2621,7 @@ class select_list_control_class
 		this._state[pl]["count"] := 0
 		this._state[pl]["maxRows"] := 0
 		this._state[pl]["maxRowsB"] := 0 
+		this._state[pl]["selectedObject"] := Map()
 
 		if (pl <= this._maxSystems)
 		{
@@ -2618,6 +2634,7 @@ class select_list_control_class
 			this._state[fl]["count"] := 0
 			this._state[fl]["maxRows"] := 0 ;actual_rows ;save maxRows as part of the state for this playlist
 			this._state[fl]["maxRowsB"] := 0 ;actual_rowsB
+			this._state[pl]["selectedObject"] := Map()
 		}
 
 		;clear the current object
@@ -2627,7 +2644,7 @@ class select_list_control_class
 		this.SetEmptyListLabel(pl)
 	}
 
-	;Get metadata type value from a 
+	;Get a metadata type value
 	_getSourceValue(sourceType, cr, pl)
 	{
 		sourceValue := ""
@@ -2657,11 +2674,12 @@ class select_list_control_class
 		return sourceValue
 	}
 
+	;delete a row from a ListView
 	;specify cr=0 to delete all
 	_deleteFromLV(pl, cr)
 	{
-		global
-		local cnt
+		global gGui
+		;local cnt
 
 		gGui.guiSelect_ListViewTop%pl%.Delete(cr)
 		gGui.guiSelect_ListViewBottom%pl%.Delete(cr)
@@ -2686,23 +2704,23 @@ class select_list_control_class
 
 	_scrollToRow(sr, cnt, pl)
 	{ 
-		global
+		global gGui
 
 		this._initializing := true ;blocks graphic updates		
 		gGui.guiSelect_GameName%pl%.Visible := false
 
-		;if bottom of the list
 		oBASS.Active := 0 ;suppress scroll sound effects
+
+		;if bottom of the list
 		if (sr > cnt)
-		{
-			
+		{			
 			this.ScrollVertical("index",cnt-1)	
 			this.ScrollVertical("d")
 		}
 		else ;anywhere else in list
 		{	
 			this.Init(pl)
-			this.ScrollVertical("index",0, true)
+			this.ScrollVertical("index",0)
 			this.ScrollVertical("index",sr)
 			if (sr > 1)
 			{
@@ -2758,8 +2776,8 @@ class select_list_control_class
 
 	_deleteFromMasterFavorites(vector)
 	{
-		global
-		local n
+		global gGui
+		;local n
 
 		;Also delete from Master Favorites
 		;(both main and favorite favorites list)
@@ -2810,7 +2828,8 @@ class select_list_control_class
 	;Controls left/right Scrolling of the systems/lists
 	ScrollHorizontal(direction, idx:=0)
 	{
-		global
+		global gGui
+
 		static absPos := 1
 
 		;these two values control the scroll speed of the 
@@ -2839,7 +2858,7 @@ class select_list_control_class
 			gGui.guiSelect_ListViewPlaylist.GetPos(&curPosX, &curPosY, &curPosW, &curPosH)
 			initPos := curPosX
 
-			Loop
+			Loop ;the animation loop
 			{
 				gGui.guiSelect_ListViewPlaylist.GetPos(&curPosX, &curPosY, &curPosW, &curPosH)
 				newPos := curPosX + GAP
@@ -2869,7 +2888,7 @@ class select_list_control_class
 			gGui.guiSelect_ListViewPlaylist.GetPos(&curPosX, &curPosY, &curPosW, &curPosH)
 			initPos := curPosX
 
-			Loop
+			Loop ;the animation loop
 			{
 				gGui.guiSelect_ListViewPlaylist.GetPos(&curPosX, &curPosY, &curPosW, &curPosH)
 				newPos := curPosX - GAP
@@ -2899,9 +2918,15 @@ class select_list_control_class
 			this._current_playlist := base_pl + this._maxSystems
 
 		pl := this._current_playlist
-		this._current_row := this._state[pl]["selectedRow"]
-		this._current_count := this._state[pl]["count"]
-		this._current_object := this._state[pl]["selectedObject"]
+		try {
+			this._current_row := this._state[pl]["selectedRow"]
+			this._current_count := this._state[pl]["count"]
+			this._current_object := this._state[pl]["selectedObject"]
+		}
+		catch as e {
+			LogEntry("ERROR: Selected list, " pl " has an unknown state.`n")
+			ExitApp
+		}
 
 		this.UpdateMetaTags(pl)
 
@@ -2926,12 +2951,12 @@ class select_list_control_class
 	}
 
 	;Controls up/down scrolling of games in individual system/lists
-	;*** Big HOUSE OF CARDS Warning ***
+	;*** HOUSE OF CARDS WARNING ***
 	;Any changes in here should be followed by EXTENSIVE regression testing!!!
 	;Spot checking IS NOT ADEQUATE.
-	ScrollVertical(direction,idx:=0, suppressNameUpdate:=false)
+	ScrollVertical(direction,idx:=0)
 	{
-		global
+		global gGui
 
 		pl := this._current_playlist
 
@@ -2956,6 +2981,7 @@ class select_list_control_class
 			return
 		}
 
+		;jump to a specified row
 		if (direction == "index")
         {		
             ;Set top listview
@@ -3062,7 +3088,7 @@ class select_list_control_class
 			selectedObject := selectedObject == "" ? Map() : ObjFromPtrAddRef(Integer(selectedObject))    ;object containing extended info (like logo paths)
 		}
 
-		;reduce font size if necessary to fit long names
+		;adjust font size as necessary to fit game names in control
 		fsz := this._gameNameFontSize
 		fnt := this._font
 		Loop
@@ -3074,12 +3100,15 @@ class select_list_control_class
 				fsz--
 		}
 
-		guiSelect.SetFont("s" fsz " cWhite", fnt)
-		gGui.guiSelect_GameName%pl%.SetFont()
+		if (!this._suppressNameUpdate)
+		{
+			guiSelect.SetFont("s" fsz " cWhite", fnt)
+			gGui.guiSelect_GameName%pl%.SetFont()
 
-		;Replace & with && otherwise they won't be visible in the GUI GameName control.
-		selectedText := StrReplace(selectedText, "&", "&&")	
-		gGui.guiSelect_GameName%pl%.Text := selectedText	
+			;Replace & with && otherwise they won't be visible in the GUI GameName control.
+			selectedText := StrReplace(selectedText, "&", "&&")	
+			gGui.guiSelect_GameName%pl%.Text := selectedText	
+		}
 
 		sleep_setting := 0
 		Sleep sleep_setting ;improves stepping speed and flickering
@@ -3157,7 +3186,7 @@ class select_list_control_class
 
 		HideGraphics()
 		{
-			global
+			global gGui
 			
 			last_image1_window := this._last_image1_window
 			last_image2_window := this._last_image2_window
@@ -3184,19 +3213,23 @@ class select_list_control_class
 		;selection:           game id     
 		;image_type:          1=rom logo; 2=system logo; 3=favorite icon; 4=rating icon
 		;show_now (optional): default true (whether to show the image now or just create it)
-		;subtype: (optional): default 0 (designates sub image, such as star number in a rating)
+		;subtype: (optional): default 0 (designates sub image, such as number of stars in a rating)
 		ShowGraphic(playlist, selection, image_type, image_file, show_now:=true, subtype:=0)
 		{
-			global
 			Critical  ;without this, images are not always properly deleted leaving orphans
 
 			if (!playlist || !selection)
 				return
 
-			;OutputDebug playlist: %playlist%, selection: %selection%, image_type: %image_type%, image_file: %image_file%, show_now: %show_now%, subtype: %subtype%`n
+			last_image1_window := this._last_image1_window
+			last_image2_window := this._last_image2_window
+			last_image3_window := this._last_image3_window
+			last_image4_window := this._last_image4_window
 
-			;if no image file, then hide the previous one since there
-			;is apparently nothing to show for this one.
+			last_image4_subtype := this._last_image4_subtype
+
+			;if no image file, then hide the previous one and return
+			;since there is apparently nothing to show.
 			if (!image_file || !FileExist(image_file))
 			{
 				if (image_type == 1)
@@ -3207,16 +3240,12 @@ class select_list_control_class
 					try gGui.%last_image3_window%.Hide()
 				if (image_type == 4)
 					try gGui.%last_image4_window%.Hide()
+
 				return
 			}
 
-			last_image1_window := this._last_image1_window
-			last_image2_window := this._last_image2_window
-			last_image3_window := this._last_image3_window
-			last_image4_window := this._last_image4_window
-
-			last_image4_subtype := this._last_image4_subtype
-
+			;if specified image was the most recent previous one shown, 
+			;then just show it again and return
 			if (image_type == 1 && image_file == this._last_image1_file)
 			{
 				try	gGui.%last_image1_window%.Show("NA")
@@ -3238,6 +3267,7 @@ class select_list_control_class
 				return
 			}
 
+			;update the last image file with the new image_file
 			if (image_type == 1)
 				this._last_image1_file := image_file
 			if (image_type == 2)
@@ -3247,6 +3277,7 @@ class select_list_control_class
 			if (image_type == 4)
 				this._last_image4_file := image_file		
 
+			;Hide the current image
 			if (image_type == 1 && last_image1_window)
 				try	gGui.%last_image1_window%.Hide()
 			if (image_type == 2 && last_image2_window)
@@ -3256,123 +3287,132 @@ class select_list_control_class
 			if (image_type == 4 && last_image4_window)
 				try	gGui.%last_image4_window%.Hide()					
 
-			;Create a layered window (+E0x80000 : must be used for UpdateLayeredWindow to work!) 
-			;that is always on top (+AlwaysOnTop), and has no taskbar entry or caption
-			gui_id := playlist "_" selection "_" image_type ;Graphic 1 is the game logo image
+			;create a unique gui_id for this image window
+			gui_id := playlist "_" selection "_" image_type 
 
+			;only create a new image window if it doesn't already exist
 			try
 				gExist := IsObject(gGui.%gui_id%)
 			catch
 				gExist := false
 
+			;create the window if it doesn't already exist
 			if (!gExist)
 			{
+				;Create a new layered window (+E0x80000 : must be used for UpdateLayeredWindow to work!) 
+				;that is always on top (+AlwaysOnTop), and has no taskbar or caption
 				gGui.%gui_id% := Gui(, "eipGui - " gui_id)
 			    gGui.%gui_id%.Opt("-Caption +E0x80000 +LastFound +AlwaysOnTop +ToolWindow +OwnDialogs") ;+OwnerGuiOverlay")
 			}
 
-			if (show_now == true)
-				gGui.%gui_id%.Show("NA")
+			if (show_now)
+				gGui.%gui_id%.Show("NA") ;show the window		
 
-			if (FileExist(image_file))
-				pBitmap := Gdip_CreateBitmapFromFile(image_file)
-			else 
+			;create image for the window if it doesn't already exist
+			;or if it is an icon (since icon state may have changed)
+			if (!gExist || image_type == 4 || image_type == 3) 
 			{
-				LogEntry("ERROR: image file, " image_file " could not be found. Assertion error. Exiting.`n")
-				ExitApp
+				if (FileExist(image_file))
+					pBitmap := Gdip_CreateBitmapFromFile(image_file)
+				else 
+				{
+					LogEntry("ERROR: image file, " image_file " could not be found. Assert condition. Exiting.`n")
+					ExitApp
+				}
+
+				Width := Gdip_GetImageWidth(pBitmap)
+				Height := Gdip_GetImageHeight(pBitmap)
+
+				;Note that all screen coordinates here are native 
+				;(i.e. not adjusted for screen scaling)
+				barHeightFactor := 1/10
+				centerLabelWidthFactor := gCfg.lst_game_name_ratio
+				topBarPosFactor := 1/3
+
+				t_barHeight := Floor(A_ScreenHeight * barHeightFactor)
+				t_systemLabelWidth := A_ScreenWidth / 3
+				t_centerLabelWidth := A_ScreenWidth * centerLabelWidthFactor
+				t_sideLabelWidth := (A_ScreenWidth - t_centerLabelWidth) / 2
+				t_graphicMargin := 16 ;number of pixels to shrink graphic inside box
+				
+				;calculate image size/scale while keeping correct aspect ratio
+				Switch image_type
+				{
+					Case 1, 2: ;system and rom logos	
+						ar := Width/Height
+						pic_h := t_barHeight - t_graphicMargin
+						pic_w := pic_h * ar - t_graphicMargin
+						
+						if (pic_w > t_sideLabelWidth)
+						{
+							ar := Height/Width
+							pic_w := t_sideLabelWidth - t_graphicMargin
+							pic_h := pic_w * ar - t_graphicMargin
+						}
+
+						pic_sw := Width
+						pic_sh := Height
+				
+					Case 3:	;favorite and no star (unrated) icons		
+						ar := Width/Height
+						pic_h := t_barHeight // 5
+						pic_w := pic_h * ar
+
+						pic_sw := Width
+						pic_sh := Height				
+				
+					Case 4:	 ;5 through 1 star
+						ar := Width/(Height/5)
+						pic_h := t_barHeight // 5
+						pic_w := pic_h * ar
+
+						pic_sw := Width
+						pic_sh := 264	
+
+						if (subtype == 0)	
+							pic_sh := 1	
+				}
+
+				;on-screen position
+				pic_sx := pic_sy := 0
+				pic_y := A_ScreenHeight * topBarPosFactor - pic_h/2
+
+				Switch image_type
+				{
+					Case 1: ;rom logo
+						pic_x := (t_sideLabelWidth + t_centerLabelWidth) + t_sideLabelWidth / 2 - pic_w/2
+				
+					Case 2: ;system logo
+						pic_x := t_sideLabelWidth / 2 - pic_w/2
+				
+					Case 3:	;favorite icon
+						pic_y := A_ScreenHeight * topBarPosFactor - t_barHeight // 2 + 2
+						pic_x := t_sideLabelWidth + 2
+				
+					Case 4:	;5 stars and no stars (unrated) icons
+						pic_y := A_ScreenHeight * topBarPosFactor - t_barHeight // 2 + 2
+						pic_x := t_sideLabelWidth + t_centerLabelWidth - pic_w - 2
+						pic_sy := 1320 - 264 * subtype			
+				}
+
+				; Create image using Gdip library
+				hbm := CreateDIBSection(pic_w, pic_h)
+				hdc := CreateCompatibleDC()
+				obm := SelectObject(hdc, hbm)
+				G := Gdip_GraphicsFromHDC(hdc)
+
+				;Use high quality Bicubic (7) to resize here since it is probably the best quality
+				Gdip_SetInterpolationMode(G, 7)
+				Gdip_DrawImage(G, pBitmap, 0, 0, pic_w, pic_h, pic_sx, pic_sy, pic_sw, pic_sh)
+				Gdip_DeleteGraphics(G)
+				UpdateLayeredWindow(gGui.%gui_id%.Hwnd, hdc, pic_x, pic_y, pic_w, pic_h)
+				SelectObject(hdc, obm)
+				DeleteObject(hbm)
+				DeleteDC(hdc)
+				Gdip_DisposeImage(pBitmap)
 			}
 
-			Width := Gdip_GetImageWidth(pBitmap)
-			Height := Gdip_GetImageHeight(pBitmap)
-
-			;Note that all screen coordinates here are native (i.e. not adjusted
-			;for screen scaling)
-			barHeightFactor := 1/10
-			centerLabelWidthFactor := gCfg.lst_game_name_ratio
-			topBarPosFactor := 1/3
-
-			t_barHeight := Floor(A_ScreenHeight * barHeightFactor)
-			t_systemLabelWidth := A_ScreenWidth / 3
-			t_centerLabelWidth := A_ScreenWidth * centerLabelWidthFactor
-			t_sideLabelWidth := (A_ScreenWidth - t_centerLabelWidth) /2
-			t_graphicMargin := 16 ;pixels to shrink graphic inside box
-			
-			;calculate image size/scale
-			Switch image_type
-			{
-				Case 1, 2:			
-					ar := Width/Height
-					pic_h := t_barHeight - t_graphicMargin
-					pic_w := pic_h * ar - t_graphicMargin
-					
-					if (pic_w > t_sideLabelWidth)
-					{
-						ar := Height/Width
-						pic_w := t_sideLabelWidth - t_graphicMargin
-						pic_h := pic_w * ar - t_graphicMargin
-					}
-
-					pic_sw := Width
-					pic_sh := Height
-			
-			 	Case 3:	;favorite and no star (unrated) icons		
-					ar := Width/Height
-					pic_h := t_barHeight // 5
-					pic_w := pic_h * ar
-
-					pic_sw := Width
-					pic_sh := Height				
-			
-				Case 4:	 ;5 through 1 star
-					ar := Width/(Height/5)
-					pic_h := t_barHeight // 5
-					pic_w := pic_h * ar
-
-					pic_sw := Width
-					pic_sh := 264	
-
-					if (subtype == 0)	
-						pic_sh := 1	
-			}
-
-			;on-screen position
-			pic_sx := pic_sy := 0
-			pic_y := A_ScreenHeight * topBarPosFactor - pic_h/2
-
-			Switch image_type
-			{
-				Case 1:
-					pic_x := (t_sideLabelWidth + t_centerLabelWidth) + t_sideLabelWidth / 2 - pic_w/2
-			
-				Case 2:
-					pic_x := t_sideLabelWidth / 2 - pic_w/2
-			
-				Case 3:			
-					pic_y := A_ScreenHeight * topBarPosFactor - t_barHeight // 2 + 2
-					pic_x := t_sideLabelWidth + 2
-			
-			    Case 4:	;5 stars and no stars (unrated) icons
-					pic_y := A_ScreenHeight * topBarPosFactor - t_barHeight // 2 + 2
-					pic_x := t_sideLabelWidth + t_centerLabelWidth - pic_w - 2
-					pic_sy := 1320 - 264 * subtype			
-			}
-
-			; Create one "canvas" bitmap large enough for both images.
-			hbm := CreateDIBSection(pic_w, pic_h)
-			hdc := CreateCompatibleDC()
-			obm := SelectObject(hdc, hbm)
-			G := Gdip_GraphicsFromHDC(hdc)
-
-			;Using High quality Bicubic (7) to resize here since it is probably the best quality
-			Gdip_SetInterpolationMode(G, 7)
-			Gdip_DrawImage(G, pBitmap, 0, 0, pic_w, pic_h, pic_sx, pic_sy, pic_sw, pic_sh)
-			Gdip_DeleteGraphics(G)
-			UpdateLayeredWindow(gGui.%gui_id%.Hwnd, hdc, pic_x, pic_y, pic_w, pic_h)
-			SelectObject(hdc, obm)
-			DeleteObject(hbm)
-			DeleteDC(hdc)
-			Gdip_DisposeImage(pBitmap)
-
+			;update the last image window with this gui_id
 			if (image_type == 1)
 				this._last_image1_window := gui_id
 			else if (image_type == 2)
@@ -3387,387 +3427,5 @@ class select_list_control_class
 
 			return gui_id
 		}
-		
-/*
-		ShowGraphic(playlist, selection, image_type, image_file, show_now:=true, subtype:=0)
-		{
-			global
-			Critical  ;without this, images are not always properly deleted leaving orphans
-			;image_type
-			;1 = rom logo
-			;2 = system logo
-			;3 = favorite icon
-			;4 = rating icon
-
-			if (!playlist || !selection)
-				return
-
-			;OutputDebug playlist: %playlist%, selection: %selection%, image_type: %image_type%, image_file: %image_file%, show_now: %show_now%, subtype: %subtype%`n
-
-			;if no image file, then hide the previous one since there
-			;is apparently nothing to show for this one.
-			if (!image_file || !FileExist(image_file))
-			{
-				if (image_type == 1)
-					try gGui.%last_image1_window%.Hide()
-				if (image_type == 2)
-					try gGui.%last_image2_window%.Hide()
-				if (image_type == 3)
-					try gGui.%last_image3_window%.Hide()
-				if (image_type == 4)
-					try gGui.%last_image4_window%.Hide()
-				return
-			}
-
-			last_image1_window := this._last_image1_window
-			last_image2_window := this._last_image2_window
-			last_image3_window := this._last_image3_window
-			last_image4_window := this._last_image4_window
-
-			last_image4_subtype := this._last_image4_subtype
-
-			if (image_type == 1 && image_file == this._last_image1_file)
-			{
-				;Gui, %last_image1_window%: Show, NA
-				try	gGui.%last_image1_window%.Show("NA")
-				return
-			}
-			if (image_type == 2 && image_file == this._last_image2_file)
-			{
-				;Gui, %last_image2_window%: Show, NA 
-				try
-					gGui.%last_image2_window%.Show("NA")
-				return
-			}
-			if (image_type == 3 && image_file == this._last_image3_file)
-			{
-				;Gui, %last_image3_window%: Show, NA 
-				try
-					gGui.%last_image3_window%.Show("NA")
-				return
-			}
-			if (image_type == 4 && image_file == this._last_image4_file && subtype == this._last_image4_subtype)
-			{
-				;Gui, %last_image4_window%: Show, NA 
-				try
-					gGui.%last_image4_window%.Show("NA")
-				return
-			}
-
-			if (image_type == 1)
-				this._last_image1_file := image_file
-			if (image_type == 2)
-				this._last_image2_file := image_file
-			if (image_type == 3)
-				this._last_image3_file := image_file	
-			if (image_type == 4)
-				this._last_image4_file := image_file		
-
-			if (image_type == 1 && last_image1_window)
-				try
-					gGui.%last_image1_window%.Hide()
-				;Gui, %last_image1_window%:Hide
-			if (image_type == 2 && last_image2_window)
-				try
-					gGui.%last_image2_window%.Hide()
-				;Gui, %last_image2_window%:Hide
-			if (image_type == 3 && last_image3_window)
-				try
-					gGui.%last_image3_window%.Hide()
-				;Gui, %last_image3_window%:Hide
-			if (image_type == 4 && last_image4_window)
-				try
-					gGui.%last_image4_window%.Hide()					
-				;Gui, %last_image4_window%:Hide
-
-			;if (!FileExist(image_file))
-			;	return ""
-
-			;Create a layered window (+E0x80000 : must be used for UpdateLayeredWindow to work!) 
-			;that is always on top (+AlwaysOnTop), and has no taskbar entry or caption
-			gui_id := playlist . "_" selection . "_" . image_type ;Graphic 1 is the game logo image
-			;Gui, %gui_id%:+LastFoundExist
-			;gGui.%gui_id%.Opt("+LastFoundExist")
-			;if (!WinExist())
-			;try
-			;	gn := gGui.%gui_id%.Hwnd
-			;catch
-			;	gn := false
-
-			;OutputDebug "gn:" gn  " gui_id:" gui_id "`n"
-
-			;if (!gn)
-			{
-				;gGui.%gui_id% := Gui()
-				gGui.%gui_id% := Gui(, "eipGui - " gui_id)
-			    gGui.%gui_id%.Opt("-Caption +E0x80000 +LastFound +AlwaysOnTop +ToolWindow +OwnDialogs") ;+OwnerGuiOverlay")
-				gGui.Gui%gui_id% := gGui.%gui_id%.Hwnd
-				;Gui, %gui_id%: -Caption +E0x80000 +LastFound +AlwaysOnTop +ToolWindow +OwnDialogs +HwndGui%gui_id% ;+OwnerGuiOverlay 
-			}
-
-			if (show_now == true)
-				gGui.%gui_id%.Show("NA")
-				;Gui, %gui_id%: Show, NA
-
-			; Get a handle to this window we have created in order to update it later
-			hwnd := WinExist()
-
-			pBitmap := Gdip_CreateBitmapFromFile(image_file)
-			;OutputDebug "image_file:" image_file "`n"
-
-			;future exception handling
-			If !pBitmap
-			{
-				xx:=1
-			}
-			else
-				xx:=2
-
-			Width := Gdip_GetImageWidth(pBitmap)
-			Height := Gdip_GetImageHeight(pBitmap)
-
-			;Note that all screen coordinates here are native (i.e. not adjusted
-			;for screen scaling)
-			barHeightFactor := 1/10
-			centerLabelWidthFactor := gCfg.lst_game_name_ratio
-			topBarPosFactor := 1/3
-
-			t_barHeight := Floor(A_ScreenHeight * barHeightFactor)
-			t_systemLabelWidth := A_ScreenWidth / 3
-			t_centerLabelWidth := A_ScreenWidth * centerLabelWidthFactor
-			t_sideLabelWidth := (A_ScreenWidth - t_centerLabelWidth) /2
-			t_graphicMargin := 16 ;pixels to shrink graphic inside box
-			
-			;image size
-			Switch image_type
-			{
-				Case 1, 2:			
-					;OutputDebug "image_file: " image_file "`n"
-					ar := Width/Height
-					pic_h := t_barHeight - t_graphicMargin
-					pic_w := pic_h * ar - t_graphicMargin
-					
-					if (pic_w > t_sideLabelWidth)
-					{
-						ar := Height/Width
-						pic_w := t_sideLabelWidth - t_graphicMargin
-						pic_h := pic_w * ar - t_graphicMargin
-					}
-
-					pic_sw := Width
-					pic_sh := Height
-			
-			 	Case 3:	;favorite and no star (unrated) icons		
-					ar := Width/Height
-					pic_h := t_barHeight // 5
-					pic_w := pic_h * ar
-
-					pic_sw := Width
-					pic_sh := Height				
-			
-				Case 4:	 ;5 through 1 star
-					ar := Width/(Height/5)
-					pic_h := t_barHeight // 5
-					pic_w := pic_h * ar
-
-					pic_sw := Width
-					pic_sh := 264	
-
-					if (subtype == 0)	
-						pic_sh := 1	
-			}
-
-			;on-screen position
-			pic_sx := pic_sy := 0
-			pic_y := A_ScreenHeight * topBarPosFactor - pic_h/2
-
-			Switch image_type
-			{
-				Case 1:
-					pic_x := (t_sideLabelWidth + t_centerLabelWidth) + t_sideLabelWidth / 2 - pic_w/2
-			
-				Case 2:
-					pic_x := t_sideLabelWidth / 2 - pic_w/2
-			
-				Case 3:			
-					pic_y := A_ScreenHeight * topBarPosFactor - t_barHeight // 2 + 2
-					pic_x := t_sideLabelWidth + 2
-			
-			    Case 4:	;5 stars and no stars (unrated) icons
-					pic_y := A_ScreenHeight * topBarPosFactor - t_barHeight // 2 + 2
-					pic_x := t_sideLabelWidth + t_centerLabelWidth - pic_w - 2
-					pic_sy := 1320 - 264 * subtype			
-			}
-
-			; Create one "canvas" bitmap large enough for both images.
-			hbm := CreateDIBSection(pic_w, pic_h)
-			;hbm := CreateDIBSection(pic_w<pic_w2 ? pic_w2 : pic_w, pic_h<pic_h2 ? pic_h2 : pic_h)
-			; Get a device context compatible with the screen
-			hdc := CreateCompatibleDC()
-			; Select the bitmap into the device context
-			; i.e. select the "canvas", storing a handle to the default bitmap
-			obm := SelectObject(hdc, hbm)
-			; Get a pointer to the graphics of the bitmap, for use with drawing functions
-			; i.e. Create a GDI+ Graphics context to draw with.
-			G := Gdip_GraphicsFromHDC(hdc)
-			;Using Bilinear (7) to resize here since bicubic (7) is kinda slow and I can't see an improvement
-			Gdip_SetInterpolationMode(G, 7)
-			; Gdip_DrawImage(pGraphics, pBitmap, dx, dy, dw, dh, sx, sy, sw, sh, Matrix)
-			; d is for destination and s is for source. We will not talk about the matrix yet (this is for changing colours when drawing)
-			Gdip_DrawImage(G, pBitmap, 0, 0, pic_w, pic_h, pic_sx, pic_sy, pic_sw, pic_sh)
-			; Delete the GDI+ Graphics context in order to use the GDI device context.
-			Gdip_DeleteGraphics(G)
-			; Update the specified window we have created (hwnd1) with a handle to our bitmap (hdc), specifying the x,y,w,h we want it positioned on our screen	
-			UpdateLayeredWindow(hwnd, hdc, pic_x, pic_y, pic_w, pic_h)
-			;G := Gdip_GraphicsFromHDC(hdc)
-			; Clear the canvas.
-			;Gdip_GraphicsClear(G)
-			; Draw the second image.
-			;Gdip_SetInterpolationMode(G, 7)
-			;Gdip_DrawImage(G, pBitmap2, 0, 0, pic_w2, pic_h2, 0, 0, Width2, Height2)
-			; Delete the GDI+ Graphics context in order to use the GDI device context.
-			;Gdip_DeleteGraphics(G)
-			; Update the second window. (Note hwnd2 not hwnd1.)
-			;UpdateLayeredWindow(hwnd2, hdc, pic_x2, pic_y2, pic_w2, pic_h2)
-			; Select the object back into the hdc
-			SelectObject(hdc, obm)
-			; Now the bitmap may be deleted
-			DeleteObject(hbm)
-			; Also the device context related to the bitmap may be deleted
-			DeleteDC(hdc)
-			; The bitmap we made from the image may be deleted
-			Gdip_DisposeImage(pBitmap)
-			;Gdip_DisposeImage(pBitmap2)
-
-			if (image_type == 1)
-				this._last_image1_window := gui_id
-			else if (image_type == 2)
-				this._last_image2_window := gui_id
-			else if (image_type == 3)
-				this._last_image3_window := gui_id
-			else if (image_type == 4)
-			{
-				this._last_image4_window := gui_id
-				this._last_image4_subtype := subtype
-			}
-
-			return gui_id
-		}
-		*/
-/*
-		;Creates a hidden list logo image and returns its guid
-		;Logos always created at proper size in centered position.
-		CreateListLogo(list_index, image_file)
-		{
-			global
-			;Create a layered window (+E0x80000 : must be used for UpdateLayeredWindow to work!) 
-			;that is always on top (+AlwaysOnTop), and has no taskbar entry or caption
-			gui_id := "listlogo_" . list_index ;Unique name for this logo
-			;OutputDebug Here gui_id: %gui_id%`n
-			;Gui, %gui_id%:+LastFoundExist
-			gGui.%gui_id%.Opt("+LastFoundExist")
-			if (!WinExist())
-			{
-				gGui.%gui_id% := Gui(, "eipGui - " gui_id)
-				gGui.%gui_id%.Opt("-Caption +E0x80000 +LastFound +AlwaysOnTop +ToolWindow +OwnDialogs") ;+OwnerGuiOverlay")
-				gGui.Gui%gui_id% := gGui.%gui_id%.Hwnd
-				;Gui, %gui_id%: -Caption +E0x80000 +LastFound +AlwaysOnTop +ToolWindow +OwnDialogs +HwndGui%gui_id% ;+OwnerGuiOverlay 
-			}
-			;if (show_now == true)
-				;Gui, %gui_id%: Show, NA
-
-			; Get a handle to this window we have created in order to update it later
-			hwnd := WinExist()
-
-			pBitmap := Gdip_CreateBitmapFromFile(image_file)
-
-			;future exception handling
-			If !pBitmap
-			{
-				xx:=1
-			}
-			else
-				xx:=2
-
-			Width := Gdip_GetImageWidth(pBitmap)
-			Height := Gdip_GetImageHeight(pBitmap)
-
-			;Note that all screen coordinates here are native (i.e. not adjusted
-			;for screen scaling)
-			;Gui, ListView, ListViewPlaylist
-			;GuiControlGet, lv_pos, guiSelect:Pos, ListViewPlaylist
-			gGui.guiSelect_ListViewPlaylist.GetPos(&lv_posX, &lv_posY, &lv_posW, &lv_posH)
-			t_spaceHeight := Floor(lv_posH * A_ScreenDPI / 96) - 4 ;4 is the top/bottom margin
-			t_spaceWidth := Floor(A_ScreenWidth / 3)
-
-			t_spaceYPos := Floor(lv_posY * A_ScreenDPI / 96) + 2 ;2 is half of 4 above
-			t_spaceXPos := Floor((A_ScreenWidth / 2) - (t_spaceWidth / 2))
-
-			OutputDebug "H: " . t_spaceHeight . ", W: " . t_spaceWidth . ", X: " . t_spaceXPos . ", Y: " . t_spaceYPos . "`n"
-			
-			;image size					
-			ar := Width/Height
-			pic_h := t_spaceHeight
-			pic_w := pic_h * ar 
-			
-			if (pic_w > t_spaceWidth)
-			{
-				ar := Height/Width
-				pic_w := t_spaceWidth
-				pic_h := pic_w * ar
-			}
-
-			pic_sw := Width
-			pic_sh := Height
-
-			;on-screen position
-			pic_sx := pic_sy := 0
-			pic_y :=  Floor((t_spaceYPos + t_spaceHeight/2) - (pic_h/2))	
-			pic_x := Floor((A_ScreenWidth/2)-(pic_w/2))
-			
-			; Create one "canvas" bitmap large enough for both images.
-			hbm := CreateDIBSection(pic_w, pic_h)
-			;hbm := CreateDIBSection(pic_w<pic_w2 ? pic_w2 : pic_w, pic_h<pic_h2 ? pic_h2 : pic_h)
-			; Get a device context compatible with the screen
-			hdc := CreateCompatibleDC()
-			; Select the bitmap into the device context
-			; i.e. select the "canvas", storing a handle to the default bitmap
-			obm := SelectObject(hdc, hbm)
-			; Get a pointer to the graphics of the bitmap, for use with drawing functions
-			; i.e. Create a GDI+ Graphics context to draw with.
-			G := Gdip_GraphicsFromHDC(hdc)
-			;Using Bilinear (7) to resize here since bicubic (7) is kinda slow and I can't see an improvement
-			Gdip_SetInterpolationMode(G, 7)
-			; Gdip_DrawImage(pGraphics, pBitmap, dx, dy, dw, dh, sx, sy, sw, sh, Matrix)
-			; d is for destination and s is for source. We will not talk about the matrix yet (this is for changing colours when drawing)
-			Gdip_DrawImage(G, pBitmap, 0, 0, pic_w, pic_h, pic_sx, pic_sy, pic_sw, pic_sh)
-			; Delete the GDI+ Graphics context in order to use the GDI device context.
-			Gdip_DeleteGraphics(G)
-			; Update the specified window we have created (hwnd1) with a handle to our bitmap (hdc), specifying the x,y,w,h we want it positioned on our screen	
-			UpdateLayeredWindow(hwnd, hdc, pic_x, pic_y, pic_w, pic_h)
-			;G := Gdip_GraphicsFromHDC(hdc)
-			; Clear the canvas.
-			;Gdip_GraphicsClear(G)
-			; Draw the second image.
-			;Gdip_SetInterpolationMode(G, 7)
-			;Gdip_DrawImage(G, pBitmap2, 0, 0, pic_w2, pic_h2, 0, 0, Width2, Height2)
-			; Delete the GDI+ Graphics context in order to use the GDI device context.
-			;Gdip_DeleteGraphics(G)
-			; Update the second window. (Note hwnd2 not hwnd1.)
-			;UpdateLayeredWindow(hwnd2, hdc, pic_x2, pic_y2, pic_w2, pic_h2)
-			; Select the object back into the hdc
-			SelectObject(hdc, obm)
-			; Now the bitmap may be deleted
-			DeleteObject(hbm)
-			; Also the device context related to the bitmap may be deleted
-			DeleteDC(hdc)
-			; The bitmap we made from the image may be deleted
-			Gdip_DisposeImage(pBitmap)
-			;Gdip_DisposeImage(pBitmap2)
-
-			;OutputDebug, Returning %gui_id%`n
-			return gui_id
-		}
-		*/
 	}
 }
