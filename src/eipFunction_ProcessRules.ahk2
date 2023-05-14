@@ -5,18 +5,16 @@
 ;Implements the arcadeEIP rules engine
 ProcessRules()
 {
-    ;the following are some of the globals
-    ;param_list, rules, Emu_Args, proxy_type, 
-    global
+    global mRules, gCfg, Emu_Args, bDoRuleVector, proxy_type, proxy_contents, search_tag, oEmulators
     
-    local arg_1, arg_2
-    local n, e, fnc, idx, cl, len
-    local this_rule, param, param_list_copy
-    local varFile, filename, file_to_run
-    local new_folder, proxy_file, proxy_folder, proxy_full_path
-    local sys_key_test, aSearchPaths, searchPath
-    local foundRom, param_is_quoted, search_pattern, rom_subfolder, current_folder
-    local tempArgs, partial_config_file, partial_config_section    
+    ;local arg_1, arg_2
+    ;local n, e, fnc, idx, cl, len
+    ;local this_rule, param, param_list_copy
+    ;local varFile, filename, file_to_run
+    ;local new_folder, proxy_file, proxy_folder, proxy_full_path
+    ;local sys_key_test, aSearchPaths, searchPath
+    ;local foundRom, param_is_quoted, search_pattern, rom_subfolder, current_folder
+    ;local tempArgs, partial_config_file, partial_config_section    
 
     for n, this_rule in mRules
     {

@@ -103,14 +103,15 @@ UpdateAutoAttractList()
 ;actually switching games.
 AttractSwitch(update:=false, add_vector:="")
 {
-    global
+    global g_directswitch_args, play_previous
 
     static attractList := Array(), idx := 0  ;the current full attract list and index
     static originalList := Array()           ;the original attract list when we started
     static originalSize
     static last_vector
 
-    local size, sysKey, mapExit, vector_array, vector
+    ;local size, sysKey, mapExit, vector_array, vector
+
     size := attractList.Length
 
     ;This forces a re-read/rebuild of originalList so that any games added/removed
@@ -446,9 +447,9 @@ AttractSwitch(update:=false, add_vector:="")
 ;See the MouseDelta class for more information about this function.
 MouseEvent(MouseID, x := 0, y := 0)
 {  
-    global
+    ;global
 
-    local horiz, vert
+    ;local horiz, vert
 
     ;speed values of 5 & 5 work good for a trackball
     static yu := 0, yd := 0, ymaxspeed := 5

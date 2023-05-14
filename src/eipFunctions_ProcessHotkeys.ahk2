@@ -13,7 +13,7 @@
 ;Note that "option" is not actually used at this time.
 MagicKey(option, theHotkey:="")
 {
-    global
+    global gCfg, g_mouse_clicks_off, g_guiselect_visible
 
     ;*** HOUSE OF CARDS ALERT ***
     ;BEWARE that the sequence of events in this function are
@@ -40,7 +40,7 @@ MagicKey(option, theHotkey:="")
 
         oMouseDelta.SetState(1) 
         oDetectInactivity.Suspend()
-        mouse_clicks_off := 1
+        g_mouse_clicks_off := 1
     
         guiAlpha.Opt("+AlwaysOnTop")
         WinSetTransColor "Black 240", "ahk_id " . guiSelect.Hwnd
@@ -88,7 +88,7 @@ MagicKey(option, theHotkey:="")
             ControlFocus(WinGetID("ahk_pid " . pid_emulator))
         }
 
-        mouse_clicks_off := 0
+        g_mouse_clicks_off := 0
 
         g_guiselect_visible := false
         HideControls("guiSelect")  
@@ -120,7 +120,7 @@ MagicKey(option, theHotkey:="")
 ;Possible keyState values are "", (Down), or "Up"
 PauseKey(keyState, theHotkey:="")
 {
-    global
+    global g_pause_state, g_guipause_visible, g_mouse_clicks_off
 
     static paused := false
     static lastTick := 0
@@ -162,23 +162,23 @@ PauseKey(keyState, theHotkey:="")
     ;1. {Toggle} x, which sends an x-Down and x-Up
     ;2. {a}|{b}, which sends a then b
     ;3. {x}, which just send an x
-    oMapPauseArray := StrSplit(gCfg.map_pause, "|")	
-	if (oMapPauseArray.Length > 2 || StrLen(oMapPauseArray[1]) == 0)
+    aMapPauseArray := StrSplit(gCfg.map_pause, "|")	
+	if (aMapPauseArray.Length > 2 || StrLen(aMapPauseArray[1]) == 0)
 	    return
 
-    oMapPause := Map()
-    for n, val in oMapPauseArray
+    mMapPause := Map()
+    for n, val in aMapPauseArray
     {
-        oMapPause[n] := oMapPauseArray[n]
+        mMapPause[n] := aMapPauseArray[n]
     }
 	
     ;the {Toggle} tag is a shortcut so one can write: {Toggle} p
     ;instead of: {p DownR}|{p up}
-    if (InStr(oMapPause[1], "{Toggle}")) 
+    if (InStr(mMapPause[1], "{Toggle}")) 
     {
-        pause_cmd := Trim(StrReplace(oMapPause[1], "{Toggle}", A_Space))
-        oMapPause[1] := "{" . pause_cmd . " DownR}"
-        oMapPause[2] := "{" . pause_cmd . " up}"
+        pause_cmd := Trim(StrReplace(mMapPause[1], "{Toggle}", A_Space))
+        mMapPause[1] := "{" . pause_cmd . " DownR}"
+        mMapPause[2] := "{" . pause_cmd . " up}"
     }
 
     ;Pause the emulator using the appropriate method
@@ -216,11 +216,11 @@ PauseKey(keyState, theHotkey:="")
     }	
     else if (gCfg.pause_key && gCfg.map_pause) ;if this is a native/mapped pause
     {
-        if (oMapPause.Count == 1) ;use if a single input message is adequate
+        if (mMapPause.Count == 1) ;use if a single input message is adequate
         {
             if (keyState == "")
             {
-                pause_cmd := oMapPause[1]
+                pause_cmd := mMapPause[1]
                 SendInput pause_cmd
                 paused := paused ? false : true
             }
@@ -229,18 +229,18 @@ PauseKey(keyState, theHotkey:="")
                 return
             }
         }
-        else if (oMapPause.Count == 2)  ;(pauseToggle) ;only used if a full keystroke must be emulated (like MAME native pause)
+        else if (mMapPause.Count == 2)  ;(pauseToggle) ;only used if a full keystroke must be emulated (like MAME native pause)
         {
             if (keyState =="Up")
             {
-                pause_cmd := oMapPause[2]
+                pause_cmd := mMapPause[2]
                 SendInput pause_cmd
  
                 paused := paused ? false : true
             }
             else
             {
-                pause_cmd := oMapPause[1]
+                pause_cmd := mMapPause[1]
                 SendInput pause_cmd
 
                 return
@@ -253,7 +253,7 @@ PauseKey(keyState, theHotkey:="")
     {
         oDetectInactivity.Suspend()
         g_pause_state := true
-        mouse_clicks_off := 1
+        g_mouse_clicks_off := 1
 
         if (!g_guiselect_visible && oPauseControl.HasContent())
         {
@@ -287,7 +287,7 @@ PauseKey(keyState, theHotkey:="")
 
         oDetectInactivity.Resume()
         g_pause_state := false
-        mouse_clicks_off := 0
+        g_mouse_clicks_off := 0
 
         ;Make sure the emulator gets the focus back
         ;ControlFocus,,ahk_pid %pid_emulator%
@@ -304,8 +304,8 @@ PauseKey(keyState, theHotkey:="")
 ;internal == 1 if exited via a hotkey (using a valid map_exit code)
 ExitKey(internal, theHotkey:="")
 {
-    global
- 	local exit_cmd
+    global g_exit_code
+ 	;local exit_cmd
 
     g_exit_code := internal
 
@@ -373,17 +373,11 @@ ExitKey(internal, theHotkey:="")
 ;Implements exit key function (along with its companion function ExitKey())
 ExitKeyUp(theHotkey:="")
 {	
-    global 
+    ;global 
 
-	local exit_cmd, tag
+	;local exit_cmd, tag
 
-    if (exit_key_off)
-        return
-
-    if (!bEmuWindowActive)
-        return
-	
-	if (aMapExit.Length == 1 || StrLen(aMapExit[2]) == 0)
+	if (exit_key_off || !bEmuWindowActive || aMapExit.Length == 1 || !aMapExit.Has(2))
 		return		
 	
 	exit_cmd := aMapExit[2]
@@ -426,7 +420,7 @@ ExitKeyUp(theHotkey:="")
 ;Support function called by ExitKey() and ExitKeyUp()
 DoExitFunction(func, exit_cmd)
 {  
-    global 
+    ;global 
 
     if (func == "CloseTop")
     {
@@ -515,7 +509,7 @@ DoExitFunction(func, exit_cmd)
 ;Hide controls on specified gui windows
 HideControls(guiName)
 {
-    global
+    global gGui
 
     if (guiName == "guiPause")
     {
@@ -548,7 +542,7 @@ HideControls(guiName)
 ;Show controls on specified gui windows
 ShowControls(guiName)
 {
-    global
+    global gGui
 
     if (guiName == "guiPause")
     {
@@ -583,7 +577,6 @@ ShowControls(guiName)
 AddDirectSwitchHotKeys()
 {
     global
-
     local key, hstr, lowerFileName, e
 
     hklist := Array()
@@ -641,7 +634,7 @@ AddDirectSwitchHotKeys()
 ;Support scrolling functions in guiSelect and the pause screen.
 ScrollList(direction, theHotkey:="")
 {
-    global
+    ;global
 
     Switch direction
     {
@@ -739,7 +732,7 @@ ScrollList(direction, theHotkey:="")
 PauseScroll(direction, screen:=0)
 {
     ;if (screen != 0)
-    global
+    ;global
 
     Switch direction
     {
@@ -764,9 +757,9 @@ PauseScroll(direction, screen:=0)
 ;hk_style can be "passthrough" or "blocking"
 ModifyHotkeys(hk_style)
 {
-    global
+    ;global
 
-    local e
+    ;local e
 
     try
     {
@@ -1045,14 +1038,11 @@ ShowHideMenu(mode, theHotkey:="")
 ;Initialize the hotkeys
 AddHotkeys()
 {
+    ;functions need to be global since they are used by ModifyHotKeys() above
     global 
 
     static last_next_key := "", last_previous_key := ""
 
-    ;functions need to be global since they are used by ModifyHotKeys() above
-    ;local fPauseKeyUp, fPauseKey
-    ;local fExitKeyUp, fExitKey
-    ;local fScrollNowhere, fScrollUp, fScrollDown, fMagicKey, fScrollSelect fScrollRight, fScrollLeft,
     local fLaunchHotkeyApp, fExitHotkeyApp
     local e, n, o, cl, hKey, app, key_style, hKeyVal
     local exit_cmd
@@ -1375,7 +1365,7 @@ InActivateHotKeys()
 ;Switch to the next game in the attract list.
 AttractNext(theHotkey:="")
 {   
-    global
+    global gGui, magic_key_off
     
     ;If startup initialization is still occurring, we can't switch till its done.
     ;So put up a message.
@@ -1410,7 +1400,7 @@ AttractNext(theHotkey:="")
 ;would expect to happen when stepping back.
 AttractPrevious(theHotkey:="")
 {
-    global
+    ;global
 
     static last_cycle := 0
 

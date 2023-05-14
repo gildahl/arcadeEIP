@@ -8,15 +8,16 @@
 ;hiFile is the name of the high score file, e.g. "berzerk.hi" 
 GetHighScores(hiFile)
 {
-    global 
+    global mHighscores, top_score, hiscore_folder, hiscoredat_folder
 
-    local stdout, stderr, rawscores, hi2txt_cmd, headers, nScoreCount
-    local nHeaderCount, headerLoop, thisScore, com_pid, WshShell, exec
-    local hi_name := "", hi_stage := ""
+    ;local stdout, stderr, rawscores, hi2txt_cmd, headers, nScoreCount
+    ;local nHeaderCount, headerLoop, thisScore, com_pid, WshShell, exec
+    
+    hi_name := "", hi_stage := ""
 
     ;init globals
     top_score := "" ;current top score string
-    highscores := Map()  ;current highscore list array
+    mHighscores := Map()  ;current highscore list array
 
     if (!gCfg.use_hi2txt)
     {
@@ -103,7 +104,7 @@ GetHighScores(hiFile)
             Loop nHeaderCount
             {
                 headerLoop := A_Index
-                highscores[headers[headerLoop]] := Array() ;note highscores is global
+                mHighscores[headers[headerLoop]] := Array() ;note highscores is global
                 
                 Loop nScoreCount
                 {
@@ -111,24 +112,24 @@ GetHighScores(hiFile)
                         continue
                     thisScore := StrSplit(rawscores[A_Index],"|")                       
                     if (thisScore.Length >= headerLoop)
-                        highscores[headers[headerLoop]].Push(thisScore[headerLoop])
+                        mHighscores[headers[headerLoop]].Push(thisScore[headerLoop])
                 }
             }
 
             ;set the top score global for the current game if one exists
-            if (highscores.Has("SCORE"))
+            if (mHighscores.Has("SCORE"))
             {
-                if (highscores["SCORE"][1] && highscores["SCORE"][1] != 0)
+                if (mHighscores["SCORE"][1] && mHighscores["SCORE"][1] != 0)
                 {
-                    if (highscores.Has("NAME"))
-                        if (Trim(highscores["NAME"][1]))
-                            hi_name := " by " . Trim(highscores["NAME"][1])
+                    if (mHighscores.Has("NAME"))
+                        if (Trim(mHighscores["NAME"][1]))
+                            hi_name := " by " . Trim(mHighscores["NAME"][1])
 
-                    if (highscores.Has("STAGE"))
-                        if (Trim(highscores["STAGE"][1]))
-                            hi_stage := " (Stage " . Trim(highscores["STAGE"][1]) . ")"
+                    if (mHighscores.Has("STAGE"))
+                        if (Trim(mHighscores["STAGE"][1]))
+                            hi_stage := " (Stage " . Trim(mHighscores["STAGE"][1]) . ")"
 
-                    top_score := "Top Score: " . ThouSep(Trim(highscores["SCORE"][1])) . hi_name . hi_stage
+                    top_score := "Top Score: " . ThouSep(Trim(mHighscores["SCORE"][1])) . hi_name . hi_stage
 
                     LogEntry("INFO: Successfully read high score: " top_score "`n")
                 }

@@ -5,10 +5,10 @@
 ;This function provides implementation of several command line functions.
 ProcessDirectives(&argList)
 {
-    global
+    global gCfg, bSuppressExitMessage
 
-    local n, e, i, err, param, emu := "", input_arg, input_arg_decomp, bDirectiveArgs, emulator
-    local aSearchPaths, searchPath, searchRomName, romExt, dev, oSoundDeviceList, filePrefix
+    ;local n, e, i, err, param, emu := "", input_arg, input_arg_decomp, bDirectiveArgs, emulator
+    ;local aSearchPaths, searchPath, searchRomName, romExt, dev, oSoundDeviceList, filePrefix
     
     bDirectiveArgs := false
     
@@ -30,7 +30,7 @@ ProcessDirectives(&argList)
         if (InStr(input_arg, "-debug") || InStr(input_arg, "-debug_mode"))
         {
             input_arg_decomp := StrSplit(input_arg, ["="], " ")
-            if (input_arg_decomp[2] = "")
+            if (input_arg_decomp[2] == "")
                 gCfg.debug_mode := "os"
             else
                 gCfg.debug_mode := input_arg_decomp[2]
@@ -284,33 +284,27 @@ ProcessDirectives(&argList)
         }
         
         if (input_arg = Trim("-find") || input_arg = Trim("-f"))
-        {
-            ;allow the -find (or -findall) token to be placed either before or after the emulator
-            ;eipc.exe -find emu rom
-            ;eipc.exe -find rom
-            ;eipc.exe emu rom -find
-            ;eipc.exe rom -find
-            
+        { 
             if (argList[1] = "-find" || argList[1] = "-f")
             {
-                if (!argList[2])
+                if (!argList.Has(2))
                     emu := "-find"
-                if (argList.Has(3))
+                else if (argList.Has(3))
                 {
                     emu := argList[2]
-                    rom := argList[3]
+                    rom := ""
+                    ct := argList.Length
+                    Loop ct
+                    {
+                        if argList.Has(A_Index + 2)
+                            rom := rom . argList[A_Index + 2] . A_Space
+                        else
+                            break
+                    }
+                    rom := Trim(rom)
                 }
                 else 
                     rom := argList[2]
-            }
-            else if (argList[2] = "-find" || argList[2] = "-f")
-            {
-                rom := argList[1]
-            }
-            else if (argList[3] = "-find" || argList[3] = "-f")
-            {
-                emu := argList[1]
-                rom := argList[2]
             }
             
             DisplayRomList(emu, rom, "top", "-find")
@@ -318,31 +312,27 @@ ProcessDirectives(&argList)
         
         if (input_arg = Trim("-findall") || input_arg = Trim("-fa"))
         {
-            ;allow the -find token to be placed either before or after the emulator
+            ;-findall (or -fa) must be the first parameter
             if (argList[1] = "-findall" || argList[1] = "-fa")
             {
-                if (!argList[2])
-                    emu := "-findall" 
-                
-                if (argList.Has(3))
+                if (!argList.Has(2))
+                    emu := "-findall"                 
+                else if (argList.Has(3))
                 {
                     emu := argList[2]
-                    ct := argList.Count
+                    rom := ""
+                    ct := argList.Length
                     Loop ct
-                        rom := rom . argList[A_Index + 2] . A_Space
+                    {
+                        if argList.Has(A_Index + 2)
+                            rom := rom . argList[A_Index + 2] . A_Space
+                        else
+                            break
+                    }
                     rom := Trim(rom)
                 }
                 else
                     rom := argList[2]
-            }
-            else if (argList[2] = "-findall" || argList[2] = "-fa")
-            {
-                rom := argList[1]
-            }
-            else if (argList[3] = "-findall" || argList[3] = "-fa")
-            {
-                emu := argList[1]
-                rom := argList[2]
             }
             
             DisplayRomList(emu, rom, "all", "-findall")				
@@ -359,13 +349,13 @@ ProcessDirectives(&argList)
 ;listType may be "all" or "top"
 DisplayRomList(emu, rom, listType, argName)
 {
-    global
+    global bSuppressLogging, bSearchGlobal
 
-    local n, i, err, header
+    ;local n, i, err, header
 
     try
     {
-        if (InStr(emu, "-f"))
+        if (InStr(emu, "-f")) ;covers -f, -fa, -find, -findall
         {
             FileAppend "Rom name missing`n", "*"
             ExitApp
@@ -403,6 +393,7 @@ DisplayRomList(emu, rom, listType, argName)
                             col_1_vals[n] := "* " . n-1 
                         else
                             col_1_vals[n] := " " . n-1
+
                         col_2_vals[n] := rom_list[n].system
                         col_3_vals[n] := rom_list[n].fileName
                         

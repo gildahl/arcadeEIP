@@ -109,9 +109,8 @@ GetSysKeyFromCmdLine(args)
 ;sParamList is returned with the passthrough templates replaced
 ProcessPassthroughArgs(&oArgs, sParamList)
 {
-    global
-
-    local oParam, oParamList, n, param_arg, p, originalArg, nArgs
+    ;global
+    ;local oParam, oParamList, n, param_arg, p, originalArg, nArgs
 
     oParamList := Array()
     
@@ -478,8 +477,7 @@ BuildEmuArgs()
 ; Rebuild param_list from Emu_Args
 BuildParamList()
 {    
-    global
-    local n, param
+    global gCfg
 
     gCfg.param_list := ""
     for n, param in Emu_Args ; For each parameter:
@@ -488,12 +486,12 @@ BuildParamList()
 
 RunApps(assetName, romName, appList, appFilter:="")
 {
-    global
+    ;global
 
-    local n, param, cChar
-    local this_exe_full_path, this_param_list, this_test_profile
-    local cut_start_pos, cut_end_pos, left_part, right_part
-    local profileDefined, exe_ops, run_style, full_command_line
+    ;local n, param, cChar
+    ;local this_exe_full_path, this_param_list, this_test_profile
+    ;local cut_start_pos, cut_end_pos, left_part, right_part
+    ;local profileDefined, exe_ops, run_style, full_command_line
     
     local this_profile := ""
     local tAppList := "", bOpenP := false
@@ -842,8 +840,7 @@ SendMsg(msg)
     return
 }
 
-;*********************************************************************************************
-;Launch an application or emulator
+;Launch application or emulator
 ;runStyle:   "Run" or "RunWait"
 ;fullPath:   full path to the executable (ex. D:\Emulators\MAME\mame.exe)
 ;paramList:  full parameter string for the executable
@@ -851,7 +848,7 @@ SendMsg(msg)
 ;runOptions: runtime option, empty, "Min", "Max", "Hide"
 Launch(runStyle, fullPath, paramList, typeApp, runOption:="", windowStyle:="", appPID:="", &pid_id:="")
 {
-    global
+    ;global
     
     loggedRunOption := "", loggedWindowStyle := ""    
     fullCommandLine := fullPath . " " . paramList
@@ -896,11 +893,11 @@ Launch(runStyle, fullPath, paramList, typeApp, runOption:="", windowStyle:="", a
     return success
 }
 
+;Fill in templates in the parameter list such as [sys_key], [root_folder], etc.
 ProcessParamListTemplates()
 {
-    global    
-
-    local rfolder
+    global gCfg
+    ;local rfolder, z, emu_set, cl
 
     ;refresh _settings with any changes made to local variables
     for z, emu_set in oEmulators.Emulators[gCfg.sys_key]._settings
@@ -1025,10 +1022,6 @@ ProcessParamListTemplates()
 ;when an absolute path was not supplied on the command line.
 GetRoms(sysKey, romFileName, &oRoms)
 {
-    global
-
-    local n
-
     bFoundRom := false
     originalRom := romFileName
 
@@ -1049,21 +1042,21 @@ GetRoms(sysKey, romFileName, &oRoms)
     ;Now set the oRoms[1] to the best rom found
     for n, romObj in oRoms
     {
-        if (romObj.matchType = "exactMatch")
+        if (romObj.matchType == "exactMatch")
         {
             oRoms[1].matchType := romObj.matchType
             oRoms[1].system := romObj.system
             oRoms[1].fullPath := romObj.fullPath
             return true
         }
-        if (romObj.matchType = "strongMatch" && oRoms[1].matchType != "strongMatch")
+        if (romObj.matchType == "strongMatch" && oRoms[1].matchType != "strongMatch")
         {
             oRoms[1].matchType := romObj.matchType
             oRoms[1].system := romObj.system
             oRoms[1].fullPath := romObj.fullPath
             bFoundRom := true
         }
-        if (romObj.matchType = "weakMatch" && oRoms[1].matchType = "")
+        if (romObj.matchType == "weakMatch" && oRoms[1].matchType = "")
         {
             oRoms[1].matchType := romObj.matchType
             oRoms[1].system := romObj.system
@@ -1086,7 +1079,7 @@ GetRoms(sysKey, romFileName, &oRoms)
 ;For example: C:\mypath\myroms\*.rom,bin,iso
 GetFuzzyRom(sysKey, romFileName, &oRoms)
 { 
-    global ;oEmulators, fast_load, rom_title
+    global rom_title
 
     try 
     {
@@ -1131,7 +1124,7 @@ GetFuzzyRom(sysKey, romFileName, &oRoms)
                     }
                     if (InStr(rom_title, romFileName, false))
                     {
-                        if (rom_title = romFileName)
+                        if (rom_title == romFileName)
                             strongMatch := true
                         else
                             weakMatch := true
@@ -1151,15 +1144,13 @@ GetFuzzyRom(sysKey, romFileName, &oRoms)
 
 ProcessEmulatorSettings(config_section)
 {
-    global
-
-    local rule, idx, config_item, romFileDecomp, hot_key
+    global mRules
     
     ProcessEmulatorOverrides()
     
     ProcessParamListTemplates()
     
-    ;Fill the rule structure
+    ;Create and fill-in the mRules structure
     ;rule = [function] arg_1 [policy] arg_2
     mRules := Map()
     Loop 
@@ -1225,15 +1216,14 @@ InsertTemplateField(targetText, templateText, replacementText, iniItem)
 ;typeArgs = "A_Args" or "Emu_Args" (used for validation)
 ProcessOverrideArgs(&argList, typeArgs:="A_Args")
 {    
-    global
-    local n
+    global cl_start_screen, cl_exit_screen, cl_run_apps
 
     bPreprocessArgs := false
+    emu_arg := ""
+
     cl_start_screen := ""
     cl_exit_screen := ""
     cl_run_apps := ""
-    cl_fast_load_index := ""
-    emu_arg := ""
  
     newArgList := argList.Clone()
     
@@ -1320,9 +1310,8 @@ ProcessOverrideArgs(&argList, typeArgs:="A_Args")
 ;Takes a searchPath and returns a reversed array of its paths
 ParseSearchPath(sysKey)
 {
-    global
-
-    local e, err, searchPath, rootFolder, bIsRootSearch, searchPattern, romSegment, aSearchPaths
+    ;global
+    ;local e, err, searchPath, rootFolder, bIsRootSearch, searchPattern, romSegment, aSearchPaths, n, sPath
 
     ;if a root path search is specified (i.e. [root_folder]_*\roms\*.zip) then we create
     ;an array of all the search paths.
@@ -1357,25 +1346,32 @@ ParseSearchPath(sysKey)
     }
     else	
         aSearchPaths := SplitByStringDelimiter(searchPath, "||")
+
+    ;Modify delimiter if needed
+    ;This is to support possible commas in path
+    for n, sPath in aSearchPaths
+    {
+        aSearchPaths[n] := TokenizePath(aSearchPaths[n])
+    }
     
     return aSearchPaths
 }
 
 FrontEndStartup()
 {
-    global
+    global gCfg, log_file
     
-    local config_section, e, fe_sections
-    local os_fe_key, os_asset_name, os_exe_full_path, os_run_apps
-    local this_fe_key, this_asset_name, this_exe_full_path, this_run_apps 
+    ;local config_section, e, fe_sections
+    ;local os_fe_key, os_asset_name, os_exe_full_path, os_run_apps
+    ;local this_fe_key, this_asset_name, this_exe_full_path, this_run_apps 
     
-    local ran_fe := false
+    ran_fe := false
     
     ;get list of apps to run after front end exits back to the OS
     ;also get the os asset_name and do some validation
     config_section := "Front_End_OS"
     os_fe_key := IniRead(config_file, config_section, "fe_key", A_Space)
-    os_exe_full_path := IniRead(config_file, config_section, "exe_full_path", A_Space)
+    os_exe_full_path := TokenizePath(IniRead(config_file, config_section, "exe_full_path", A_Space))
     os_asset_name := IniRead(config_file, config_section, "asset_name", A_Space)
     os_run_apps := IniRead(config_file, config_section, "run_apps", A_Space)
     
@@ -1399,11 +1395,11 @@ FrontEndStartup()
 
         this_fe_key := IniRead(config_file, config_section, "fe_key", A_Space)
         
-        ;Check to see if classic.exe was called with a valid front-end as an argument
+        ;Check to see if eip.exe was called with a valid front-end as an argument
         ;if so, we'll run in front-end mode.
-        if (A_Args[1] = this_fe_key) 
+        if (A_Args[1] == this_fe_key) 
         {			
-            ;We have confirmed that classic was launched in front-end mode so lets rename
+            ;We have confirmed that arcadeEIP was launched in front-end mode so lets rename
             ;the log file and continue logging in that file so that it won't be overwritten
             ;by any subsequent emulator mode runs.
             try
@@ -1425,7 +1421,7 @@ FrontEndStartup()
             
             this_asset_name := IniRead(config_file, config_section, "asset_name", A_Space)
             this_run_apps := IniRead(config_file, config_section, "run_apps", A_Space)
-            this_exe_full_path := IniRead(config_file, config_section, "exe_full_path", A_Space)
+            this_exe_full_path := TokenizePath(IniRead(config_file, config_section, "exe_full_path", A_Space))
             
             ;Since this method is called before ProcessIni() is called, 
             ;we need to read the configured applications
@@ -1531,7 +1527,7 @@ DeleteAndLog(t, f)
 
 LogEntry(logString, continueLine:=false)
 {
-    global
+    global log_file
 
     ;if making changes to this function
     ;also update the function in cf_add_param.ahk
@@ -1571,4 +1567,11 @@ LogEntry(logString, continueLine:=false)
     }
 
     return
+}
+
+;Log otherwise unhandled errors (spawed by OnError)
+LogError(e, mode)
+{
+    LogEntry("ERROR: Unhandled exception: " FormatErrorMessage(e) "`n")
+    ExitApp
 }

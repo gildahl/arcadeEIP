@@ -13,7 +13,7 @@ ReadConfig()
         return false
 
     ;[General]
-    gCfg.path_delimiter := IniRead(config_file, "General", "path_delimiter", ",") ;use legacy comma if no entry
+    ;gCfg.path_delimiter is read in emulator_class
     gCfg.show_license := Integer(IniRead(config_file, "General", "show_license", 1))
     gCfg.idle_log := Integer(IniRead(config_file, "General", "idle_log", 0))
     gCfg.seed_rom := IniRead(config_file, "General", "seed_rom", "mame galaga.zip")
@@ -240,7 +240,8 @@ ProcessIni()
             continue
 
         temp_fe_key := IniRead(config_file, config_section, "fe_key", A_Space)
-        temp_fe_exe_full_path := IniRead(config_file, config_section, "exe_full_path", A_Space)
+        temp_fe_exe_full_path := TokenizePath(IniRead(config_file, config_section, "exe_full_path", A_Space))
+
 
         debugValid := gCfg.debug_mode == temp_fe_key ? true : debugValid ;part of debug_mode setting validation
         
@@ -256,7 +257,7 @@ ProcessIni()
             ;risk of side effects.
             gCfg.fe_key := IniRead(config_file, config_section, "fe_key", A_Space)
             gCfg.fe_asset_name := IniRead(config_file, config_section, "asset_name", A_Space)
-            gCfg.fe_exe_full_path := IniRead(config_file, config_section, "exe_full_path", A_Space)
+            gCfg.fe_exe_full_path := TokenizePath(IniRead(config_file, config_section, "exe_full_path", A_Space))
             gCfg.start_screen := IniRead(config_file, config_section, "start_screen", "-1,Black")
             gCfg.exit_screen := IniRead(config_file, config_section, "exit_screen", "-1,Black")
             gCfg.hide_cursor := Integer(IniRead(config_file, config_section, "hide_cursor", 0))
@@ -315,7 +316,7 @@ ProcessIniApplications()
     for i, config_section in app_sections
     {
         app_app_key := IniRead(config_file, config_section, "app_key", A_Space)
-        app_exe_full_path := IniRead(config_file, config_section, "exe_full_path", A_Space)
+        app_exe_full_path := TokenizePath(IniRead(config_file, config_section, "exe_full_path", A_Space))
         app_run_options := IniRead(config_file, config_section, "run_options", A_Space)
         app_profile := IniRead(config_file, config_section, "profile", A_Space)
         app_param_list := ReadIniFile(config_file, config_section, "param_list", A_Space)
@@ -361,8 +362,8 @@ ProcessFeSettings()
 ;Sub function called by ProcessFeSettings() and ProcessRules()
 ProcessFeOverrides()
 {
-    global
-    local ini_arg_decomp
+    global start_show_time, start_back_color, exit_show_time, exit_back_color
+    ;local ini_arg_decomp
     
     ;apply any command-line preprocessor overrides
     if (cl_start_screen != "")

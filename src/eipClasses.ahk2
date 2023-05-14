@@ -78,7 +78,7 @@ class config_file_class
 {
 	__New(config_file)
 	{
-		global
+		;global
 
 		this._config_file := config_file
 
@@ -91,7 +91,7 @@ class config_file_class
 
 	GetGroupSections(grp)
 	{
-		global
+		;global
 
 		grp := grp . "_"
 		config_sections := this._config_sections

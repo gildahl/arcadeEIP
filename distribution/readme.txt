@@ -1,6 +1,7 @@
 ========================================
 arcadeEIP 
 Arcade Emulator Integration Player
+https://github.com/gildahl/arcadeEIP
 ========================================
 Readme.txt for version, 0.4.0.0 beta
 ========================================
@@ -148,3 +149,4 @@ runlast_eip.bat: batch file that will re-launch last run game
 ========================================
 arcadeEIP 0.4.0.0 beta
 Copyright (c) 2023 by David G. Dahlstrom
+https://github.com/gildahl/arcadeEIP

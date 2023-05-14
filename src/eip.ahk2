@@ -4,28 +4,28 @@
 
 ;arcadeEIP main thread
 ;
-;Use this module to compile as either eip.exe or util.exe
+;Compile as eip.exe or util.exe
 ;
 ;eip.exe  - Compile with no changes to the source code to create main arcadeEIP executable.
 ;util.exe - Compile with the following two changes to create the command line executable
 ;           1. Uncomment ";@Ahk2Exe-ConsoleApp" under compiler directives below.
 ;           2. set console_mode := true below.
 ;
-;Currently I use Microsoft Visual Studio Code with the following extenstions to develop arcadeEIP.
+;Currently Microsoft Visual Studio Code with the following extensions is used to develop arcadeEIP.
 ; * AutoHotkey Plus Plus
 ; * AutoHotkey v2 Language Support
 ; * vscode-autohotkey-debug
 ;
-;Note about the term "vector" (since it may not be obvious from the comments what this is)
+;Note about the term "vector" (since it may not be obvious what this is)
 ;=================================================================================================
-;A vector is simply a two-part space-separated pointer to an emulator rom. The form is
+;A vector is a two-part space-separated pointer to an emulator rom. The form is
 ;
 ;        <key> <rom>
 ;
 ;Where <key> is the sys_key for one of the systems defined in arcadeEIP.ini (like "mame" ) and <rom>
-;is the name of some rom on that system. This may be anything ranging from a full path to the rom 
+;is the name of some rom on that system. The form of <rom> may be anything ranging from a full path 
 ;such as "D:\Emulators\MAME\roms\zaxxon.zip" to simply a part of the name such as "zaxx", in which 
-;case a best match will be sought when attempting to run the game. 
+;case a best match (using the GetFuzzyRom() method) will be sought when attempting to run the game. 
 ;
 ;Vectors can be used on the command line to run games, but are also used in proxy files, hotstrings, and
 ;passed around internally to specify a game.
@@ -82,7 +82,7 @@ global console_mode := false  ;to compile console app, set to true and uncomment
 global start_tick := A_TickCount, start_time := A_Now 
 
 ;Early declarations needed in case we have to exit early
-global mouse_clicks_off  := 0
+global g_mouse_clicks_off := 0
 global oPauseProc := suspend_process_class()
 
 ;---------------------------------------------------------------------------------
@@ -199,7 +199,7 @@ global gCfg := {}
 
 ;[General]
 gCfg.debug_mode := ""  ;Set to "os" or front-end fe_key to be simulated
-gCfg.path_delimiter:= ","
+gCfg.path_delimiter:= "|"
 gCfg.idle_log := 0
 gCfg.use_log := 1
 gCfg.fast_load := 0
@@ -334,17 +334,17 @@ global gGui := {}
 
 ;Miscellaneous object inits and declarations
 global Emu_Args := Array()
+global aMapExit := Array()
 global mLists := Map()  
 global mApplications := Map()
 global mPlayLog := Map()
-global aMapExit := Array()
 global mRules := ""
 global oDom := "", oDetectInactivity, oSelectListControl := "", oMameData := ""
 
 ;Miscellaneous inits and declarations
 global current_volume := -1
-global fav_idx := g_idx := 0
-global exit_key_off, pause_key_off, magic_key_off, g_param, g_offset, orig_run_apps
+global g_idx := 0
+global exit_key_off, pause_key_off, g_param, g_offset, orig_run_apps
 global play_next := play_previous := emu := search_tag := ""
 global license_text := mouse_horiz := attract_pattern := proxy_type := ""
 global cl_start_screen := cl_exit_screen := cl_run_apps := ""
@@ -367,7 +367,7 @@ global color_green      := "0x006400"
 global color_yellow     := "0xFFFF00"
 
 ;hi score inits
-global hiscore_folder := "", hiscoredat_folder := "", highscores := Array(), top_score := ""
+global hiscore_folder := "", hiscoredat_folder := "", mHighscores := Map(), top_score := ""
 
 ;Diagnostic and unit test
 global ut_runwait_avg := 0, ut_runwait_cycle := 0, ut_runwait_timer := 0
@@ -525,8 +525,10 @@ args_postprocess := ArgArrayToParamString(A_Args)
 
 ProcessDirectives(&A_Args)  ;process command line directives
 
-DeleteAndLog("F", log_file)
-DeleteAndLog("F", idle_log_file)
+if (FileExist(log_file))
+    FileDelete(log_file)
+if (FileExist(idle_log_file))
+    FileDelete(idle_log_file)
 
 ;Do initial read of the configuration file (arcadeEIP.ini)
 if (!ReadConfig())
@@ -550,6 +552,9 @@ DateString := FormatTime(,"LongDate")
 LogEntry("INFO: Started on: " DateString ", at " TimeString "`n")
 LogEntry("INFO: Native Width: " A_ScreenWidth ", Native Height: " A_ScreenHeight "`n")
 LogEntry("INFO: DPI: " A_ScreenDPI ", DPI Width: " nScreenWidth ", DPI Height: " nScreenHeight "`n")
+
+;log any otherwise unhandled exceptions
+OnError LogError 
 
 ;---------------------------------------------------------------------------------
 ; Remove legacy files if they exist 
@@ -996,25 +1001,25 @@ Vector:
         ;Also see the delay on setting bEmuWindowActive:=true in RunWaitTimer which
         ;performs a similar function for subsequent runs.
         SetTimer KeepActive, start_show_time * 1000 + 4000
+
+        ;support for magic_key delay
+        if (gCfg.magic_delay > 0)
+        {
+            LogEntry("INFO: Starting keyboard strobe for magic_key support.`n")
+
+            ;doing inits to 0 here is important to make sure keyboardstrobe state is
+            ;consistent in case started while the magic_key is being held down.
+            ;magic_timer := 0
+            ;magicKeyState := 0
+            if (gCfg.kiosk_mode)
+                SetTimer KeyboardStrobeA, 50
+            else
+                SetTimer KeyboardStrobeB, 50
+        }
     }
 
     ;Add game to the play log
     mPlayLog["log"].Push(gCfg.sys_key " " gCfg.rom_name)
-
-    ;support for magic_key delay
-    if (gCfg.magic_delay > 0)
-    {
-        LogEntry("INFO: Starting keyboard strobe for magic_key support.`n")
-
-        ;doing inits to 0 here is important to make sure keyboardstrobe state is
-        ;consistent in case started while the magic_key is being held down.
-        magic_timer := 0
-        magicKeyState := 0
-        if (gCfg.kiosk_mode)
-            SetTimer KeyboardStrobeA, 50
-        else
-            SetTimer KeyboardStrobeB, 50
-    }
 
     ;---------------------------------------------------------------------------------
     ; Graphics related prep and display.
@@ -1491,7 +1496,7 @@ KillApp(theHotkey:="")
 }
 
 ;Used for disabling mouse clicks while in Picker
-#HotIf mouse_clicks_off = 1
+#HotIf g_mouse_clicks_off = 1
 LButton::
 RButton::
 MButton::

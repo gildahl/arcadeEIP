@@ -92,6 +92,7 @@
 				"stopOnEntry": false,
 				"maxChildren": 10000
 			},
+
 			{
 				"name": "eip (-findall asteroid)",
 				"request": "launch",
@@ -100,6 +101,18 @@
 				"runtime_v2": "v2/AutoHotkey.exe",
 				"program": "${file}",
 				"args": ["-findall", "asteroid"],
+				"stopOnEntry": false,
+				"maxChildren": 10000
+			},
+
+			{
+				"name": "eip (-find atari800 do)",
+				"request": "launch",
+				"type": "autohotkey",
+				"runtime_v1": "AutoHotkey.exe",
+				"runtime_v2": "v2/AutoHotkey.exe",
+				"program": "${file}",
+				"args": ["-find", "atari800", "do"],
 				"stopOnEntry": false,
 				"maxChildren": 10000
 			},
@@ -185,6 +198,19 @@
 				"stopOnEntry": false,
 				"maxChildren": 10000
 			},
+
+			{
+				"name": "eip atari800 donkey",
+				"request": "launch",
+				"type": "autohotkey",
+				"runtime_v1": "AutoHotkey.exe",
+				"runtime_v2": "v2/AutoHotkey.exe",
+				"program": "${file}",
+				"args": ["atari800", "donkey"],
+				"stopOnEntry": false,
+				"maxChildren": 10000
+			},
+
 			{
 				"name": "ColecoVision centipede",
 				"request": "launch",

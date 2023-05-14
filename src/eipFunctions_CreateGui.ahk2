@@ -28,7 +28,7 @@ ScreenRefresh()
 ;A simple black (or optionally colored) background screen
 CreateBackgroundScreen()
 {
-    global
+    global guiBackground
 
     guiBackground := Gui(, "eipGui - guiBackground")
     guiBackground.Opt("-Caption")
@@ -47,8 +47,8 @@ CreateBackgroundScreen()
 ;Note that this would probably alos be the place to add bezel support as a possible future enhancement.
 CreateAlphaScreen()
 {
-    global
-    local label_xpos, label_ypos, assetTypes, typeCount
+    global gGui, guiAlpha
+    ;local label_xpos, label_ypos, assetTypes, typeCount
 
     guiAlpha := Gui(, "eipGui - guiAlpha")
     guiAlpha.Opt("-Caption")
@@ -72,15 +72,15 @@ CreateAlphaScreen()
 ;This creates the startup bookend screen
 CreateStartScreen()
 {
-    global
+    global gGui, guiStart, rom_title
 
     ;Note *DON'T* make label_pos a local variable
 
-    local label_width, stack_height
-    local label_xpos, label_ypos, label_tag
-    local rom_tag, rom_xpos, rom_ypos
-    local screen_centerH, screen_centerW
-    local bb_platform
+    ;local label_width, stack_height
+    ;local label_xpos, label_ypos, label_tag
+    ;local rom_tag, rom_xpos, rom_ypos
+    ;local screen_centerH, screen_centerW
+    ;local bb_platform
 
     label_tag := gCfg.rom_name ? "Game..." : "System..."
     
@@ -201,15 +201,15 @@ CreateStartScreen()
 ;them separate is intentional so as not to convolute efforts to customize them separately.
 CreateExitScreen()
 {
-    global
+    global gGui, guiExit, rom_title
 
     ;Note *DON'T* make label_pos a local variable
 
-    local label_width, stack_height
-    local label_xpos, label_ypos, label_tag
-    local rom_tag, rom_xpos, rom_ypos
-    local screen_centerH, screen_centerW
-    local bb_platform
+    ;local label_width, stack_height
+    ;local label_xpos, label_ypos, label_tag
+    ;local rom_tag, rom_xpos, rom_ypos
+    ;local screen_centerH, screen_centerW
+    ;local bb_platform
     
     label_tag := gCfg.rom_name ? "Game..." : "System..."
     
@@ -305,7 +305,7 @@ return
 ;and behavior of the selection screen are implemented in the select_list_control_class
 CreateSelectScreen()
 {  
-    global
+    global guiSelect
 
     guiSelect := Gui(, "eipGui - guiSelect")
     guiSelect.Opt("+LastFound -Caption")

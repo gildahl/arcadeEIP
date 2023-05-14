@@ -18,6 +18,9 @@ class emulators_class
 		local r, q, global_q, metaItem, found, systemItem
 
 		configFile := configObj.ConfigFile		
+
+		;Get global path_delimiter
+		gCfg.path_delimiter := IniRead(config_file, "General", "path_delimiter", "|") 
 		
 		;Read the [Global_Assets] section
 		aGlobalAssets := Array()
@@ -65,6 +68,8 @@ class emulators_class
 				;special case 1 - create root_folder out of exe_full_path
 				if (systemKey == "exe_full_path")
 				{
+					systemValue := TokenizePath(systemValue) ;support for commas in path
+
 					SplitPath systemValue, &exeName, &rootFolder
 					mSystemMap["root_folder"] := rootFolder 
 					mSystemMap["exe_name"] := exeName
@@ -343,10 +348,10 @@ class emulators_class
 			;cache the meta data
 			_cache_meta_file()
 			{
-				global ;oEmulators, oLaunchBox
-				local lf, mf, elementVal, xml_data, platform_xml
-				local objNodeList, game_count, idx, game_rom, element
-				local fullFileName, shortFileName
+				;global ;oEmulators, oLaunchBox
+				;local lf, mf, elementVal, xml_data, platform_xml
+				;local objNodeList, game_count, idx, game_rom, element
+				;local fullFileName, shortFileName
 
 				;obtain these from the parent class
 				lf := this._emulator.logo_folder

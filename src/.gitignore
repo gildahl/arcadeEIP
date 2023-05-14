@@ -4,6 +4,7 @@ marquee.txt
 *.ini
 *.lic
 *.log
+*.exe
 license-generator/
 Assets/
 Direct/
