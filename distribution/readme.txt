@@ -85,7 +85,7 @@ arcadeEIP to other mappings via its configuration file, arcadeEIP.ini.
 
 Here is a list of key defaults.
 
-Basic controls - available while a game is playing
+Basic controls - available while a game is playing (relies on correct configuration)
 -------------------------------------------------------------------------------
 Menu:                 '                Toggle game selection menu
 Pause:                , (comma)        Pause emulator.
@@ -106,15 +106,15 @@ Edit Mode:            Left-Shift       Puts a custom list in edit mode for add/r
 Add/Remove:           Space            Add/remove selected game to/from a "Picks" or targeted custom list.
 Add/Remove All:       a                Add/remove all games to/from a "Picks" or tageted custom list
 
-Additional controls for use in constructing and managing game lists
+Additional controls used to bulk add/remove games to/from pick lists and custom lists.
 ---------------------------------------------------------------------------------
-Add/Remove rating        r        Add/remove all games having the same star rating as selected game.
-Add/Remove favorites     f        Add/remove all games having the same favorite marking as selected game.
-Add/Remove genre         g        Add/remove all games having the same genre as selected game.
-Add/Remove year          y        Add/remove all games having the same release year as selected game.
-Add/Remove publisher     u        Add/remove all games having the same publisher as selected game.
-Add/Remove developer     d        Add/remove all games having the same developer as selected game.
-Add/Remove players       n        Add/remove all games having the same number of players as selected game.
+Add/Remove by rating        r      Add/remove all games having the same star rating as selected game.
+Add/Remove by favorite      f      Add/remove all games having the same favorite marking as selected game.
+Add/Remove by genre         g      Add/remove all games having the same genre as selected game.
+Add/Remove by year          y      Add/remove all games having the same release year as selected game.
+Add/Remove by publisher     u      Add/remove all games having the same publisher as selected game.
+Add/Remove by developer     d      Add/remove all games having the same developer as selected game.
+Add/Remove by players       n      Add/remove all games having the same number of players as selected game.
 
 Marquee
 ---------------------------------------------------------------------------------- 
@@ -129,22 +129,32 @@ license.txt                  : terms of the license.
 readme.txt                   : this file
 update.txt                   : version update information
 sound.txt                    : information about turning on sound effects
-Quick Start 1 - MAME.txt     : tl;dr guide to setting up MAME with EIP.
-Quick Start 2 - MARQUEE.txt  : tl;dr guid to using a dynamic marquee monitor with EIP.
+Quick Start 1 - MAME.txt     : short guide to setting up MAME with EIP.
+Quick Start 2 - MARQUEE.txt  : short guide to using a dynamic marquee monitor with EIP.
 
 Configuration FILE
 ------------------
-arcadeEIP.ini : see above
+arcadeEIP.ini                : main configuration file (intended for user editing)
+arcadeEIP_example.ini        : commented configuration file for reference.
 
 OTHER FILES
 -----------
-.state : holds current state of lists
-.history : holds game play history
+.state : record of current list states
+.history : record of game play history
 arcadeEIP.lic : license file (see license.txt)
 arcadeEIP.log : log file, created at runtime
 arcadeEIP_fe.log : log file, created by the front-end launcher.
 runlast_native.bat: batch file that will run last emulator command line
 runlast_eip.bat: batch file that will re-launch last run game
+
+DEVELOPMENT NOTES
+=================
+arcadeEIP is written in AHK 2.0.
+
+Current development environment is Visual Studio Code using the following extensions:
+* AutoHotkey Plus Plus
+* AutoHotkey v2 Language Support
+* vscode-autohotkey-debug
 
 ========================================
 arcadeEIP 0.4.0.0 beta

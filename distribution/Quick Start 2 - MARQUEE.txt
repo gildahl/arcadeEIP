@@ -11,7 +11,7 @@ If you have a marquee monitor...
    ..\Assets\MAME\Marquees
    (or set marquee_folder= in [Global_Assets] to where they are)
    If you use LaunchBox, you may already have this setup if you followed
-   step 6b in the MAME Quick Start guide.
+   step 7b in the MAME Quick Start guide.
 
 2. In the [Marquee] section of arcadeEIP.ini, set active=1. The monitor= line
    should normally be set to 2, but might need a different number if you have

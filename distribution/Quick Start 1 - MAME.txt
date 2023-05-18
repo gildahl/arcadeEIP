@@ -8,7 +8,7 @@ See video here for a walk-through of these instructions:
 https://youtu.be/1RueDRhyrao
 
 *** By default, tap the period key (.) to exit a game.             ***
-*** Use right ctrl-alt-k to force-exit arcadeEIP if it ever hangs. ***
+*** Use RIGHT ctrl-alt-k to force-exit arcadeEIP if it ever hangs. ***
 =======================================================================
 
 1. Double-click create_cfg.bat to create arcadeEIP.ini and
@@ -27,13 +27,14 @@ https://youtu.be/1RueDRhyrao
    know you have.
 
 6. If you'd like to hide the mouse cursor during gameplay, set hide_cursor=1
-   in the [Front_End_os] section.
+   in the [Front_End_os] section. (It is recommended to only set this to 1
+   after confirming at least one successful startup) 
 
-6a. Optional: If you have them, copy a set of game logo files (named
+7a. Optional: If you have them, copy a set of game logo files (named
     after your roms) into ..\Assets\MAME\Logos\Rom
     (or set logo_folder= in [Global_Assets] to where they are.)
 
-6b. Optional: Instead of following step 6a, if you use LaunchBox, you may use
+7b. Optional: Instead of following step 6a, if you use LaunchBox, you may use
     it as your content manager instead.  Just add the following lines (with 
     paths adjusted to your machine) to the [System_mame] section.  In this 
     case, we assume that the name of the LaunchBox platform for MAME is "Arcade".
@@ -65,12 +66,12 @@ While in any game:
 6. Use "M" key to mark a game as a favorite or "S" to change star rating
 7. Use Space to add a game to the "Picks" list for the system and "LAlt" to
    view that list.
-8. See docs for many more functions.
+8. See readme.txt and docs for many more commands and functions.
 
 Autoswitching:
 By default, as you play games, the autoswitch list will auto-populate with
 those games. If you walk away with a game still in session, the active game will
-switch every 3 minutes. This is like a screensaver, but the games will be playable.
+switch every 5 minutes. This is like a screensaver, but the games will be playable.
 By default the list holds the 20 most played games.
 
 Naturally, all this is customizable.  See the full docs for much more.
