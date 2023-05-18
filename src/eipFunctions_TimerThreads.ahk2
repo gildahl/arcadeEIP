@@ -259,10 +259,10 @@ KeepActive()
         {
             ;Move mouse pointer to ensure it won't be over the taskbar
             ;which causes a side effect with Visual Pinball
-            Loop 6 ;try for 3 seconds
+            Loop 3 ;try for 3 seconds
             {
                 MouseMove(nScreenWidth // 2, nScreenHeight // 2)
-                Sleep 500
+                Sleep 1000
             }
 
             cycle_check := g_cycle
