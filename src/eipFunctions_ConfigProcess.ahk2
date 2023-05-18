@@ -101,7 +101,7 @@ ReadConfig()
     if (!InStr(gCfg.attract_folder, ":\"))
         gCfg.attract_folder := A_ScriptDir . "\" . gCfg.attract_folder
 
-    attract_pattern := gCfg.attract_folder . "\*.txt"
+    gCfg.attract_pattern := gCfg.attract_folder . "\*.txt"
 
     return true
 }
@@ -363,7 +363,6 @@ ProcessFeSettings()
 ProcessFeOverrides()
 {
     global start_show_time, start_back_color, exit_show_time, exit_back_color
-    ;local ini_arg_decomp
     
     ;apply any command-line preprocessor overrides
     if (cl_start_screen != "")

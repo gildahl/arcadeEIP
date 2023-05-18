@@ -70,7 +70,7 @@ RunWaitTimer()
     {
         if (A_TickCount - emu_start_time > gCfg.attract_mute * 1000)
         {
-            oMasterSound.On()
+            MasterSound.On()
         }
     }
 
@@ -254,7 +254,20 @@ KeepActive()
 
             bEmuWindowActive := true   
         }
-            
+
+        if (winset_style == "winset_D" && cycle_check != g_cycle)
+        {
+            ;Move mouse pointer to ensure it won't be over the taskbar
+            ;which causes a side effect with Visual Pinball
+            Loop 6 ;try for 3 seconds
+            {
+                MouseMove(nScreenWidth // 2, nScreenHeight // 2)
+                Sleep 500
+            }
+
+            cycle_check := g_cycle
+            winset_style := ""
+        }            
         ;This will attempt to turn off the title bar and menu of the emulator's
         ;window the first time is becomes active.
         if (winset_style && winset_style != "winset_D" && cycle_check != g_cycle)
@@ -292,8 +305,7 @@ KeepActive()
             WinSetStyle "-0xC00000", "ahk_id " . act_win ;%emu_hwnd%   ;removes title bar  
             WinSetStyle "-0xC40000", "ahk_id " . act_win ;%emu_hwnd%   ;removes border
            
-            DllCall("SetMenu", "Uint", act_win, "UInt", 0)   ;removes menu
-            
+            DllCall("SetMenu", "Uint", act_win, "UInt", 0)   ;removes menu            
 
             ;*** Be sure to add any new winset styles to ParseRTParams ***
             if winset_style == "winset_B" or winset_style == "winset_C"  ;currently for Demul (Naomi) and Supermodel
@@ -333,13 +345,6 @@ KeepActive()
                 WinGetPos &X, &Y, &W, &H, "ahk_id " . act_win  ;ahk_pid %pid_emulator%                    
                 LogEntry("INFO: New dimensions: X:" . X . ", Y:" . Y . ", W:" . W . ", H:" . H . "`n")                
             }
-            if winset_style == "winset_D"
-            {
-                ;Move mouse pointer to ensure it won't be over the taskbar
-                ;which causes a side effect with Visual Pinball
-                MouseMove nScreenWidth // 2, nScreenHeight // 2
-            }
-
             
             cycle_check := g_cycle
             winset_style := ""
@@ -519,8 +524,6 @@ ScreenDelay()
 ;a designated amount of time.
 ScreenClear()
 {
-    ;global
-
     if (bkend_relinquish || gCfg.debug_mode || test_mode)
     {
         ;relinquish always-on-top priority
@@ -562,24 +565,3 @@ CreatePausePage()
 
     return
 }
-
-/*
-ScreenWinWaitMonitor:
-
-    if !WinActive("guiBackground")
-    {   
-        if (bkend_relinquish || debug_mode || test_mode)
-            Gui, -AlwaysOnTop ;relinquish always-on-top priority
-        
-        if (start_show_time > -1)
-        {
-            GuiControl, guiBackground:Hide, Label
-            GuiControl, guiBackground:Hide, Logo
-            GuiControl, guiBackground:Hide, Rom
-        }
-        
-        SetTimer, ScreenWinWaitMonitor, Off
-    }
-    
-return
-*/

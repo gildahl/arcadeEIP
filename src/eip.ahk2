@@ -166,9 +166,10 @@ else
 #include eipFunctions_CreateGui.ahk2            ;Create the main gui screens
 #include eipFunctions_ProcessDirectives.ahk2    ;Process command line directives
 #include eipFunctions_ProcessHotkeys.ahk2       ;Hotkey management and functions
+#include eipFunctions_RunApplications.ahk2      ;Functions that launch/run applications
 #include eipFunctions_TimerThreads.ahk2         ;Major thread functions launched by timers
 #include eipFunctions_Utility.ahk2		        ;Library of general utility functions
-#include eipFunctions.ahk2                      ;Miscellaneous functions
+#include eipFunctions.ahk2                      ;Miscellaneous support functions
 
 ;---------------------------------------------------------------------------------
 ; Global Flags
@@ -283,6 +284,7 @@ gCfg.clean_lists := 0
 
 ;[Auto_Switch]
 gCfg.attract_folder := "Lists\autoswitch"
+gCfg.attract_pattern := ""
 gCfg.attract_auto := 1
 gCfg.attract_mute := 0
 gCfg.attract_delay := 180
@@ -320,6 +322,7 @@ gCfg.run_options := ""
 gCfg.rom_full_path := ""
 gCfg.rom_file := ""
 gCfg.rom_folder := ""
+gCfg.logo_full_path := ""
 gCfg.param_list := ""
 gCfg.autoswitch := 1
 gCfg.search_path := ""
@@ -333,27 +336,27 @@ gCfg.map_pause := ""
 global gGui := {}
 
 ;Miscellaneous object inits and declarations
-global Emu_Args := Array()
+global aEmuArgs := Array()
 global aMapExit := Array()
 global mLists := Map()  
 global mApplications := Map()
 global mPlayLog := Map()
 global mRules := ""
-global oDom := "", oDetectInactivity, oSelectListControl := "", oMameData := ""
+global oMameData := ""
+global oSelectListControl := ""
+global oDetectInactivity 
 
 ;Miscellaneous inits and declarations
 global current_volume := -1
-global g_idx := 0
-global exit_key_off, pause_key_off, g_param, g_offset, orig_run_apps
-global play_next := play_previous := emu := search_tag := ""
-global license_text := mouse_horiz := attract_pattern := proxy_type := ""
-global cl_start_screen := cl_exit_screen := cl_run_apps := ""
+global exit_key_off, pause_key_off, orig_run_apps
+global play_next := play_previous := search_tag := ""
+global license_text := proxy_type := ""
 global bSuppressExitMessage := bHotkeysOn := false
 
 ;Gui inits and declarations
 global start_back_color := exit_back_color := "Black"
+global cl_start_screen := cl_exit_screen := cl_run_apps := ""
 global default_start_back_color := default_exit_back_color := "Black"
-global rom_title := "", logo_full_path, controls_full_path := ""
 global default_start_show_time := default_exit_show_time := start_show_time := exit_show_time := "-1"
 
 ;Colors
@@ -435,9 +438,6 @@ global marqueePipeFile := A_ScriptDir "\marquee.txt"
 global hi2txt_exe := A_ScriptDir "\hi2txt\hi2txt.exe"
 global hi2txt_omit := A_ScriptDir "\hi2txt\omit.txt"
 
-;Sound methods
-global oMasterSound := master_sound_class()
-
 ;Create object to manage config (ini) cFELogFileName
 global oConfigFile := config_file_class(config_file)
 
@@ -493,22 +493,18 @@ args_original := ArgArrayToParamString(A_Args)
 ;the user provided a wrong commandline for the emulator that ultimately got launched.
 ;We process the currently known sys_key last to ensure that the working A_Args list correlates
 ;with the working param_list from this point forward through initial validation checking.
-g_idx_temp := g_idx
-emu_temp := emu
-for g_idx, emu in oEmulators.Emulators
+;g_idx_temp := nIdx
+;emu_temp := emu
+for nIdx, emu in oEmulators.Emulators
 {	
-    if (g_idx != gCfg.sys_key)
+    if (nIdx != gCfg.sys_key)
     {
         oArgs := oOriginalArgs.Clone()
-        pList := oEmulators.Emulators[g_idx].param_list
+        pList := oEmulators.Emulators[nIdx].param_list
         pList := ProcessPassthroughArgs(&oArgs, pList)
-        oEmulators.Emulators[g_idx]._default_settings["param_list"] := pList
+        oEmulators.Emulators[nIdx]._default_settings["param_list"] := pList
     }
-    g_idx_temp := g_idx
-    emu_temp := emu
 }
-g_idx := g_idx_temp
-emu := emu_temp
 
 ;Now process the initially specified (or logically specified) sys_key
 if (gCfg.sys_key) ;might be empty if we are doing a -createcfg
@@ -771,23 +767,23 @@ FileAppend(cExeName . " " . args_original, launch_file)
 ;Allow multi-word roms to be handled on command line without quotes
 if (A_Args.Length > 2 || (A_Args.Length == 2 && !oEmulators.IsValidKey(A_Args[1])))
 {
-    g_offset := 0
-    g_idx := A_Args.Length
+    nOffset := 0
+    nIdx := A_Args.Length
 
     if (oEmulators.IsValidKey(A_Args[1]))
     {
         temp_sys := A_Args[1]
-        g_idx := g_idx - 1
-        g_offset := 1
+        nIdx := nIdx - 1
+        nOffset := 1
     }
 
     temp_rom := ""
-    Loop g_idx
-        temp_rom := temp_rom . " " . A_Args[A_Index + g_offset]
+    Loop nIdx
+        temp_rom := temp_rom . " " . A_Args[A_Index + nOffset]
 
     temp_rom := Trim(temp_rom)
     A_Args := Array()
-    if (g_offset == 1)
+    if (nOffset == 1)
     {
         A_Args.Push(temp_sys)
         A_Args.Push(temp_rom)
@@ -924,7 +920,7 @@ Vector:
     ProcessIni()
 
     ;---------------------------------------------------------------------------------
-    ; Build Emu_Args command line array from param_list in the ini file
+    ; Build aEmuArgs command line array from param_list in the ini file
     ;---------------------------------------------------------------------------------
     BuildEmuArgs()
     
@@ -1000,17 +996,13 @@ Vector:
         ;Delay starting until it is reasonable to expect the game's screen to be active
         ;Also see the delay on setting bEmuWindowActive:=true in RunWaitTimer which
         ;performs a similar function for subsequent runs.
-        SetTimer KeepActive, start_show_time * 1000 + 4000
+        SetTimer KeepActive, 1000   ;start_show_time * 1000 + 4000
 
         ;support for magic_key delay
         if (gCfg.magic_delay > 0)
         {
             LogEntry("INFO: Starting keyboard strobe for magic_key support.`n")
 
-            ;doing inits to 0 here is important to make sure keyboardstrobe state is
-            ;consistent in case started while the magic_key is being held down.
-            ;magic_timer := 0
-            ;magicKeyState := 0
             if (gCfg.kiosk_mode)
                 SetTimer KeyboardStrobeA, 50
             else
@@ -1032,10 +1024,10 @@ Vector:
         SystemCursor("Off") 
     }
     
-    logo_full_path := SetAssetFullPath("logo", gCfg.rom_name, gCfg.logo_folder, gCfg.system_logo, gCfg.global_asset_name)
+    gCfg.logo_full_path := SetAssetFullPath("logo", gCfg.rom_name, gCfg.logo_folder, gCfg.system_logo, gCfg.global_asset_name)
     
-    if (logo_full_path)
-        LogEntry("INFO: Logo file set to: " logo_full_path "`n")
+    if (gCfg.logo_full_path)
+        LogEntry("INFO: Logo file set to: " gCfg.logo_full_path "`n")
     else
         LogEntry("INFO: No logo files found.`n")
     
@@ -1136,7 +1128,7 @@ Vector:
     SetTimer CreatePausePage, -100
     
     ;---------------------------------------------------------------------------------
-    ;  Rebuild param_list from Emu_Args
+    ;  Rebuild param_list from aEmuArgs
     ;---------------------------------------------------------------------------------
     
     BuildParamList()
@@ -1211,11 +1203,11 @@ Vector:
     
     if (proxy_type == "Batch")
     {
-        for g_idx, g_param in proxy_contents
+        for nIdx, sParam in proxy_contents
         {
             try
             {
-                cl := ParseRTParams(proxy_contents[g_idx], &runStyle, &runOption, &windowStyle, &winset_style)
+                cl := ParseRTParams(proxy_contents[nIdx], &runStyle, &runOption, &windowStyle, &winset_style)
                 
                 ;******* create runlast_native.bat file ************
                 if (FileExist(batch_file))
@@ -1342,7 +1334,7 @@ Vector:
         g_exit_code := ""
        
         if (gCfg.attract_mute > 0) 
-            oMasterSound.Off() ;mute audio
+            MasterSound.Off() ;mute audio
 
         LogEntry("INFO: Vectoring to new game: " g_directswitch_args ".`n")
         
@@ -1439,7 +1431,7 @@ ExitFunction(ExitReason, ExitCode)
     if (gCfg.status_beeps)
         DoBeep()
 
-    oMasterSound.On() ;make sure sound is turned on
+    MasterSound.On() ;make sure sound is turned on
 
     ;restore original taskbar state
     if (IsSet(original_taskbar_state))

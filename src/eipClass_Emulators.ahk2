@@ -348,11 +348,6 @@ class emulators_class
 			;cache the meta data
 			_cache_meta_file()
 			{
-				;global ;oEmulators, oLaunchBox
-				;local lf, mf, elementVal, xml_data, platform_xml
-				;local objNodeList, game_count, idx, game_rom, element
-				;local fullFileName, shortFileName
-
 				;obtain these from the parent class
 				lf := this._emulator.logo_folder
 				mf := this._emulator.marquee_folder

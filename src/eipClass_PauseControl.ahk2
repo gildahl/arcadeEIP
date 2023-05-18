@@ -153,9 +153,6 @@ class pause_control_class
 		global oMameData
 
 		info_text := ""
-		;local image_xpos, image_ypos, image_width, image_height
-		;local image_x, image_y, assetFolder, systemAsset, mame_history_text, mame_info_text
-		;local srcIdx, destIdx, x_pos, hwndSrc, hwndDest, delta, total_lines, success, offset
 
 		if (assetType == "info")
 		{
@@ -195,16 +192,8 @@ class pause_control_class
 				if (!IsObject(oMameData))
 					oMameData := mame_data_class(gCfg.mameinfo_folder)
 
-				  ;startTimeTest := A_TickCount
 				mame_history_text := oMameData.GetHistory(gCfg.rom_name)
-				  ;doneHistoryTime := A_TickCount
 				mame_info_text := oMameData.GetInfo(gCfg.rom_name)
-				  ;doneInfoTime := A_TickCount
-
-				  ;historyTime := doneHistoryTime - startTimeTest
-				  ;infoTime := doneInfoTime - doneHistoryTime
-
-			      ;OutputDebug Rom: %rom_name%, History Time: %historyTime%, Info Time: %infoTime%`n
 
 				info_text := mame_history_text . mame_info_text
 
@@ -354,10 +343,10 @@ class pause_control_class
 			try assetFolder := gCfg.%assetType "_folder"%
 			try systemAsset := gCfg.%"system_" assetType% 
 		
-			controls_full_path := SetAssetFullPath(assetType, gCfg.rom_name, assetFolder, systemAsset, gCfg.global_asset_name)
-			if (FileExist(controls_full_path))
+			asset_full_path := SetAssetFullPath(assetType, gCfg.rom_name, assetFolder, systemAsset, gCfg.global_asset_name)
+			if (FileExist(asset_full_path))
 			{
-				gGui.guiAlpha_PauseImage%assetType% := guiAlpha.AddPicture("BackgroundTrans vPauseImage%" . assetType . "%", controls_full_path)
+				gGui.guiAlpha_PauseImage%assetType% := guiAlpha.AddPicture("BackgroundTrans vPauseImage%" . assetType . "%", asset_full_path)
 				gGui.guiAlpha_PauseImage%assetType%.GetPos(&pause_image_posX, &pause_image_posY, &pause_image_posW, &pause_image_posH)
 		
 				;Resize the image to fit on the screen while preserving aspect ratio

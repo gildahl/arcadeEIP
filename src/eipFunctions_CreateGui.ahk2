@@ -48,7 +48,6 @@ CreateBackgroundScreen()
 CreateAlphaScreen()
 {
     global gGui, guiAlpha
-    ;local label_xpos, label_ypos, assetTypes, typeCount
 
     guiAlpha := Gui(, "eipGui - guiAlpha")
     guiAlpha.Opt("-Caption")
@@ -72,15 +71,7 @@ CreateAlphaScreen()
 ;This creates the startup bookend screen
 CreateStartScreen()
 {
-    global gGui, guiStart, rom_title
-
-    ;Note *DON'T* make label_pos a local variable
-
-    ;local label_width, stack_height
-    ;local label_xpos, label_ypos, label_tag
-    ;local rom_tag, rom_xpos, rom_ypos
-    ;local screen_centerH, screen_centerW
-    ;local bb_platform
+    global gGui, guiStart
 
     label_tag := gCfg.rom_name ? "Game..." : "System..."
     
@@ -115,10 +106,10 @@ CreateStartScreen()
         gGui.guiStart_LicenseBanner.Move(0, banner_ypos)
     }
     
-    SplitPath logo_full_path,,,, &OutNameNoExt
+    SplitPath gCfg.logo_full_path,,,, &OutNameNoExt
 
-    if (!FileExist(logo_full_path))
-        LogEntry("NOTICE: logo file not found: " . logo_full_path . "`n")
+    if (!FileExist(gCfg.logo_full_path))
+        LogEntry("NOTICE: logo file not found: " . gCfg.logo_full_path . "`n")
 
     ;Check to see if a LaunchBox/BigBox platform is being referenced
     ;(since we won't want to show a LaunchBox/BigBox system image here, but rather the name of the game)
@@ -128,9 +119,9 @@ CreateStartScreen()
         bb_platform := ""
 
     ;Display logo
-    if (FileExist(logo_full_path) && OutNameNoExt != "default" && OutNameNoExt != gCfg.sys_key && OutNameNoExt != bb_platform)
+    if (FileExist(gCfg.logo_full_path) && OutNameNoExt != "default" && OutNameNoExt != gCfg.sys_key && OutNameNoExt != bb_platform)
     {
-        gGui.guiStart_Logo := guiStart.AddPicture("BackgroundTrans vLogo", logo_full_path)
+        gGui.guiStart_Logo := guiStart.AddPicture("BackgroundTrans vLogo", gCfg.logo_full_path)
         gGui.guiStart_Logo.GetPos(&logo_posX, &logo_posY, &logo_posW, &logo_posH)
 
         ;The following code ensures that the logo fits in its designated position
@@ -167,7 +158,7 @@ CreateStartScreen()
     }
     else
     {
-        if (logo_full_path) ;but the file doesn't exist
+        if (gCfg.logo_full_path) ;but the file doesn't exist
         {
             ;Since we don't have an available image, show the game name instead
             rom_title := oEmulators.Emulators[gCfg.sys_key].meta_names.GetTitle(gCfg.rom_file)
@@ -201,16 +192,8 @@ CreateStartScreen()
 ;them separate is intentional so as not to convolute efforts to customize them separately.
 CreateExitScreen()
 {
-    global gGui, guiExit, rom_title
+    global gGui, guiExit
 
-    ;Note *DON'T* make label_pos a local variable
-
-    ;local label_width, stack_height
-    ;local label_xpos, label_ypos, label_tag
-    ;local rom_tag, rom_xpos, rom_ypos
-    ;local screen_centerH, screen_centerW
-    ;local bb_platform
-    
     label_tag := gCfg.rom_name ? "Game..." : "System..."
     
     ;Create Exit Screen
@@ -224,7 +207,7 @@ CreateExitScreen()
 
     label_xpos := nScreenWidth / 2 - label_posW / 2
     
-    SplitPath logo_full_path,,,, &OutNameNoExt
+    SplitPath gCfg.logo_full_path,,,, &OutNameNoExt
 
     ;Check to see if a LaunchBox/BigBox platform is being referenced
     ;(since we won't want to show a LaunchBox/BigBox system image here, but rather the name of the game)
@@ -234,9 +217,9 @@ CreateExitScreen()
         bb_platform := ""
 
     ;logos
-    if (FileExist(logo_full_path) && OutNameNoExt != "default" && OutNameNoExt != gCfg.sys_key && OutNameNoExt != bb_platform)
+    if (FileExist(gCfg.logo_full_path) && OutNameNoExt != "default" && OutNameNoExt != gCfg.sys_key && OutNameNoExt != bb_platform)
     {
-        gGui.guiExit_Logo := guiExit.AddPicture("BackgroundTrans vLogo", logo_full_path)
+        gGui.guiExit_Logo := guiExit.AddPicture("BackgroundTrans vLogo", gCfg.logo_full_path)
         gGui.guiExit_Logo.GetPos(&logo_posX, &logo_posY, &logo_posW, &logo_posH)
 
         ;The following code ensures that the logo fits on the screen
@@ -272,7 +255,7 @@ CreateExitScreen()
     }
     else
     {
-        if (logo_full_path) ;but the file doesn't exist
+        if (gCfg.logo_full_path) ;but the file doesn't exist
         {
             ;Since we don't have an available image, show the game name in text
             rom_title := oEmulators.Emulators[gCfg.sys_key].meta_names.GetTitle(gCfg.rom_file)

@@ -11,6 +11,7 @@ class launchbox_frontend_class
 	{
 		this._current_asset_path := ""
 		this._region_priorities := Array()
+		this._oDOM := ""
 	}	
 
 	;Set this first in order to then extract...
@@ -100,13 +101,13 @@ class launchbox_frontend_class
 
 		try
 		{
-			oDOM := ComObject("MSXML2.DOMDocument.6.0")
+			this._oDOM := ComObject("MSXML2.DOMDocument.6.0")
 		}
 		catch as e
 		{
 			try
 			{
-				oDOM := ComObject("MSXML2.DOMDocument.3.0")
+				this._oDOM := ComObject("MSXML2.DOMDocument.3.0")
 			}
 			catch as e
 			{
@@ -114,12 +115,12 @@ class launchbox_frontend_class
 				LogEntry("ERROR: XML Processing Error (MSXML2.DOMDocument.3.0): " FormatErrorMessage(e) "`n")
 			}				
 		}
-		oDOM.async := false
+		this._oDOM.async := false
 
 		xml_data := FileRead(settings_xml)
-		oDOM.loadXML(xml_data)			
+		this._oDOM.loadXML(xml_data)			
 		
-		objNodeList := oDOM.getElementsByTagName("Settings")
+		objNodeList := this._oDOM.getElementsByTagName("Settings")
 		element := objNodeList.item(0).getElementsByTagName("RegionPriorities")
 		region_priorities := element.item(0).text
 		

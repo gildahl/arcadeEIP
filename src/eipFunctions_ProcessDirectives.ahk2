@@ -6,9 +6,6 @@
 ProcessDirectives(&argList)
 {
     global gCfg, bSuppressExitMessage
-
-    ;local n, e, i, err, param, emu := "", input_arg, input_arg_decomp, bDirectiveArgs, emulator
-    ;local aSearchPaths, searchPath, searchRomName, romExt, dev, oSoundDeviceList, filePrefix
     
     bDirectiveArgs := false
     
@@ -350,8 +347,6 @@ ProcessDirectives(&argList)
 DisplayRomList(emu, rom, listType, argName)
 {
     global bSuppressLogging, bSearchGlobal
-
-    ;local n, i, err, header
 
     try
     {

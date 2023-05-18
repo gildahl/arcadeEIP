@@ -258,25 +258,3 @@ SplitByStringDelimiter(sTarget, sDelimiter)
 
 	return aPathList
 }
-
-;Replace any commas past the last \ character with the currently
-;set gCfg.path_delimiter. This makes it easier for the parser to 
-;deal with paths that contain commas.
-TokenizePath(sPath)
-{
-	;Only do this if the path_delimiter is not a comma
-	;in order to preserve legacy behavior in that case
-	if (gCfg.path_delimiter != ",")
-	{
-		nLastBs := InStr(sPath, "\",, -1)
-		sFirstPart := SubStr(sPath, 1, nLastBs)
-		sLastPart := SubStr(sPath, nLastBs+1)
-		sLastPart := StrReplace(sLastPart, ",", "|")
-	}
-	else
-	{
-		return sPath
-	}
-
-	return sFirstPart . sLastPart
-}

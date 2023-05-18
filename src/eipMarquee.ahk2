@@ -150,7 +150,7 @@ CreateBackgroundScreen()
 {
     global 
 
-    guiBackground := Gui("-Caption", "marqueeGui - guiBackground")
+    guiBackground := Gui("-Caption", "arcadeEIP - Marquee")
     guiBackground.BackColor := "Black"
 
     ;handle DPI modes
@@ -173,7 +173,8 @@ CreateMarqueeAlphaScreen()
 {   
     global
 
-    guiMarqueeAlpha := Gui("+LastFound -Caption", "marqueeGui - guiMarqueeAlpha")
+    guiMarqueeAlpha := Gui("+LastFound -Caption", "guiMarqueeAlpha")
+    guiMarqueeAlpha.Opt("+Owner" guiBackground.Hwnd)
     guiMarqueeAlpha.BackColor := "Black"
     HwndMarqueeAlpha := guiMarqueeAlpha.Hwnd
         
@@ -208,6 +209,7 @@ ShowMarquee(image_file, system, top_score)
     if (!bGuiExists) ;only create a new window if we haven't previously created it
     {
         gGui.%gui_id% := Gui("-Caption +E0x80000 +LastFound +AlwaysOnTop +ToolWindow +OwnDialogs", "marqueeGui - " gui_id)
+        gGui.%gui_id%.Opt("+Owner" guiBackground.Hwnd)
         gGui.Gui%gui_id% := gGui.%gui_id%.Hwnd
     }
 
@@ -258,7 +260,6 @@ ShowMarquee(image_file, system, top_score)
 
     Gdip_SetInterpolationMode(G, marquee_interpolation)
 
-    ;Gdip_DrawImage(pGraphics, pBitmap, dx, dy, dw, dh, sx, sy, sw, sh, Matrix)
     Gdip_DrawImage(G, pBitmap, 0 + image_L, 0 + image_T, pic_w + image_W, pic_h + image_H, 0, 0, Width, Height)
     Gdip_DeleteGraphics(G)
     

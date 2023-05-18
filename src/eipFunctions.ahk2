@@ -2,90 +2,53 @@
 ; © 2023 David G. Dahlstrom
 ; File: eipFunctions.ahk2
 
-;Miscellaneous functions
+;Miscellaneous support functions
 
-;Add contents to the directswitch_folder.
-;Used during initialization and -clean operations
-PopulateDirectSwitchFolder()
+;Vector to another emulator/game. This function prepares A_Args to vector to a new game. After
+;calling this function, the caller will normally execute a Goto Vector: in the main thread.
+;Note 1: The vector passed in should not include extra arguments (just a vector)
+;Note 2: These "extra arguments" (such as passthrough arguments like -video gdi) passed in the original
+; commandline should contine to work assuming they are compatible with the emulator being vectored to 
+; since the vectored emulator provides support for these passthrough args in its param_list).
+VectorNow(vector)
 {
-    if (InStr(FileExist(directswitch_folder), "D") && !FileExist(directswitch_folder "\readme.txt"))
+    global A_Args
+
+    emu := SplitVector(vector)["sys_key"]
+    romspec := SplitVector(vector)["rom_value"]
+
+    ;Fill in possible template fields (for example, in support of the vector_to rule)
+    ;------------------------------------------------------------------------------------------------------
+    romspec := InsertTemplateField(romspec, "[sys_key]", gCfg.sys_key, "romspec")
+    romspec := InsertTemplateField(romspec, "[asset_name]", gCfg.asset_name, "romspec")
+    romspec := InsertTemplateField(romspec, "[root_folder]", gCfg.root_folder, "romspec")
+    romspec := InsertTemplateField(romspec, "[rom_full_path]", gCfg.rom_full_path, "romspec")
+    romspec := InsertTemplateField(romspec, "[rom_file]", gCfg.rom_file, "romspec")
+    romspec := InsertTemplateField(romspec, "[rom_folder]", gCfg.rom_folder, "romspec")
+    romspec := InsertTemplateField(romspec, "[rom_folder_parent]", gCfg.rom_folder_parent, "romspec")
+    romspec := InsertTemplateField(romspec, "[rom_name]", gCfg.rom_name, "romspec")	
+    ;If [rom] is specified, use either rom_name or rom_full_path depending on which is available
+    if (gCfg.rom_full_path)
+        romspec := InsertTemplateField(romspec, "[rom]", gCfg.rom_full_path, "romspec")
+    else if (gCfg.rom_file)
+        romspec := InsertTemplateField(romspec, "[rom]", gCfg.rom_file, "romspec")
+    else
+        romspec := InsertTemplateField(romspec, "[rom]", gCfg.rom_name, "romspec")
+    ;------------------------------------------------------------------------------------------------------
+    
+    A_Args := Array()
+
+    if (oEmulators.IsValidKey(emu))
     {
-        try 
-           FileAppend "
-        (
-A direct-launch file is simply a text (txt) file whose name is either a hotstring or hotkey sequence, and whose
-content is a vector to a game in the form <sys_key> <rom>. When the hot-sequence specified by the file name
-is issued on the machine, arcadeEIP will immediately switch to the game specified by the file contents.
-Direct-launch files must be placed in the \Direct subfolder of arcadeEIP.
-
-Hotstring Files
-===============
-To create a hotstring file, the name of the file must begin with the prefix "@!@", and be followed by a 
-unique text string.  See example, @!@mame_zaxxon.txt file in this folder which illustrates a file that will
-launch Zaxxon in MAME using the key sequence "@!@mame_zaxxon" followed by ENTER.
-
-Note that normally, the terminating ENTER will be issued by the external macro that broadcasts the string (such
-as a control panel button macro, Elgato Stream Deck macro, etc.).
-
-Important: Hotstrings will only be recognized by arcadeEIP if it is the active window. A reliable way to ensure
-this is to perform a virtual mouse click on the window prior to issuing the hotstring. Therefore, any macro 
-created to use hotstrings to switch games should first perform such a mouse click followed by a short delay 
-(200ms should be sufficient), prior to sending the hotstring text. If this is not possible, then you must use
-a hotkey file instead.
-
-Hotkey Files
-============
-To create a hotkey file, the name of the file must be a hotkey sequence composed of any Autohotkey modifers
-(https://www.autohotkey.com/docs/Hotkeys.htm) that are permitted in a filename.  See example ^!1.txt in this 
-folder that will launch the game Galaga in MAME using the key sequence Ctrl-Alt-1 anytime while in arcadeEIP.
-
-In general, hotstrings are preferred when there are a large number of games that will be mapped, since you do
-not have to worry about running out of hotkey combinations or potential conflicts with hotkeys of other 
-applications.  Hotkeys are preferred when there are fewer games, or it is difficult to automate a mouse click
-operation before issuing a hotstring. 
-
-Tip
-===
-If you would like to create hotstring files in bulk, you may use the -createproxy command line function 
-that is documented in "Command Line Reference Guide.pdf". For example, by using a command line such as...
-
-   >eip.exe -createproxy D:\Emulators\MAME\roms\*.zip D:\arcadeEIP\temp\*.txt mame rom_full_path @!@
-
-you can easily create direct-switch proxy files having an appropriate prefix for all mame roms. Once done,
-you can then copy just the ones you want into the \Direct folder as needed.
-
-Warning
-=======
-Note: Other than the two types of files listed above and this readme.txt file, do not place files of any other 
-type in this folder or arcadeEIP will fail with an error.
-
-        )", directswitch_folder "\readme.txt"
-
-        catch     
-            LogEntry("NOTICE: Failed to create file, " directswitch_folder "\readme.txt.`n")
-        else  
-            LogEntry("INFO: Created file, " directswitch_folder "\readme.txt.`n")            
+        A_Args.Push(emu)
+        A_Args.Push(romspec)
+    }
+    else
+    {
+        A_Args.Push(romspec)
     }
 
-    if (InStr(FileExist(directswitch_folder), "D") && !FileExist(directswitch_folder . "\^!1.txt"))
-    {
-        try
-            FileAppend "mame asteroid", directswitch_folder "\^!1.txt"          ;create sample direct-switch hotkey file
-        catch
-            LogEntry("NOTICE: Failed to create file, " directswitch_folder "\^!1.txt.`n") 
-        else       
-            LogEntry("INFO: Created file, " directswitch_folder "\^!1.txt.`n")     
-    }
-
-    if (InStr(FileExist(directswitch_folder), "D") && !FileExist(directswitch_folder . "\@!@mame_zaxxon.txt"))
-    {
-        try
-            FileAppend "mame zaxxon", directswitch_folder "\@!@mame_zaxxon.txt" ;create sample direct-switch hotstring file
-        catch
-            LogEntry("NOTICE: Failed to create file, " directswitch_folder "\@!@mame_zaxxon.txt.`n") 
-        else     
-            LogEntry("INFO: Created file, " directswitch_folder "\@!@mame_zaxxon.txt.`n")            
-    }
+    return
 }
 
 GetSysKeyFromCmdLine(args)
@@ -109,9 +72,6 @@ GetSysKeyFromCmdLine(args)
 ;sParamList is returned with the passthrough templates replaced
 ProcessPassthroughArgs(&oArgs, sParamList)
 {
-    ;global
-    ;local oParam, oParamList, n, param_arg, p, originalArg, nArgs
-
     oParamList := Array()
     
     Loop Parse sParamList, A_Space, A_Space
@@ -321,52 +281,6 @@ GetRegionalAsset(assetPath, sysKey:="")
     return asset
 }
 
-;Vector to another emulator/game
-;Note 1: Do not pass extra arguments in the args
-;Note 2: Extra arguments (like -video gdi) passed in the original commandline should still
-; work providing they are compatible with the emulator being vectored to (i.e. the vectored
-; emulator supports these passthrough args inits param_list).
-VectorNow(args)
-{
-    global A_Args
-
-    emu := SplitVector(args)["sys_key"]
-    romspec := SplitVector(args)["rom_value"]
-
-    ;Fill in possible template fields (for example, for the vector_to rule)
-    ;------------------------------------------------------------------------------------------------------
-    romspec := InsertTemplateField(romspec, "[sys_key]", gCfg.sys_key, "romspec")
-    romspec := InsertTemplateField(romspec, "[asset_name]", gCfg.asset_name, "romspec")
-    romspec := InsertTemplateField(romspec, "[root_folder]", gCfg.root_folder, "romspec")
-    romspec := InsertTemplateField(romspec, "[rom_full_path]", gCfg.rom_full_path, "romspec")
-    romspec := InsertTemplateField(romspec, "[rom_file]", gCfg.rom_file, "romspec")
-    romspec := InsertTemplateField(romspec, "[rom_folder]", gCfg.rom_folder, "romspec")
-    romspec := InsertTemplateField(romspec, "[rom_folder_parent]", gCfg.rom_folder_parent, "romspec")
-    romspec := InsertTemplateField(romspec, "[rom_name]", gCfg.rom_name, "romspec")	
-    ;If [rom] is specified, use either rom_name or rom_full_path depending on which is available
-    if (gCfg.rom_full_path)
-        romspec := InsertTemplateField(romspec, "[rom]", gCfg.rom_full_path, "romspec")
-    else if (gCfg.rom_file)
-        romspec := InsertTemplateField(romspec, "[rom]", gCfg.rom_file, "romspec")
-    else
-        romspec := InsertTemplateField(romspec, "[rom]", gCfg.rom_name, "romspec")
-    ;------------------------------------------------------------------------------------------------------
-    
-    A_Args := Array()
-
-    if (oEmulators.IsValidKey(emu))
-    {
-        A_Args.Push(emu)
-        A_Args.Push(romspec)
-    }
-    else
-    {
-        A_Args.Push(romspec)
-    }
-
-    return
-}
-
 ;Parse a decorated command line and return the base command line along 
 ;with any specified runtime options.
 ParseRTParams(cl, &runStyle, &runOption, &windowStyle, &winset_style)
@@ -419,14 +333,14 @@ ParseRTParams(cl, &runStyle, &runOption, &windowStyle, &winset_style)
     return cl_path
 }
 
-;build Emu_Args parameter array from param_list string
+;build aEmuArgs parameter array from param_list string
 BuildEmuArgs() 
 {
-    global Emu_Args
+    global aEmuArgs
 
     idx := 1
     startString := false ;used in processing double-quoted items having spaces
-    Emu_Args := Array()
+    aEmuArgs := Array()
 
     Loop Parse gCfg.param_list, A_Space, A_Space
     {	
@@ -438,7 +352,7 @@ BuildEmuArgs()
         
         if (InStr(A_LoopField, "`"") && SubStr(A_LoopField, StrLen(A_LoopField), 1) != "`"")
         { 
-            Emu_Args.Push(A_LoopField)
+            aEmuArgs.Push(A_LoopField)
             
             if (SubStr(A_LoopField, StrLen(A_LoopField), 1) = "`"")
             {
@@ -453,10 +367,10 @@ BuildEmuArgs()
         
         else if (SubStr(A_LoopField, StrLen(A_LoopField), 1) = "`"")
         {
-            if (!Emu_Args.Has(idx))
-                Emu_Args.Push(A_LoopField)
+            if (!aEmuArgs.Has(idx))
+                aEmuArgs.Push(A_LoopField)
             else
-                Emu_Args[idx] := Emu_Args[idx] . " " . A_LoopField
+                aEmuArgs[idx] := aEmuArgs[idx] . " " . A_LoopField
             
             startString := false
             idx := idx + 1
@@ -464,440 +378,30 @@ BuildEmuArgs()
         }
         
         else if (startString)
-            Emu_Args[idx] := Emu_Args[idx] . " " . A_LoopField
+            aEmuArgs[idx] := aEmuArgs[idx] . " " . A_LoopField
         
         else
         {
-            Emu_Args.Push(A_LoopField)
+            aEmuArgs.Push(A_LoopField)
             idx := idx + 1
         }		
     }
 }
 
-; Rebuild param_list from Emu_Args
+; Rebuild param_list from aEmuArgs
 BuildParamList()
 {    
     global gCfg
 
     gCfg.param_list := ""
-    for n, param in Emu_Args ; For each parameter:
+    for n, param in aEmuArgs ; For each parameter:
         gCfg.param_list := gCfg.param_list " " param
-}
-
-RunApps(assetName, romName, appList, appFilter:="")
-{
-    ;global
-
-    ;local n, param, cChar
-    ;local this_exe_full_path, this_param_list, this_test_profile
-    ;local cut_start_pos, cut_end_pos, left_part, right_part
-    ;local profileDefined, exe_ops, run_style, full_command_line
-    
-    local this_profile := ""
-    local tAppList := "", bOpenP := false
-
-    ;tokenize commas inside () as semi-colons so we can
-    ;parse apps by commas later.
-    Loop
-    {
-        if (A_Index = StrLen(appList)+1)
-            break
-        
-        cChar := SubStr(appList, A_Index, 1)
-        if (cChar = "(")
-            bOpenP := true
-        if (cChar = ")")
-            bOpenP := false
-        if (bOpenP && cChar = ",")
-        {
-            tAppList := tAppList . ";"
-            continue
-        }
-        tAppList := tAppList . cChar		
-    }
-    appList := tAppList	
-    
-    Loop Parse appList, "," A_Space 
-    {
-        ;run all unmarked apps in the list (not prefixed with "+" or "-")
-        if (appFilter = "")
-        {
-            if (SubStr(A_LoopField,1,1) != "-" && SubStr(A_LoopField,1,1) != "+")
-                this_app := A_LoopField
-            else
-                continue
-        }
-        
-        ;only run the "+" apps in the appList
-        if (appFilter = "+")
-        {
-            if (SubStr(A_LoopField,1,1) = "+")
-                this_app := SubStr(A_LoopField,2)
-            else
-                continue
-        }
-        
-        ;only run the "-" apps in the appList
-        if (appFilter = "-")
-        {
-            if (SubStr(A_LoopField,1,1) = "-")
-                this_app := SubStr(A_LoopField,2)
-            else
-                continue
-        }
-        
-        ;Call internal function
-        if (InStr(this_app, "(",,1,1) && InStr(this_app, ")",,1,1)) ;if there are () in the app, it must be an internal function
-        {
-            this_function := SubStr(this_app, 1, InStr(this_app, "(",,1,1)-1)
-            this_function_params := SubStr(this_app, StrLen(this_function)+2, StrLen(this_app)-StrLen(this_function)-2)
-            switch this_function
-            {
-                case "minimize":
-                    %this_function%(this_function_params, gCfg.debug_mode)
-                case "maximize":
-                    %this_function%(this_function_params, gCfg.debug_mode)
-                case "hidewin":
-                    %this_function%(this_function_params, gCfg.debug_mode)
-                case "showwin":
-                    %this_function%(this_function_params, gCfg.debug_mode)
-                case "killwin":
-                    %this_function%(this_function_params, gCfg.debug_mode)
-                case "delay":
-                    wait(this_function_params, gCfg.debug_mode)
-                case "send":
-                    sndmsg(this_function_params, gCfg.debug_mode)
-                default:
-                    LogEntry("ERROR: Undefined run_apps function defined: " this_function " . Please fix and try again.`n")
-                    ExitApp 
-            }
-           
-            continue
-        }
-       
-        ;lookup the app in the applications list to find out how to run it
-        for n, param in mApplications
-        {
-            if (param.app_key == this_app)
-            {
-                this_exe_full_path := param.exe_full_path
-                this_profile := param.profile
-                this_param_list := param.param_list	
-                
-                this_profile := InsertTemplateField(this_profile, "[asset_name]", assetName, "this_profile")
-                this_profile := InsertTemplateField(this_profile, "[rom_file]", gCfg.rom_file, "this_profile")
-                this_profile := InsertTemplateField(this_profile, "[rom_name]", romName, "this_profile")
-                
-                ;The standard filename in folder version of smart_name
-                if (Instr(this_profile, "\[smart_name]"))
-                {
-                    this_test_profile := StrReplace(this_profile, "[smart_name]", romName)
-                    Loop Files this_test_profile, "R"
-                        this_profile := A_LoopFileFullPath
-                    
-                    if (!FileExist(this_profile))
-                    {
-                        this_test_profile := this_profile
-                        this_test_profile := StrReplace(this_profile, "[smart_name]", assetName)
-                        Loop Files this_test_profile, "R"
-                            this_profile := A_LoopFileFullPath
-                        
-                        if (!FileExist(this_profile))
-                        {
-                            this_test_profile := this_profile
-                            cut_end_pos := InStr(this_test_profile, "[smart_name]")
-                            this_test_profile := StrReplace(this_test_profile, "[smart_name]", "default")
-                            cut_start_pos := InStr(this_test_profile, "\",,,-2)
-                            left_part := SubStr(this_test_profile, 1, cut_start_pos)
-                            right_part := SubStr(this_test_profile, cut_end_pos)
-                            this_test_profile := left_part . right_part
-                            if FileExist(this_test_profile)
-                                this_profile := this_test_profile
-                            else
-                            {
-                                LogEntry("Couldn't process [smart_name]: " this_test_profile " (not found)`n")
-                                continue
-                            }
-                        }
-                    }
-                }
-                
-                ;The single-folder "flat" name version of smart_name (useful for JoyToKey)
-                if (Instr(this_profile, "_[smart_name]"))
-                {
-                    this_test_profile := StrReplace(this_profile, "[smart_name]", romName)
-                    if FileExist(this_test_profile)
-                        this_profile := this_test_profile
-                    else
-                    {
-                        this_test_profile := this_profile
-                        this_test_profile := StrReplace(this_profile, "_[smart_name]", "")
-                        if FileExist(this_test_profile)
-                            this_profile := this_test_profile
-                        else
-                        {
-                            this_test_profile := this_profile
-                            cut_end_pos := InStr(this_test_profile, "[smart_name]")
-                            this_test_profile := StrReplace(this_test_profile, "[smart_name]", "default")
-                            cut_start_pos := InStr(this_test_profile, "\",,-1,)
-                            left_part := SubStr(this_test_profile, 1, cut_start_pos)
-                            right_part := SubStr(this_test_profile, cut_end_pos)
-                            this_test_profile := left_part . right_part
-                            if FileExist(this_test_profile)
-                                this_profile := this_test_profile
-                            else
-                            {
-                                LogEntry("Couldn't process [smart_name]: " this_test_profile " (not found)`n")
-                                continue
-                            }
-                        }
-                    }
-                }
-                
-                ;determine whether a profile (i.e. a configuration file) is defined for the application
-                profileDefined := false
-                if (InStr(this_param_list, "[profile]") && this_profile)
-                    profileDefined := true
-                
-                ;Process template fields. All apps having a profile must have at least [profile]
-                ;in the param_list, otherwise it can't be run.
-                if (!InStr(this_param_list, "[profile]") && this_profile)
-                    LogEntry("CONFIG WARNING: Application: " this_app ". A profile is defined but no [profile] template was found in the param_list.`n")
-                this_param_list := StrReplace(this_param_list, "[sys_key]", gCfg.sys_key)
-                this_param_list := StrReplace(this_param_list, "[profile]", this_profile)
-                this_param_list := StrReplace(this_param_list, "[asset_name]", assetName)
-                this_param_list := StrReplace(this_param_list, "[rom_name]", romName)
-                this_param_list := StrReplace(this_param_list, "[rom_file]", gCfg.rom_file)
-                this_param_list := StrReplace(this_param_list, "[rom_full_path]", gCfg.rom_full_path)
-                this_param_list := StrReplace(this_param_list, "[rom_folder]", gCfg.rom_folder)
-                this_param_list := StrReplace(this_param_list, "[rom_folder_parent]", gCfg.rom_folder_parent)
-                
-                cl := ParseRTParams(this_exe_full_path, &runStyle, &runOption, &windowStyle, &winset_style)
-                
-                ;Only run the application if the defined profile file exists or if there is no profile defined AND 
-                ;  if the application is not listed to be skipped for this front-end
-                if ( (FileExist(this_profile) || !profileDefined) && (!InStr(param.fe_skip, gCfg.fe_key)) ) 
-                {
-                    Launch(runStyle, cl, this_param_list, "APPLICATION (" this_app ")", runOption,,,&pid_last_app) ;note pid_last_app is a global (don't make local)
-                }
-                else
-                    if InStr(param.fe_skip, gCfg.fe_key)
-                    LogEntry("NOTICE: LAUNCH APPLICATION (" . this_app . "): SKIPPED (fe_skip=" . gCfg.fe_key . "): " . runStyle . " " . cl . " " . this_param_list . "`n")
-                else
-                    LogEntry("NOTICE: LAUNCH APPLICATION (" . this_app . "): SKIPPED (profile not found): " . runStyle . " " . cl . " " . this_param_list . "`n")
-            }
-        }
-    }
-
-    return
-}
-
-;These functions can be dynamically called by specifying them in a run_apps key value
-;*********************************************************************************************
-minimize(params,debugMode)
-{
-    if (debugMode)
-        LogEntry("(launch suppressed) LAUNCH: BUILT-IN FUNCTION: minimize(" params ")`n") 
-    else
-    {
-        try {
-            SetTitleMatchMode 2
-            WinMinimize params
-            LogEntry("LAUNCH: BUILT-IN FUNCTION: minimize(" params ")`n")
-        }
-        catch
-            LogEntry("LAUNCH: BUILT-IN FUNCTION FAILED: minimize(" params ")`n")
-    }
-}
-
-maximize(params,debugMode)
-{
-    if (debugMode)
-        LogEntry("(launch suppressed) LAUNCH: BUILT-IN FUNCTION: maximize(" params ")`n") 
-    else
-    {
-        try {
-            SetTitleMatchMode 2
-            WinMaximize params
-            LogEntry("LAUNCH: BUILT-IN FUNCTION: maximize(" params ")`n")
-        }
-        catch
-            LogEntry("LAUNCH: BUILT-IN FUNCTION FAILED: maximize(" params ")`n")
-    }
-
-    return
-}
-
-hidewin(params,debugMode)
-{
-    if (debugMode)
-        LogEntry("(launch suppressed) LAUNCH: BUILT-IN FUNCTION: minimize(" params ")`n") 
-    else
-    {
-        try {
-            SetTitleMatchMode 2
-            WinSetTransparent 0, params
-            LogEntry("LAUNCH: BUILT-IN FUNCTION: hidewin(" params ")`n")
-        }
-        catch
-            LogEntry("LAUNCH: BUILT-IN FUNCTION FAILED: hidewin(" params ")`n")
-    }
-
-    return
-}
-
-showwin(params,debugMode)
-{
-    if (debugMode)
-        LogEntry("(launch suppressed) LAUNCH: BUILT-IN FUNCTION: maximize(" params ")`n") 
-    else
-    {
-        try {
-            SetTitleMatchMode 2
-            WinSetTransparent 255, params
-            LogEntry("LAUNCH: BUILT-IN FUNCTION: showwin(" params ")`n")
-        }
-        catch
-            LogEntry("LAUNCH: BUILT-IN FUNCTION FAILED: showwin(" params ")`n")
-    }
-
-    return
-}
-
-killwin(params,debugMode)
-{
-    if (debugMode)
-        LogEntry("(launch suppressed) LAUNCH: BUILT-IN FUNCTION: kill(" params ")`n") 
-    else
-    {
-        try {
-            SetTitleMatchMode 2
-            WinKill params
-            LogEntry("LAUNCH: BUILT-IN FUNCTION: killwin(" params ")`n")
-        }
-        catch
-            LogEntry("LAUNCH: BUILT-IN FUNCTION FAILED: killwin(" params ")`n")
-    }
-
-    return
-}
-
-;built-in function (called as "delay")
-wait(params,debugMode)
-{
-    if (debugMode)
-        LogEntry("(launch suppressed) LAUNCH: BUILT-IN FUNCTION: delay(" params ")`n") 
-    else
-    { 
-        try {
-            Sleep params
-            LogEntry("LAUNCH: BUILT-IN FUNCTION: delay(" params ")`n")
-        }
-        catch
-            LogEntry("LAUNCH: BUILT-IN FUNCTION FAILED: delay(" params ")`n")
-    }
-    
-    return
-}
-
-;built-in function (called as "send")
-sndmsg(params,debugMode)
-{
-    aParams := StrSplit(params, ";", " ")
-    if (aParams.Length == 0)
-        return
-    
-    if (debugMode)
-        LogEntry("(launch suppressed) LAUNCH: BUILT-IN FUNCTION: send(" . aParams[1] . "," . aParams[2] . ")`n") 
-    else
-    {
-        if (Params.Length == 2) 
-            delayFor := "-" . aParams[2]
-        else
-            delayFor := 0
- 
-        fSendMsg := SendMsg.Bind(aParams[1])
-        try {
-            SetTimer fSendMsg, delayFor
-            LogEntry("LAUNCH: BUILT-IN FUNCTION: send(" . aParams[1] . "," . delayFor . ")`n") 
-        }
-        catch
-            LogEntry("WARNING: BUILT-IN FUNCTION FAILED: send(" . aParams[1] . "," . delayFor . ")`n")
-    } 
-    
-    return
-}
-
-SendMsg(msg)
-{    
-    try {
-        Send msg
-        LogEntry("INFO: Sent message: [" msg "] via built-in function.`n")
-    }
-    catch
-        LogEntry("INFO: Sent message failed: [" msg "] via built-in function.`n")
-    
-    return
-}
-
-;Launch application or emulator
-;runStyle:   "Run" or "RunWait"
-;fullPath:   full path to the executable (ex. D:\Emulators\MAME\mame.exe)
-;paramList:  full parameter string for the executable
-;typeApp:    type of app in all caps, such as "APPLICATION", "EMULATOR"
-;runOptions: runtime option, empty, "Min", "Max", "Hide"
-Launch(runStyle, fullPath, paramList, typeApp, runOption:="", windowStyle:="", appPID:="", &pid_id:="")
-{
-    ;global
-    
-    loggedRunOption := "", loggedWindowStyle := ""    
-    fullCommandLine := fullPath . " " . paramList
-    success := false
-    
-    if (runOption)
-        loggedRunOption := " (" runOption ")"
-    
-    if (windowStyle)
-        loggedWindowStyle := " (" windowStyle ")"
-    
-    if (gCfg.debug_mode)
-    {
-        LogEntry("(launch suppressed) LAUNCH: " . typeApp . ": " . runStyle . loggedWindowStyle . loggedRunOption . " " . fullCommandLine . "`n")
-        return
-    }
-    
-    if FileExist(fullPath)
-    {
-        LogEntry("LAUNCH: " . typeApp . ": " . runStyle . loggedRunOption . " " . fullCommandLine . "`n")
-
-        try 
-        {
-            if (runStyle == "Run")
-                Run(fullCommandLine,,runOption, &pid_id)
-            else if (runStyle == "RunWait")
-                RunWait(fullCommandLine,,runOption, &pid_id)
-        }
-        catch as e
-        {
-            LogEntry("ERROR: ATTEMPTING TO RUN FILE: " FormatErrorMessage(e) "`nFull Command Line: " fullCommandLine "`n")
-            ExitApp
-        }
-
-        success := true
-    }
-    else
-    { msg_type := typeApp == "EMULATOR" ? "ERROR" : "NOTICE"
-        LogEntry(msg_type . ": LAUNCH: " . typeApp . ": SKIPPED (exe not found): " . runStyle . loggedRunOption . " " . fullCommandLine . "`n")
-    }
-    
-    return success
 }
 
 ;Fill in templates in the parameter list such as [sys_key], [root_folder], etc.
 ProcessParamListTemplates()
 {
     global gCfg
-    ;local rfolder, z, emu_set, cl
 
     ;refresh _settings with any changes made to local variables
     for z, emu_set in oEmulators.Emulators[gCfg.sys_key]._settings
@@ -1015,7 +519,7 @@ ProcessParamListTemplates()
 }
 
 ;This function obtains rom file path(s) from the vector components
-;syskey and romname. For example, passing in "mame" to this functin as the sysKey
+;syskey and romname. For example, passing in "mame" to this function as the sysKey
 ;and "gala" as the romFileName will return an object (oRoms) containing the paths
 ;to all potential matches, with the best match returned in the first record. This function
 ;relies on the search paths existing in the system's configuration, and is useful
@@ -1079,8 +583,6 @@ GetRoms(sysKey, romFileName, &oRoms)
 ;For example: C:\mypath\myroms\*.rom,bin,iso
 GetFuzzyRom(sysKey, romFileName, &oRoms)
 { 
-    global rom_title
-
     try 
     {
         aSearchPaths := ParseSearchPath(sysKey)
@@ -1213,7 +715,7 @@ InsertTemplateField(targetText, templateText, replacementText, iniItem)
 ;argList = array of input arguments
 ;originalArgs = comma delimited list of original arg list
 ;newArgs = comma delimited list of new arg list
-;typeArgs = "A_Args" or "Emu_Args" (used for validation)
+;typeArgs = "A_Args" or "aEmuArgs" (used for validation)
 ProcessOverrideArgs(&argList, typeArgs:="A_Args")
 {    
     global cl_start_screen, cl_exit_screen, cl_run_apps
@@ -1236,7 +738,7 @@ ProcessOverrideArgs(&argList, typeArgs:="A_Args")
         ;   arg_2 = the argument# from the original command line  		
         if (InStr(input_arg, "-use_args"))
         {
-            if (typeArgs = "Emu_Args")
+            if (typeArgs = "aEmuArgs")
             {
                 LogEntry("ERROR: -use_args is not legal in a parameter list.`n")
                 ExitApp
@@ -1310,9 +812,6 @@ ProcessOverrideArgs(&argList, typeArgs:="A_Args")
 ;Takes a searchPath and returns a reversed array of its paths
 ParseSearchPath(sysKey)
 {
-    ;global
-    ;local e, err, searchPath, rootFolder, bIsRootSearch, searchPattern, romSegment, aSearchPaths, n, sPath
-
     ;if a root path search is specified (i.e. [root_folder]_*\roms\*.zip) then we create
     ;an array of all the search paths.
     ;we don't see the [root_folder] template here since it will already have been replaced.
@@ -1360,10 +859,6 @@ ParseSearchPath(sysKey)
 FrontEndStartup()
 {
     global gCfg, log_file
-    
-    ;local config_section, e, fe_sections
-    ;local os_fe_key, os_asset_name, os_exe_full_path, os_run_apps
-    ;local this_fe_key, this_asset_name, this_exe_full_path, this_run_apps 
     
     ran_fe := false
     
@@ -1454,6 +949,28 @@ FrontEndStartup()
     }
     
     return ran_fe
+}
+
+;Replace any commas past the last \ character with the currently
+;set gCfg.path_delimiter. This makes it easier for the parser to 
+;deal with paths that contain commas.
+TokenizePath(sPath)
+{
+	;Only do this if the path_delimiter is not a comma
+	;in order to preserve legacy behavior in that case
+	if (gCfg.path_delimiter != ",")
+	{
+		nLastBs := InStr(sPath, "\",, -1)
+		sFirstPart := SubStr(sPath, 1, nLastBs)
+		sLastPart := SubStr(sPath, nLastBs+1)
+		sLastPart := StrReplace(sLastPart, ",", "|")
+	}
+	else
+	{
+		return sPath
+	}
+
+	return sFirstPart . sLastPart
 }
 
 IdleLogEntry(logString)
@@ -1574,4 +1091,88 @@ LogError(e, mode)
 {
     LogEntry("ERROR: Unhandled exception: " FormatErrorMessage(e) "`n")
     ExitApp
+}
+
+;Add contents to the directswitch_folder.
+;Used during initialization and -clean operations
+PopulateDirectSwitchFolder()
+{
+    if (InStr(FileExist(directswitch_folder), "D") && !FileExist(directswitch_folder "\readme.txt"))
+    {
+        try 
+           FileAppend "
+        (
+A direct-launch file is simply a text (txt) file whose name is either a hotstring or hotkey sequence, and whose
+content is a vector to a game in the form <sys_key> <rom>. When the hot-sequence specified by the file name
+is issued on the machine, arcadeEIP will immediately switch to the game specified by the file contents.
+Direct-launch files must be placed in the \Direct subfolder of arcadeEIP.
+
+Hotstring Files
+===============
+To create a hotstring file, the name of the file must begin with the prefix "@!@", and be followed by a 
+unique text string.  See example, @!@mame_zaxxon.txt file in this folder which illustrates a file that will
+launch Zaxxon in MAME using the key sequence "@!@mame_zaxxon" followed by ENTER.
+
+Note that normally, the terminating ENTER will be issued by the external macro that broadcasts the string (such
+as a control panel button macro, Elgato Stream Deck macro, etc.).
+
+Important: Hotstrings will only be recognized by arcadeEIP if it is the active window. A reliable way to ensure
+this is to perform a virtual mouse click on the window prior to issuing the hotstring. Therefore, any macro 
+created to use hotstrings to switch games should first perform such a mouse click followed by a short delay 
+(200ms should be sufficient), prior to sending the hotstring text. If this is not possible, then you must use
+a hotkey file instead.
+
+Hotkey Files
+============
+To create a hotkey file, the name of the file must be a hotkey sequence composed of any Autohotkey modifers
+(https://www.autohotkey.com/docs/Hotkeys.htm) that are permitted in a filename.  See example ^!1.txt in this 
+folder that will launch the game Galaga in MAME using the key sequence Ctrl-Alt-1 anytime while in arcadeEIP.
+
+In general, hotstrings are preferred when there are a large number of games that will be mapped, since you do
+not have to worry about running out of hotkey combinations or potential conflicts with hotkeys of other 
+applications.  Hotkeys are preferred when there are fewer games, or it is difficult to automate a mouse click
+operation before issuing a hotstring. 
+
+Tip
+===
+If you would like to create hotstring files in bulk, you may use the -createproxy command line function 
+that is documented in "Command Line Reference Guide.pdf". For example, by using a command line such as...
+
+   >eip.exe -createproxy D:\Emulators\MAME\roms\*.zip D:\arcadeEIP\temp\*.txt mame rom_full_path @!@
+
+you can easily create direct-switch proxy files having an appropriate prefix for all mame roms. Once done,
+you can then copy just the ones you want into the \Direct folder as needed.
+
+Warning
+=======
+Note: Other than the two types of files listed above and this readme.txt file, do not place files of any other 
+type in this folder or arcadeEIP will fail with an error.
+
+        )", directswitch_folder "\readme.txt"
+
+        catch     
+            LogEntry("NOTICE: Failed to create file, " directswitch_folder "\readme.txt.`n")
+        else  
+            LogEntry("INFO: Created file, " directswitch_folder "\readme.txt.`n")            
+    }
+
+    if (InStr(FileExist(directswitch_folder), "D") && !FileExist(directswitch_folder . "\^!1.txt"))
+    {
+        try
+            FileAppend "mame asteroid", directswitch_folder "\^!1.txt"          ;create sample direct-switch hotkey file
+        catch
+            LogEntry("NOTICE: Failed to create file, " directswitch_folder "\^!1.txt.`n") 
+        else       
+            LogEntry("INFO: Created file, " directswitch_folder "\^!1.txt.`n")     
+    }
+
+    if (InStr(FileExist(directswitch_folder), "D") && !FileExist(directswitch_folder . "\@!@mame_zaxxon.txt"))
+    {
+        try
+            FileAppend "mame zaxxon", directswitch_folder "\@!@mame_zaxxon.txt" ;create sample direct-switch hotstring file
+        catch
+            LogEntry("NOTICE: Failed to create file, " directswitch_folder "\@!@mame_zaxxon.txt.`n") 
+        else     
+            LogEntry("INFO: Created file, " directswitch_folder "\@!@mame_zaxxon.txt.`n")            
+    }
 }

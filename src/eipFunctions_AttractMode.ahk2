@@ -64,8 +64,8 @@ UpdateAutoAttractList()
         if (attract_list && attract_list.Length > 0)
         {
             ;clear the existing list
-            if (FileExist(attract_pattern))
-                FileDelete(attract_pattern)
+            if (FileExist(gCfg.attract_pattern))
+                FileDelete(gCfg.attract_pattern)
 
             ;create vector files from the count-sorted attract_list
             for n, item in attract_list
@@ -110,8 +110,6 @@ AttractSwitch(update:=false, add_vector:="")
     static originalSize
     static last_vector
 
-    ;local size, sysKey, mapExit, vector_array, vector
-
     size := attractList.Length
 
     ;This forces a re-read/rebuild of originalList so that any games added/removed
@@ -124,7 +122,7 @@ AttractSwitch(update:=false, add_vector:="")
             return
         
         originalList := Array()
-        Loop Files attract_pattern
+        Loop Files gCfg.attract_pattern
         {
             Loop Read A_LoopFileFullPath
             {
@@ -263,7 +261,7 @@ AttractSwitch(update:=false, add_vector:="")
         ;updates vector file list if in auto mode
         UpdateAutoAttractList() 
 
-        Loop Files attract_pattern
+        Loop Files gCfg.attract_pattern
         {
             Loop Read A_LoopFileFullPath
             {
@@ -447,10 +445,6 @@ AttractSwitch(update:=false, add_vector:="")
 ;See the MouseDelta class for more information about this function.
 MouseEvent(MouseID, x := 0, y := 0)
 {  
-    ;global
-
-    ;local horiz, vert
-
     ;speed values of 5 & 5 work good for a trackball
     static yu := 0, yd := 0, ymaxspeed := 5
     static xr := 0, xl := 0, xmaxspeed := 20

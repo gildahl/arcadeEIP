@@ -6,7 +6,7 @@
 
 ;This class is to support creation of the default configuration
 ;files (arcadeEIP.ini and arcadeEIP_Example.ini)
-class config_manager_class
+class config_creation_class
 {
 	_filename := ""
 	_option := "All"
@@ -72,14 +72,12 @@ class config_manager_class
 	}
 }
 
-;This class encapsulates a few functions related to
+;This class encapsulates a few light functions related to
 ;reading the configuration file (arcadeEIP.ini)
 class config_file_class
 {
 	__New(config_file)
 	{
-		;global
-
 		this._config_file := config_file
 
 		config_sections := ""
@@ -91,8 +89,6 @@ class config_file_class
 
 	GetGroupSections(grp)
 	{
-		;global
-
 		grp := grp . "_"
 		config_sections := this._config_sections
 
@@ -116,7 +112,7 @@ class config_file_class
 	;Currently only used on the Key_Map section to set the key map variables.
 	ReadSection(sec)
 	{
-		global ;gCfg
+		global
 		local cfg, settings, oSetting, key, value
 
 		cfg := this._config_file
@@ -133,6 +129,7 @@ class config_file_class
 	}
 }
 
+;class used to store full rom vector and match information
 class rom_class
 {
 	_system := ""
@@ -201,27 +198,6 @@ class rom_class
 	}
 }
 
-class master_sound_class
-{
-	Off()
-	{
-		global
-
-		master_mute := SoundGetMute()
-        if (master_mute = "Off")
-			SoundSetMute +1
-	}
-
-	On()
-	{
-		global
-
-		master_mute := SoundGetMute()
-        if (master_mute = "On")
-			SoundSetMute +1
-	}
-}
-
 ;suspend a process. 
 ;used by pause
 class suspend_process_class
@@ -270,6 +246,23 @@ class suspend_process_class
 	}
 }
 
+;static class. Controls master sound on/off
+class MasterSound
+{
+	static Off()
+	{
+		master_mute := SoundGetMute()
+        if (master_mute == "Off")
+			SoundSetMute +1
+	}
+
+	static On()
+	{
+		master_mute := SoundGetMute()
+        if (master_mute == "On")
+			SoundSetMute +1
+	}
+}
 
 ;static class supporting enabling and disabling controls
 class ControlActivationState
@@ -296,8 +289,7 @@ class ControlActivationState
 	static DisablePauseControls()
 	{
 		global
-		;this._pause_disabled++
-
+	
 		;Turn off the left/right keys for navigation
 		Loop Parse gCfg.left_key, "CSV"
 			Hotkey A_LoopField, "Off"

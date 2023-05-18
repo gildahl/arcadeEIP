@@ -6,9 +6,9 @@
 CreateConfigTemplate(arg)
 {
     if (arg == "-createcfg")
-        oCM := config_manager_class(config_file, "normal")
+        oCM := config_creation_class(config_file, "normal")
     else if (arg == "-createcfgexample")
-        oCM := config_manager_class(config_example, "verbose")
+        oCM := config_creation_class(config_example, "verbose")
     else {
         LogEntry("ASSERT CREATECONFIG SCENARIO: Investigate this case.`n")
         ExitApp

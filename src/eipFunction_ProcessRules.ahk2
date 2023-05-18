@@ -5,17 +5,8 @@
 ;Implements the arcadeEIP rules engine
 ProcessRules()
 {
-    global mRules, gCfg, Emu_Args, bDoRuleVector, proxy_type, proxy_contents, search_tag, oEmulators
+    global mRules, gCfg, aEmuArgs, bDoRuleVector, proxy_type, proxy_contents, search_tag, oEmulators
     
-    ;local arg_1, arg_2
-    ;local n, e, fnc, idx, cl, len
-    ;local this_rule, param, param_list_copy
-    ;local varFile, filename, file_to_run
-    ;local new_folder, proxy_file, proxy_folder, proxy_full_path
-    ;local sys_key_test, aSearchPaths, searchPath
-    ;local foundRom, param_is_quoted, search_pattern, rom_subfolder, current_folder
-    ;local tempArgs, partial_config_file, partial_config_section    
-
     for n, this_rule in mRules
     {
         ;*** custom function ***
@@ -47,7 +38,7 @@ ProcessRules()
                     varFile.WriteLine(gCfg.exe_name)
                     varFile.WriteLine(gCfg.root_folder)		
                     param_list_copy := ""
-                    for n, param in Emu_Args
+                    for n, param in aEmuArgs
                     {
                         param_list_copy := param_list_copy " " param
                     }
@@ -81,7 +72,7 @@ ProcessRules()
                     gCfg.param_list := Trim(varFile.ReadLine(), OmitChars := " `n`r")
                     varFile.Close
                     
-                    BuildEmuArgs()	;rebuild Emu_Args from param_list	
+                    BuildEmuArgs()	;rebuild aEmuArgs from param_list	
                     
                     if (FileExist(filename))
                         FileDelete(filename)
@@ -187,20 +178,20 @@ ProcessRules()
             {		
                 if (this_rule.policy = "")
                 {
-                    for n, cl in Emu_Args
+                    for n, cl in aEmuArgs
                     {
                         if (cl = A_LoopField)
-                            Emu_Args.Delete(n)
+                            aEmuArgs.Delete(n)
                     }
                 }
                 if (this_rule.policy = "if_rom_in_list")
                 {
                     if InStr(this_rule.arg_2, gCfg.rom_name)
                     {
-                        for n, cl in Emu_Args
+                        for n, cl in aEmuArgs
                         {
                             if (cl = A_LoopField)
-                                Emu_Args.Delete(n)
+                                aEmuArgs.Delete(n)
                         }
                     }
                 }
@@ -208,10 +199,10 @@ ProcessRules()
                 {
                     if !InStr(this_rule.arg_2, gCfg.rom_name)
                     {
-                        for n, cl in Emu_Args
+                        for n, cl in aEmuArgs
                         {
                             if (cl = A_LoopField)
-                                Emu_Args.Delete(n)
+                                aEmuArgs.Delete(n)
                         }
                     }
                 }
@@ -219,7 +210,7 @@ ProcessRules()
             
             ;rebuild param_list
             gCfg.param_list := ""
-            for n, param in Emu_Args
+            for n, param in aEmuArgs
                 gCfg.param_list := gCfg.param_list " " param
         }
         
@@ -416,7 +407,7 @@ ProcessRules()
                 {
                     origParamList := gCfg.param_list
                     gCfg.param_list := proxy_contents[1]
-                    BuildEmuArgs() ;parses param_list and puts into Emu_Args array
+                    BuildEmuArgs() ;parses param_list and puts into aEmuArgs array
                     
                     ;Support the use of pre-processor override instructions in the proxy file's param_list
                     ;only cl_use_args won't be supported here (which wouldn't make sense in a parameter list anyway)
@@ -424,9 +415,9 @@ ProcessRules()
                     ; test at some point and add to docs. Provides the ability to add command line arguments into
                     ; a proxy's param_list. Not really sure how useful this really is in retrospect though. Consider removal
                     ; since it perhaps unnecessarily complicates the logic of this rule and the ProcessOverrideArgs method]
-                    if (ProcessOverrideArgs(&Emu_Args, "Emu_Args"))
+                    if (ProcessOverrideArgs(&aEmuArgs, "aEmuArgs"))
                     {					
-                        BuildParamList()				;Build param_list from the new Emu_Args 				
+                        BuildParamList()				;Build param_list from the new aEmuArgs 				
                         ProcessFeOverrides() ;Apply Front-End overrides (start_screen, exit_screen, etc.)
                         ProcessEmulatorOverrides() ;Apply Emulator overrides (run_apps, etc.)
                     }
@@ -442,7 +433,7 @@ ProcessRules()
                     oEmulators.Emulators[gCfg.sys_key].param_list := gCfg.param_list
                     oEmulators.Emulators[gCfg.sys_key]._default_settings["param_list"] := gCfg.param_list
                     ProcessParamListTemplates()   ;Process standard template items like [rom], [rom_name], etc.
-                    BuildEmuArgs()				  ;Build Emu_Args from the revised parameter list. 
+                    BuildEmuArgs()				  ;Build aEmuArgs from the revised parameter list. 
                     
                     ;don't return...
                     
@@ -477,10 +468,10 @@ ProcessRules()
             foundRom := false
             searchTag := ""
             
-            ;get current Emu_Args array index of the rom_full_path
-            ;use n and not the loop's A_Index since Emu_Args may not be sequential
+            ;get current aEmuArgs array index of the rom_full_path
+            ;use n and not the loop's A_Index since aEmuArgs may not be sequential
             ;if items were added or removed by other rules.
-            for n, param in Emu_Args 
+            for n, param in aEmuArgs 
             {
                 ;param will carry any quotes specified in the classic.ini file but
                 ;the rom_* vars will have them stripped.  So remove quotes
@@ -551,9 +542,9 @@ ProcessRules()
                 gCfg.rom_full_path := gCfg.root_folder . rom_subfolder . "\" . gCfg.rom_file
                 if (param_is_quoted)
                     gCfg.rom_full_path := "`"" gCfg.rom_full_path "`""
-                len := Emu_Args.Length
-                Emu_Args.RemoveAt(pathIdx)
-                Emu_Args.InsertAt(pathIdx, gCfg.rom_full_path)
+                len := aEmuArgs.Length
+                aEmuArgs.RemoveAt(pathIdx)
+                aEmuArgs.InsertAt(pathIdx, gCfg.rom_full_path)
             }
 
             ;Read partial arcadeEIP.ini if present
@@ -589,7 +580,7 @@ ProcessRules()
                 tempArgs := oOriginalArgs.Clone()
                 gCfg.param_list := ProcessPassthroughArgs(&tempArgs, gCfg.param_list)
                 ProcessParamListTemplates()     ;Process standard template items like [rom], [rom_name], etc.
-                BuildEmuArgs()					;Build Emu_Args from the revised parameter list. 
+                BuildEmuArgs()					;Build aEmuArgs from the revised parameter list. 
             }
         }
     }

@@ -1,0 +1,407 @@
+; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
+; © 2023 David G. Dahlstrom
+; File: eipFunctions_RunApplications.ahk2
+
+;This file is for functions that launch/run applications
+
+;Launch application or emulator
+;runStyle:   "Run" or "RunWait"
+;fullPath:   full path to the executable (ex. D:\Emulators\MAME\mame.exe)
+;paramList:  full parameter string for the executable
+;typeApp:    type of app in all caps, such as "APPLICATION", "EMULATOR"
+;runOptions: runtime option, empty, "Min", "Max", "Hide"
+Launch(runStyle, fullPath, paramList, typeApp, runOption:="", windowStyle:="", appPID:="", &pid_id:="")
+{
+    paramList := Trim(paramList)
+    loggedRunOption := "", loggedWindowStyle := ""    
+    fullCommandLine := fullPath . " " . paramList
+    success := false
+    
+    if (runOption)
+        loggedRunOption := " (" runOption ")"
+    
+    if (windowStyle)
+        loggedWindowStyle := " (" windowStyle ")"
+    
+    if (gCfg.debug_mode)
+    {
+        LogEntry("(launch suppressed) LAUNCH: " . typeApp . ": " . runStyle . loggedWindowStyle . loggedRunOption . " " . fullCommandLine . "`n")
+        return
+    }
+    
+    if FileExist(fullPath)
+    {
+        LogEntry("LAUNCH: " . typeApp . ": " . runStyle . loggedRunOption . " " . fullCommandLine . "`n")
+
+        try 
+        {
+            if (runStyle == "Run")
+                Run(fullCommandLine,,runOption, &pid_id)
+            else if (runStyle == "RunWait")
+                RunWait(fullCommandLine,,runOption, &pid_id)
+        }
+        catch as e
+        {
+            LogEntry("ERROR: ATTEMPTING TO RUN FILE: " FormatErrorMessage(e) "`nFull Command Line: " fullCommandLine "`n")
+            ExitApp
+        }
+
+        success := true
+    }
+    else
+    { msg_type := typeApp == "EMULATOR" ? "ERROR" : "NOTICE"
+        LogEntry(msg_type . ": LAUNCH: " . typeApp . ": SKIPPED (exe not found): " . runStyle . loggedRunOption . " " . fullCommandLine . "`n")
+    }
+    
+    return success
+}
+
+
+RunApps(assetName, romName, appList, appFilter:="")
+{
+    local this_profile := ""
+    local tAppList := "", bOpenP := false
+
+    ;tokenize commas inside () as semi-colons so we can
+    ;parse apps by commas later.
+    Loop
+    {
+        if (A_Index = StrLen(appList)+1)
+            break
+        
+        cChar := SubStr(appList, A_Index, 1)
+        if (cChar = "(")
+            bOpenP := true
+        if (cChar = ")")
+            bOpenP := false
+        if (bOpenP && cChar = ",")
+        {
+            tAppList := tAppList . ";"
+            continue
+        }
+        tAppList := tAppList . cChar		
+    }
+    appList := tAppList	
+    
+    Loop Parse appList, "," A_Space 
+    {
+        ;run all unmarked apps in the list (not prefixed with "+" or "-")
+        if (appFilter = "")
+        {
+            if (SubStr(A_LoopField,1,1) != "-" && SubStr(A_LoopField,1,1) != "+")
+                this_app := A_LoopField
+            else
+                continue
+        }
+        
+        ;only run the "+" apps in the appList
+        if (appFilter = "+")
+        {
+            if (SubStr(A_LoopField,1,1) = "+")
+                this_app := SubStr(A_LoopField,2)
+            else
+                continue
+        }
+        
+        ;only run the "-" apps in the appList
+        if (appFilter = "-")
+        {
+            if (SubStr(A_LoopField,1,1) = "-")
+                this_app := SubStr(A_LoopField,2)
+            else
+                continue
+        }
+        
+        ;Call internal function
+        if (InStr(this_app, "(",,1,1) && InStr(this_app, ")",,1,1)) ;if there are () in the app, it must be an internal function
+        {
+            this_function := SubStr(this_app, 1, InStr(this_app, "(",,1,1)-1)
+            this_function_params := SubStr(this_app, StrLen(this_function)+2, StrLen(this_app)-StrLen(this_function)-2)
+            switch this_function
+            {
+                case "minimize":
+                    %this_function%(this_function_params, gCfg.debug_mode)
+                case "maximize":
+                    %this_function%(this_function_params, gCfg.debug_mode)
+                case "hidewin":
+                    %this_function%(this_function_params, gCfg.debug_mode)
+                case "showwin":
+                    %this_function%(this_function_params, gCfg.debug_mode)
+                case "killwin":
+                    %this_function%(this_function_params, gCfg.debug_mode)
+                case "delay":
+                    wait(this_function_params, gCfg.debug_mode)
+                case "send":
+                    sndmsg(this_function_params, gCfg.debug_mode)
+                default:
+                    LogEntry("ERROR: Undefined run_apps function defined: " this_function " . Please fix and try again.`n")
+                    ExitApp 
+            }
+           
+            continue
+        }
+       
+        ;lookup the app in the applications list to find out how to run it
+        for n, param in mApplications
+        {
+            if (param.app_key == this_app)
+            {
+                this_exe_full_path := param.exe_full_path
+                this_profile := param.profile
+                this_param_list := param.param_list	
+                
+                this_profile := InsertTemplateField(this_profile, "[asset_name]", assetName, "this_profile")
+                this_profile := InsertTemplateField(this_profile, "[rom_file]", gCfg.rom_file, "this_profile")
+                this_profile := InsertTemplateField(this_profile, "[rom_name]", romName, "this_profile")
+                
+                ;The standard filename in folder version of smart_name
+                if (Instr(this_profile, "\[smart_name]"))
+                {
+                    this_test_profile := StrReplace(this_profile, "[smart_name]", romName)
+                    Loop Files this_test_profile, "R"
+                        this_profile := A_LoopFileFullPath
+                    
+                    if (!FileExist(this_profile))
+                    {
+                        this_test_profile := this_profile
+                        this_test_profile := StrReplace(this_profile, "[smart_name]", assetName)
+                        Loop Files this_test_profile, "R"
+                            this_profile := A_LoopFileFullPath
+                        
+                        if (!FileExist(this_profile))
+                        {
+                            this_test_profile := this_profile
+                            cut_end_pos := InStr(this_test_profile, "[smart_name]")
+                            this_test_profile := StrReplace(this_test_profile, "[smart_name]", "default")
+                            cut_start_pos := InStr(this_test_profile, "\",,,-2)
+                            left_part := SubStr(this_test_profile, 1, cut_start_pos)
+                            right_part := SubStr(this_test_profile, cut_end_pos)
+                            this_test_profile := left_part . right_part
+                            if FileExist(this_test_profile)
+                                this_profile := this_test_profile
+                            else
+                            {
+                                LogEntry("Couldn't process [smart_name]: " this_test_profile " (not found)`n")
+                                continue
+                            }
+                        }
+                    }
+                }
+                
+                ;The single-folder "flat" name version of smart_name (useful for JoyToKey)
+                if (Instr(this_profile, "_[smart_name]"))
+                {
+                    this_test_profile := StrReplace(this_profile, "[smart_name]", romName)
+                    if FileExist(this_test_profile)
+                        this_profile := this_test_profile
+                    else
+                    {
+                        this_test_profile := this_profile
+                        this_test_profile := StrReplace(this_profile, "_[smart_name]", "")
+                        if FileExist(this_test_profile)
+                            this_profile := this_test_profile
+                        else
+                        {
+                            this_test_profile := this_profile
+                            cut_end_pos := InStr(this_test_profile, "[smart_name]")
+                            this_test_profile := StrReplace(this_test_profile, "[smart_name]", "default")
+                            cut_start_pos := InStr(this_test_profile, "\",,-1,)
+                            left_part := SubStr(this_test_profile, 1, cut_start_pos)
+                            right_part := SubStr(this_test_profile, cut_end_pos)
+                            this_test_profile := left_part . right_part
+                            if FileExist(this_test_profile)
+                                this_profile := this_test_profile
+                            else
+                            {
+                                LogEntry("Couldn't process [smart_name]: " this_test_profile " (not found)`n")
+                                continue
+                            }
+                        }
+                    }
+                }
+                
+                ;determine whether a profile (i.e. a configuration file) is defined for the application
+                profileDefined := false
+                if (InStr(this_param_list, "[profile]") && this_profile)
+                    profileDefined := true
+                
+                ;Process template fields. All apps having a profile must have at least [profile]
+                ;in the param_list, otherwise it can't be run.
+                if (!InStr(this_param_list, "[profile]") && this_profile)
+                    LogEntry("CONFIG WARNING: Application: " this_app ". A profile is defined but no [profile] template was found in the param_list.`n")
+                this_param_list := StrReplace(this_param_list, "[sys_key]", gCfg.sys_key)
+                this_param_list := StrReplace(this_param_list, "[profile]", this_profile)
+                this_param_list := StrReplace(this_param_list, "[asset_name]", assetName)
+                this_param_list := StrReplace(this_param_list, "[rom_name]", romName)
+                this_param_list := StrReplace(this_param_list, "[rom_file]", gCfg.rom_file)
+                this_param_list := StrReplace(this_param_list, "[rom_full_path]", gCfg.rom_full_path)
+                this_param_list := StrReplace(this_param_list, "[rom_folder]", gCfg.rom_folder)
+                this_param_list := StrReplace(this_param_list, "[rom_folder_parent]", gCfg.rom_folder_parent)
+                
+                cl := ParseRTParams(this_exe_full_path, &runStyle, &runOption, &windowStyle, &winset_style)
+                
+                ;Only run the application if the defined profile file exists or if there is no profile defined AND 
+                ;  if the application is not listed to be skipped for this front-end
+                if ( (FileExist(this_profile) || !profileDefined) && (!InStr(param.fe_skip, gCfg.fe_key)) ) 
+                {
+                    Launch(runStyle, cl, this_param_list, "APPLICATION (" this_app ")", runOption,,,&pid_last_app) ;note pid_last_app is a global (don't make local)
+                }
+                else
+                    if InStr(param.fe_skip, gCfg.fe_key)
+                    LogEntry("NOTICE: LAUNCH APPLICATION (" . this_app . "): SKIPPED (fe_skip=" . gCfg.fe_key . "): " . runStyle . " " . cl . " " . this_param_list . "`n")
+                else
+                    LogEntry("NOTICE: LAUNCH APPLICATION (" . this_app . "): SKIPPED (profile not found): " . runStyle . " " . cl . " " . this_param_list . "`n")
+            }
+        }
+    }
+
+    return
+}
+
+;These functions can be dynamically called by specifying them in a run_apps key value
+;*********************************************************************************************
+minimize(params,debugMode)
+{
+    if (debugMode)
+        LogEntry("(launch suppressed) LAUNCH: BUILT-IN FUNCTION: minimize(" params ")`n") 
+    else
+    {
+        try {
+            SetTitleMatchMode 2
+            WinMinimize params
+            LogEntry("LAUNCH: BUILT-IN FUNCTION: minimize(" params ")`n")
+        }
+        catch
+            LogEntry("LAUNCH: BUILT-IN FUNCTION FAILED: minimize(" params ")`n")
+    }
+}
+
+maximize(params,debugMode)
+{
+    if (debugMode)
+        LogEntry("(launch suppressed) LAUNCH: BUILT-IN FUNCTION: maximize(" params ")`n") 
+    else
+    {
+        try {
+            SetTitleMatchMode 2
+            WinMaximize params
+            LogEntry("LAUNCH: BUILT-IN FUNCTION: maximize(" params ")`n")
+        }
+        catch
+            LogEntry("LAUNCH: BUILT-IN FUNCTION FAILED: maximize(" params ")`n")
+    }
+
+    return
+}
+
+hidewin(params,debugMode)
+{
+    if (debugMode)
+        LogEntry("(launch suppressed) LAUNCH: BUILT-IN FUNCTION: minimize(" params ")`n") 
+    else
+    {
+        try {
+            SetTitleMatchMode 2
+            WinSetTransparent 0, params
+            LogEntry("LAUNCH: BUILT-IN FUNCTION: hidewin(" params ")`n")
+        }
+        catch
+            LogEntry("LAUNCH: BUILT-IN FUNCTION FAILED: hidewin(" params ")`n")
+    }
+
+    return
+}
+
+showwin(params,debugMode)
+{
+    if (debugMode)
+        LogEntry("(launch suppressed) LAUNCH: BUILT-IN FUNCTION: maximize(" params ")`n") 
+    else
+    {
+        try {
+            SetTitleMatchMode 2
+            WinSetTransparent 255, params
+            LogEntry("LAUNCH: BUILT-IN FUNCTION: showwin(" params ")`n")
+        }
+        catch
+            LogEntry("LAUNCH: BUILT-IN FUNCTION FAILED: showwin(" params ")`n")
+    }
+
+    return
+}
+
+killwin(params,debugMode)
+{
+    if (debugMode)
+        LogEntry("(launch suppressed) LAUNCH: BUILT-IN FUNCTION: kill(" params ")`n") 
+    else
+    {
+        try {
+            SetTitleMatchMode 2
+            WinKill params
+            LogEntry("LAUNCH: BUILT-IN FUNCTION: killwin(" params ")`n")
+        }
+        catch
+            LogEntry("LAUNCH: BUILT-IN FUNCTION FAILED: killwin(" params ")`n")
+    }
+
+    return
+}
+
+;built-in function (called as "delay")
+wait(params,debugMode)
+{
+    if (debugMode)
+        LogEntry("(launch suppressed) LAUNCH: BUILT-IN FUNCTION: delay(" params ")`n") 
+    else
+    { 
+        try {
+            Sleep params
+            LogEntry("LAUNCH: BUILT-IN FUNCTION: delay(" params ")`n")
+        }
+        catch
+            LogEntry("LAUNCH: BUILT-IN FUNCTION FAILED: delay(" params ")`n")
+    }
+    
+    return
+}
+
+;built-in function (called as "send")
+sndmsg(params,debugMode)
+{
+    aParams := StrSplit(params, ";", " ")
+    if (aParams.Length == 0)
+        return
+    
+    if (debugMode)
+        LogEntry("(launch suppressed) LAUNCH: BUILT-IN FUNCTION: send(" . aParams[1] . "," . aParams[2] . ")`n") 
+    else
+    {
+        if (Params.Length == 2) 
+            delayFor := "-" . aParams[2]
+        else
+            delayFor := 0
+ 
+        fSendMsg := SendMsg.Bind(aParams[1])
+        try {
+            SetTimer fSendMsg, delayFor
+            LogEntry("LAUNCH: BUILT-IN FUNCTION: send(" . aParams[1] . "," . delayFor . ")`n") 
+        }
+        catch
+            LogEntry("WARNING: BUILT-IN FUNCTION FAILED: send(" . aParams[1] . "," . delayFor . ")`n")
+    } 
+    
+    return
+}
+
+SendMsg(msg)
+{    
+    try {
+        Send msg
+        LogEntry("INFO: Sent message: [" msg "] via built-in function.`n")
+    }
+    catch
+        LogEntry("INFO: Sent message failed: [" msg "] via built-in function.`n")
+    
+    return
+}

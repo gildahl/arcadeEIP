@@ -8,10 +8,10 @@
 ;   scrolling systems list (one row only). Both of the game list ListView controls hold
 ;   the entire list of games, but are dynamically adjusted to make it appear that they
 ;   act as a single contiguous list.  Importantly, the bottom of these two lists also
-;   contains a pointer (stored in column 3 of the list) to the playlist object for that
-;   game which holds the game's metadata. This pointer is retained no matter what list
+;   contains a pointer (stored in column 3 of the list) to the playlist object for each
+;   game which holds the game's metadata. This pointer is the same no matter what list
 ;   the game is copied into (such as favorites, master favorites, or custom lists) so that
-;   the metadata is always preserved across lists.
+;   the metadata is always consistent across lists.
 ;
 ;2. The selection screen never takes the focus (ensuring emulators maintain the focus), 
 ;   therefore, all interaction is achieved via system level hotkeys that are turned on
@@ -29,9 +29,16 @@
 ;   selected game name, a game logo to the right of the selected game name, a favorites icon
 ;   to the top left of the selected game name, and a rating icon to the top right of the 
 ;   selected game name.
+;
+;5. Two major structures are used. The first is this._playlists, which is a Map() that holds
+;   the raw game list for each system (this is what is getting loaded during initialization).
+;   The data shown in the on-screen list is populated from this list.
+;
+;   The other structure is this._state, which is keeps track of the state of each playlist
+;   as the user navigates around. Important fields in these structures are identified below.
 
 ;---------------------------------------------------------------------------------
-; ;Important list state, current state, and LV list item settings
+; ;Important state, LV, and playlist fields
 ;---------------------------------------------------------------------------------
 ;this._state[base_pl]["sublist"]   ;which sublist is currently selected (0=base or 1=picks)
 ;this._state[pl]["selectedItem"]   ;== this._current_game == column 2 in LV list -- deprecated
@@ -49,7 +56,8 @@
 ;LV_GetText(selectedItem, selectedRow, 2)    ;not currently used
 ;LV_GetText(selectedObject, selectedRow, 3)  ;ref to object containing extended game info
 
-;Fields in ;this._current_object[] and this._playlists[pl]["playlist"][gm][]
+;Fields in this._current_object[] and this._playlists[pl]["playlist"][gm][]:
+
 ;["parent"], ["vector"], ["rom_category"], ["rom_release"], ["rom_players"]
 ;["rom_year"], ["rom_publisher"], ["rom_developer"], ["rom_favorite"], ["favorite_icon_file"]
 ;["sys_key"], ["rom_spec"], ["proper_name"], ["logo_file"], ["system_logo_file"], ["parent"]
@@ -58,9 +66,6 @@
 ;Class implementing the game selection screen in arcadeEIP.
 class select_list_control_class
 {	
-	static fav_idx := 0
-	;static suppressNameUpdate := 0
-	
 	_current_object := Map()
 	_current_playlist := ""
 	_current_target := 0
@@ -73,7 +78,7 @@ class select_list_control_class
 
 	__New(maxRows, maxRowsB, lstFontType, lstFontSize, lstGameFontSize, lstSysFontSize, lstListMargin)
 	{
-		;global 
+		global fav_idx := 0
 
 		;initialize the GDI+ (gdip) library (in gdip.ahk)
 		If !pToken := Gdip_Startup()
@@ -91,11 +96,10 @@ class select_list_control_class
 		this._systemNameFontSize := lstSysFontSize
 		this._maxSystems := 0
 
+		;compute some basic dimensions
 		barHeightFactor := 1/10
 		topBarPosFactor := 1/3
 		centerLabelWidthFactor := gCfg.lst_game_name_ratio
-
-		;Create game list selector
 		this._barHeight := Floor(nScreenHeight * barHeightFactor)
 		this._topbar_ypos := Floor(nScreenHeight * topBarPosFactor - this._barHeight / 2)
 		this._bottombar_ypos := Floor(nScreenHeight / 5 * 4 - this._barHeight / 2)
@@ -128,12 +132,9 @@ class select_list_control_class
 		this._AddEmulatorItems()
 	}
 
-	;Read in prior states from state file
+	;Read prior states from the .state file
 	_deserializeState()
 	{
-		;global
-		;local loop_idx, sf, oSf, val, idx := 0, sys, listName, cnt, sel, tog
-
 		loop_idx := 0, idx := 0
 
 		if (!FileExist(state_file))
@@ -229,11 +230,9 @@ class select_list_control_class
 		LogEntry("INFO: Deserialized " idx " states from .state file.`n")
 	}
 
+	;write the control state to the .state file.
 	_serializeState()
 	{
-		;global
-		;local fState, n, s, sys, cnt, row, tog, nVal := 0
-
 		nVal := 0
 
 		if (!g_guiselect_loaded)
@@ -294,11 +293,10 @@ class select_list_control_class
 		LogEntry("INFO: Serialized " nVal " states to .state file.`n")
 	}
 
+	;This function initializes a playlist. An Init() is normally necessary whenever the
+	;list's content has changed.
 	Init(this_pl)
 	{
-		;global
-		;local orig_object, orig_pl
-
 		;This line is for cases where the function is called
 		;from outside the default gui process (like RefreshAttractList())
 		orig_object := this._current_object
@@ -322,6 +320,7 @@ class select_list_control_class
 		return
 	}
 
+	;Update the currently selected game's metadata tags 
 	UpdateMetaTags(pl)
 	{
 		global gGui
@@ -374,6 +373,7 @@ class select_list_control_class
 	{
 	}
 
+	;switch to the (now) current_playlist (given the last_playlist)
 	_SwitchPlaylist(last_playlist)
 	{ 
 		this.HidePlaylist(last_playlist)
@@ -400,9 +400,6 @@ class select_list_control_class
 
 	SwitchGame()
 	{
-		;global
-		;local ob, vector
-
 		ob := this._current_object
 		vector := ob["vector"]
 		
@@ -470,7 +467,6 @@ class select_list_control_class
 	_HideAll()
 	{	
 		global gGui
-		;local n, pl, pl_count
 
 		if (g_guiselect_visible)
 			return
@@ -584,11 +580,6 @@ class select_list_control_class
 	_AddEmulatorItems()
 	{
 		global gGui, fav_idx, g_guiselect_loaded
-
-		;local pl_idx, fv_idx, n, vector, vec, filename, emulators, emulator ;, test_filename,idx, item
-		;local cleanLists, cleanedProperName, sysKey, systemKey, catver_file, cstList
-		;local logo_folder, logo_file, system_logo_file, rom_category, aSearchPaths
-		;local picker_load_timer, orderedEmulatorList, orderedCustomLists, customList
 
 		pl_idx_map := Map()
 		cl_idx_map := Map()
@@ -1118,8 +1109,6 @@ class select_list_control_class
 			this.Show() 
 			ControlActivationState.EnableSelectControls()
 		}
-		;else
-		;	HideControls("guiSelect")
 
 		return
 	}
@@ -1128,7 +1117,6 @@ class select_list_control_class
 	_AddSystemItems()
 	{
 		global gGui
-		;local c, n, SysItem, column 
 
 		;Column 1 is there by default, so modify (rather than add) the first 
 		;system to it separately.
@@ -1388,11 +1376,6 @@ class select_list_control_class
 	{
 		global gGui 
 
-		;local font, playlist_font_size, barHeight, topbar_ypos, bottombar_ypos, x, y, ho, hi, yo, h, pw, slw, sw
-		;local systemViewWidth, y_center, systemLabelWidth, areaT, areaB, listT, listB, w_adj, x_adj, l_adjy
-		;local init_text_y, right_start, test_y, prog_h, prog_w, prog_x, prog_y, prog_text_y
-		;local Gradient_1, Gradient_2, fav_offset, metaLabelWidth, systemname_font_size, centerLabelWidth, sideLabelWidth
-
 		font := this._font
 		playlist_font_size := this._playlistFontSize 
 		systemname_font_size := this._systemNameFontSize
@@ -1553,9 +1536,6 @@ class select_list_control_class
 
 	SetListRows(pl, list_count)
 	{
-		;global
-		;local actual_rows, actual_rowsB
-
 		;for top list control *************************************************
 		if (list_count <= this._maxRows)
 			actual_rows := list_count == 1 ? 1 : list_count - 1
@@ -1587,10 +1567,6 @@ class select_list_control_class
 	_CreateGameListControl(pl)
 	{
 		global gGui
-		;local list_count, dr, actual_rows, actual_rowsB
-		;local SM_CXVSCROLL, barHeight, topbar_ypos, bottombar_ypos
-		;local colwtop, new_lv_w, new_lv_y, new_lv_x, lvb_y
-		;local playlist_font_size
 
 		playlist_font_size := this._playlistFontSize
 		gamename_font_size := this._gameNameFontSize
@@ -1666,7 +1642,6 @@ class select_list_control_class
 
 	_getAttractPlaylistID()
 	{
-		;global
 		n := 0, n_temp := 0
 
 		for n, pl in this._playlists
@@ -1799,12 +1774,6 @@ class select_list_control_class
 	SublistCommand(cmd)
 	{
 		global gGui
-
-		;local cnt := 0, pl, cr, sr, i, r, v, fsz, fnt, gm
-		;local progLimit, oDeletedRows, oDeletedRowsEntry, sourceValue, items, prog, selectedObject
-		;local vector, listName, thisValue, sysKey, filename, base_pl, propName, labelText
-		;local new_state, new_playlist, romspec, sysspec, assetspec, favoritesPath, favoritesFile
-		;local bFavorite, newValue, p_pl, p_gm, ratingsPath, ratingsFile, nRating
 
 		pl := this._current_playlist ;local var for the current playlist
 
@@ -2679,7 +2648,6 @@ class select_list_control_class
 	_deleteFromLV(pl, cr)
 	{
 		global gGui
-		;local cnt
 
 		gGui.guiSelect_ListViewTop%pl%.Delete(cr)
 		gGui.guiSelect_ListViewBottom%pl%.Delete(cr)
@@ -2777,7 +2745,6 @@ class select_list_control_class
 	_deleteFromMasterFavorites(vector)
 	{
 		global gGui
-		;local n
 
 		;Also delete from Master Favorites
 		;(both main and favorite favorites list)

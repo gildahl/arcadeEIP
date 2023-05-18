@@ -193,13 +193,13 @@ PauseKey(keyState, theHotkey:="")
                 if (!g_guiselect_visible) ;avoid bringing guiAlpha to the top when guiSelect is displayed.
                     guiAlpha.Opt("+AlwaysOnTop") ;we will need it on top if guiSelect is not displayed
              
-                oMasterSound.Off() ;pausing the process while a sound is active can produce a hum.
+                MasterSound.Off() ;pausing the process while a sound is active can produce a hum.
                 oPauseProc.Suspend()
             }
             else ;Synthetic UNPAUSE
             {
                 oDetectInactivity.Resume()
-                oMasterSound.On()                  
+                MasterSound.On()                  
 
                 oPauseProc.Resume()
                 Sleep 200 ;needed to prevent ControlFocus from being called before proc has finished resuming which can result in a crash
@@ -305,7 +305,6 @@ PauseKey(keyState, theHotkey:="")
 ExitKey(internal, theHotkey:="")
 {
     global g_exit_code
- 	;local exit_cmd
 
     g_exit_code := internal
 
@@ -373,10 +372,6 @@ ExitKey(internal, theHotkey:="")
 ;Implements exit key function (along with its companion function ExitKey())
 ExitKeyUp(theHotkey:="")
 {	
-    ;global 
-
-	;local exit_cmd, tag
-
 	if (exit_key_off || !bEmuWindowActive || aMapExit.Length == 1 || !aMapExit.Has(2))
 		return		
 	
@@ -420,8 +415,6 @@ ExitKeyUp(theHotkey:="")
 ;Support function called by ExitKey() and ExitKeyUp()
 DoExitFunction(func, exit_cmd)
 {  
-    ;global 
-
     if (func == "CloseTop")
     {
         MouseGetPos ,, &id, &control
@@ -634,8 +627,6 @@ AddDirectSwitchHotKeys()
 ;Support scrolling functions in guiSelect and the pause screen.
 ScrollList(direction, theHotkey:="")
 {
-    ;global
-
     Switch direction
     {
         ;handle paging in the pause screen
@@ -731,9 +722,6 @@ ScrollList(direction, theHotkey:="")
 ;Support function for ScrollList() above.
 PauseScroll(direction, screen:=0)
 {
-    ;if (screen != 0)
-    ;global
-
     Switch direction
     {
         Case "r":            
@@ -757,10 +745,6 @@ PauseScroll(direction, screen:=0)
 ;hk_style can be "passthrough" or "blocking"
 ModifyHotkeys(hk_style)
 {
-    ;global
-
-    ;local e
-
     try
     {
         ;This style is used when a game is in session to allow most hotkeys
@@ -1400,8 +1384,6 @@ AttractNext(theHotkey:="")
 ;would expect to happen when stepping back.
 AttractPrevious(theHotkey:="")
 {
-    ;global
-
     static last_cycle := 0
 
     if (!g_guiselect_loaded)

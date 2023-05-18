@@ -9,8 +9,10 @@
 ; The specified function will be called with the delta move for the X and Y axes
 ; Normally, there is no windows message "mouse stopped", so one is simulated.
 ; After 10ms of no mouse movement, the callback is called with 0 for X and Y
-Class MouseDelta {
+Class MouseDelta 
+{
 	State := 0
+	
 	__New(callback) 
 	{
 		this.MouseMovedFn := this.MouseMoved.Bind(this)

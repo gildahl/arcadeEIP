@@ -171,7 +171,7 @@ class DetectInactivity_Class
 			this._action_count++ 
 
 			if (this._unmute)
-				oMasterSound.On() ;force sound unmute
+				MasterSound.On() ;force sound unmute
 
 			if (gCfg.idle_log)
 			{
@@ -195,7 +195,7 @@ class DetectInactivity_Class
 				if (!sound_set && this._unmute) ;only do once per test
 				{
 					sound_set := true
-					oMasterSound.On() ;force sound unmute
+					MasterSound.On() ;force sound unmute
 				}
 				
 				if (gCfg.idle_log)

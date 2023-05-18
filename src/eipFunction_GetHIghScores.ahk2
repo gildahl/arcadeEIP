@@ -10,9 +10,6 @@ GetHighScores(hiFile)
 {
     global mHighscores, top_score, hiscore_folder, hiscoredat_folder
 
-    ;local stdout, stderr, rawscores, hi2txt_cmd, headers, nScoreCount
-    ;local nHeaderCount, headerLoop, thisScore, com_pid, WshShell, exec
-    
     hi_name := "", hi_stage := ""
 
     ;init globals
