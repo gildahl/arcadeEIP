@@ -8,7 +8,7 @@ is not distributed/packaged with any other product, whether commercial, free, or
 
 Although arcadeEIP beta is free for hobbyist users, it is is not free for commercial use. It is conventionally
 licensed software, having all rights reserved by David G. Dahlstrom. Source code is available at
-https://github.com/gildahl/arcadeEIP for personal use and modification.
+https://github.com/gildahl/arcadeEIP for personal use and modification only.
 
 DISCLAIMER: The user of arcadeEIP acknowledges that he or she is receiving this software "as is" and is not
 relying on the functionality or stability of the software for any purpose. The user further acknowledges that any

@@ -5,15 +5,16 @@ Arcade Emulator Integration Player
 Update Log
 ========================================
 
-0.4.0.0 Port to AHK 2.0 and major code refactor. Public source code release.
+0.4.0.0 Port to AHK 2.0, code refactor, oublic source code release.
 * Ported arcadeEIP from AHK 1.1 to 2.0, while also performing some major
   refactoring, regression testing, and bug fixing. Should remain compatible
-  with prior versions, so hopefully this should work as a drop in update.
+  with prior versions, so hopefully this should work as a drop in replacement
+  update, not requiring a full re-install for those with previous versions.
 * Moved source code to GitHub (https://github.com/gildahl/arcadeEIP) and 
-  made publically available (see license.txt for terms). This will also serve
+  made publicly available (see license.txt for terms). This will also serve
   as the release point for all new releases.
 * It should now be possible for the exe_full_path and search_path settings to
-  contain paths that contain commas.
+  use paths that contain commas.
 * The delimiter between separate search_paths has been changed from a single
   pipe character to a double pipe ("||").
 * While eip.exe remains the primary executable, console commands have been
