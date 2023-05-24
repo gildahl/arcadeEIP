@@ -609,11 +609,8 @@ if (A_Args.Length == 1)
         
             for n, emulator in oEmulators.Emulators
             {
-                ;assetspec := emulator.asset_name
                 emulator.DeleteRomProperies("favorites")
                 emulator.DeleteRomProperies("ratings")
-                ;DeleteAndLog("F", A_ScriptDir "\Assets\" assetspec "\Settings\favorites.ini")
-                ;DeleteAndLog("F", A_ScriptDir "\Assets\" assetspec "\Settings\ratings.ini")
             }          
         }
         

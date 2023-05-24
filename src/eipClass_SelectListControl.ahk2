@@ -2289,17 +2289,6 @@ class select_list_control_class
 				romspec := SplitVector(v)["rom_value"]
 				sysspec := SplitVector(v)["sys_key"]
 
-				/*
-				assetspec := oEmulators.Emulators[sysspec].asset_name
-
-				favoritesPath := A_ScriptDir "\Assets\" assetspec "\Settings"
-				favoritesFile := favoritesPath "\favorites.ini"
-		
-				if (!FileExist(favoritesFile))
-					CreateDirAndLog(favoritesPath)
-
-				bFavorite := IniRead(favoritesFile, "Favorites", romspec, 0)
-				*/
 				bFavorite := oEmulators.Emulators[sysspec].GetRomProperty("favorites", romspec)
 
 				newValue := bFavorite == 0 ? 1 : 0
@@ -2342,16 +2331,6 @@ class select_list_control_class
 				romspec := SplitVector(v)["rom_value"]
 				sysspec := SplitVector(v)["sys_key"]
 
-				/*
-				assetspec := oEmulators.Emulators[sysspec].asset_name
-
-				ratingsPath := A_ScriptDir "\Assets\" assetspec "\Settings"
-				ratingsFile := ratingsPath "\ratings.ini"
-		
-				if (!FileExist(ratingsFile))
-					CreateDirAndLog(ratingsPath)
-				*/
-				
 				if (cmd == "star")
 				{
 					nRating := this._current_object["rom_rating"]
@@ -2368,7 +2347,6 @@ class select_list_control_class
 				this._current_object["rom_rating"] := nRating
 				this.ShowGraphics()
 				
-				;IniWrite(nRating, ratingsFile, "Ratings", romspec)	
 				oEmulators.Emulators[sysspec].SetRomProperty("ratings", romspec, nRating)
 		}
 	}
