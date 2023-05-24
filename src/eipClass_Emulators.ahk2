@@ -154,6 +154,19 @@ class emulators_class
 			this._settings := ""
 		}
 
+		AddSystem(mSystemMap)
+		{
+			;Deep copy the mSystemMap.
+			;This copy will always hold the original still-templated fields.
+			;This will be used to update settings.
+			for n, value in mSystemMap
+				this._default_settings[n] := value
+
+			;The systemArray initially contains raw, templated fields
+			;These can now be filled in by the client calling UpdateSystem()
+			this._settings := mSystemMap 
+		}
+
 		UpdateSystem()
 		{
 			;fill in template fields
@@ -184,19 +197,6 @@ class emulators_class
 			}
 		}
 
-		AddSystem(mSystemMap)
-		{
-			;Deep copy the mSystemMap.
-			;This copy will always hold the original still-templated fields.
-			;This will be used to update settings.
-			for n, value in mSystemMap
-				this._default_settings[n] := value
-
-			;The systemArray initially contains raw, templated fields
-			;These can now be filled in by the client calling UpdateSystem()
-			this._settings := mSystemMap 
-		}
-
 		config_file
 		{
 			get => this._config_file
@@ -210,6 +210,82 @@ class emulators_class
 		sys_key
 		{
 			get => this._sys_key
+		}
+
+		/**
+		 * Gets a sticky rom propery
+		 * These properties are native to arcadeEIP
+		 * @param sProperty - May be "favorites" or "ratings"
+		 * @param sRom - rom name
+		 * @returns {integer|number} - The value of the property
+		 */
+		GetRomProperty(sProperty, sRom)
+		{
+			if (sProperty != "favorites" && sProperty != "ratings")
+			{
+				OutputDebug "assert: GetRomProperty()"
+				LogEntry("ASSERT ERROR: Bad property passed to function GetRomProperty, " sProperty ".`n")
+				ExitApp
+			}
+
+			assetspec := this._settings.Get("asset_name", "") 
+			
+			if (assetspec)
+			{
+				propertyPath := A_ScriptDir "\Assets\" assetspec "\Settings"
+				propertyFile := propertyPath "\" sProperty ".ini"
+
+				if (FileExist(propertyFile))
+					return Integer(IniRead(propertyFile, StrTitle(sProperty), sRom, 0))
+			}
+
+			return 0
+		}
+
+		/**
+		 * Gets a sticky rom propery
+		 * These properties are native to arcadeEIP
+		 * @param sProperty - May be "favorites" or "ratings"
+		 * @param sRom - rom name
+		 * @param sValue - The value to set
+		 * @returns {void} 
+		 */
+		SetRomProperty(sProperty, sRom, sValue)
+		{
+			if (sProperty != "favorites" && sProperty != "ratings")
+			{
+				OutputDebug "assert: SettRomProperty()"
+				LogEntry("ASSERT ERROR: Bad property passed to function SetRomProperty, " sProperty ".`n")
+				ExitApp
+			}
+
+			assetspec := this._settings.Get("asset_name", "") 
+
+			if (assetspec)
+			{
+				propertyPath := A_ScriptDir "\Assets\" assetspec "\Settings"
+				propertyFile := propertyPath "\" sProperty ".ini"
+
+				if (!FileExist(propertyFile))
+					CreateDirAndLog(propertyPath)
+		
+				IniWrite(sValue, propertyFile, StrTitle(sProperty), sRom)
+			}
+
+			return
+		}
+
+		/**
+		 * Delete all values for a propery
+		 * @param sPropery - May be "favorites" or "ratings"
+		 */
+		DeleteRomProperies(sProperty)
+		{
+			assetspec := this._settings.Get("asset_name", "") 
+			if (assetspec)
+				DeleteAndLog("F", A_ScriptDir "\Assets\" assetspec "\Settings\" sProperty ".ini")
+
+			return
 		}
 
 		asset_name

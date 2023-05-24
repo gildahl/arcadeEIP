@@ -127,8 +127,8 @@ class DetectInactivity_Class
 		mJoyX := Map()
 		mJoyY := Map()
 
-		horiz := gCfg.joy_horiz == "all" ? 1 : 0
-    	vert := gCfg.joy_vert == "all" ? 1 : 0
+		static horiz := gCfg.joy_horiz == "all" ? 1 : 0
+    	static vert := gCfg.joy_vert == "all" ? 1 : 0
 
 		mJoylist := this._joylist
 
@@ -138,6 +138,8 @@ class DetectInactivity_Class
 
 			mJoyX[id] := GetKeyState(id "JoyX")
 			mJoyY[id] := GetKeyState(id "JoyY")
+
+			;OutputDebug "oldX: " Round(mState["X"]) " newX: " Round(mJoyX[id]) " oldY: " Round(mState["Y"]) " newY: " Round(mJoyY[id]) " deltaX: " Round(mJoyX[id] - mState["X"]) " deltaY: " Round(mJoyY[id] - mState["Y"]) "`n"
 
 			if (mJoyX[id] - mState["X"] > 20 && horiz)
 				return "r"

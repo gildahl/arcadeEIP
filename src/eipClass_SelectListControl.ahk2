@@ -755,7 +755,6 @@ class select_list_control_class
 
 						;skip if this is a duplicate rom or if there is no enty for this item in the metafile
 						;Note that the metafile check will only fail if there actually is a metafile.
-						;if (duplicate_test[vec] != 1 && properName != "missing_from_metafile" && !orphaned_rom)
 						if (!duplicate_test.Has(vec) && properName != "missing_from_metafile" && !orphaned_rom)
 						{	
 							gm_idx++
@@ -803,42 +802,13 @@ class select_list_control_class
 								}
 							}							
 							
-							assetspec := oEmulators.Emulators[emulator.sys_key].asset_name
-							favoritesPath := A_ScriptDir . "\Assets\" . assetspec . "\Settings"
-							favoritesFile := favoritesPath . "\favorites.ini"
-					
-							if (FileExist(favoritesFile))
-							{
-								bFavorite := IniRead(favoritesFile, "Favorites", romFile, 0)
+							bFavorite := oEmulators.Emulators[emulator.sys_key].GetRomProperty("favorites", romFile)
+							this._playlists[pl_idx]["playlist"][gm_idx]["rom_favorite"] := bFavorite == 1 ? "true" : "false"
+							this._playlists[pl_idx]["playlist"][gm_idx]["favorite_icon"] := bFavorite == 1 ? favorite_on_icon_file : favorite_off_icon_file
 
-								rom_favorite := bFavorite == 1 ? "true" : "false"
-
-								if (rom_favorite == "true")
-									favorite_icon_file := favorite_on_icon_file
-								else
-									favorite_icon_file := favorite_off_icon_file
-
-								this._playlists[pl_idx]["playlist"][gm_idx]["rom_favorite"] := rom_favorite
-								this._playlists[pl_idx]["playlist"][gm_idx]["favorite_icon"] := favorite_icon_file
-							}	
-							else
-							{
-								this._playlists[pl_idx]["playlist"][gm_idx]["rom_favorite"] := "false"
-								this._playlists[pl_idx]["playlist"][gm_idx]["favorite_icon"] := favorite_off_icon_file
-							}
-
-							ratingsPath := A_ScriptDir "\Assets\" assetspec "\Settings"
-							ratingsFile := ratingsPath "\ratings.ini"
-					
-							if (FileExist(ratingsFile))
-							{
-								nRating := IniRead(ratingsFile, "Ratings", romFile, 0)
-								this._playlists[pl_idx]["playlist"][gm_idx]["rom_rating"] := nRating
-							}	
-							else
-							{
-								this._playlists[pl_idx]["playlist"][gm_idx]["rom_rating"] := 0
-							}
+							nRating := oEmulators.Emulators[emulator.sys_key].GetRomProperty("ratings", romFile)
+							this._playlists[pl_idx]["playlist"][gm_idx]["rom_rating"] := nRating
+							
 							/*
 							;possibly make this an option
 							else
@@ -2318,6 +2288,8 @@ class select_list_control_class
 
 				romspec := SplitVector(v)["rom_value"]
 				sysspec := SplitVector(v)["sys_key"]
+
+				/*
 				assetspec := oEmulators.Emulators[sysspec].asset_name
 
 				favoritesPath := A_ScriptDir "\Assets\" assetspec "\Settings"
@@ -2327,6 +2299,8 @@ class select_list_control_class
 					CreateDirAndLog(favoritesPath)
 
 				bFavorite := IniRead(favoritesFile, "Favorites", romspec, 0)
+				*/
+				bFavorite := oEmulators.Emulators[sysspec].GetRomProperty("favorites", romspec)
 
 				newValue := bFavorite == 0 ? 1 : 0
 
@@ -2343,7 +2317,8 @@ class select_list_control_class
 					oBASS.Play("unfav")
 				}
 				
-				IniWrite(newValue, favoritesFile, "Favorites", romspec)	
+				;IniWrite(newValue, favoritesFile, "Favorites", romspec)	
+				oEmulators.Emulators[sysspec].SetRomProperty("favorites", romspec, newValue)
 
 				this.ShowGraphics()	
 
@@ -2366,6 +2341,8 @@ class select_list_control_class
 
 				romspec := SplitVector(v)["rom_value"]
 				sysspec := SplitVector(v)["sys_key"]
+
+				/*
 				assetspec := oEmulators.Emulators[sysspec].asset_name
 
 				ratingsPath := A_ScriptDir "\Assets\" assetspec "\Settings"
@@ -2373,6 +2350,7 @@ class select_list_control_class
 		
 				if (!FileExist(ratingsFile))
 					CreateDirAndLog(ratingsPath)
+				*/
 				
 				if (cmd == "star")
 				{
@@ -2390,7 +2368,8 @@ class select_list_control_class
 				this._current_object["rom_rating"] := nRating
 				this.ShowGraphics()
 				
-				IniWrite(nRating, ratingsFile, "Ratings", romspec)	
+				;IniWrite(nRating, ratingsFile, "Ratings", romspec)	
+				oEmulators.Emulators[sysspec].SetRomProperty("ratings", romspec, nRating)
 		}
 	}
 
