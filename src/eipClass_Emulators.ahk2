@@ -215,13 +215,13 @@ class emulators_class
 		/**
 		 * Gets a sticky rom propery
 		 * These properties are native to arcadeEIP
-		 * @param sProperty - May be "favorites" or "ratings"
+		 * @param sProperty - May be "favorites", "ratings", or "volume"
 		 * @param sRom - rom name
 		 * @returns {integer|number} - The value of the property
 		 */
 		GetRomProperty(sProperty, sRom)
 		{
-			if (sProperty != "favorites" && sProperty != "ratings")
+			if (sProperty != "favorites" && sProperty != "ratings" && sProperty != "volume")
 			{
 				OutputDebug "assert: GetRomProperty()"
 				LogEntry("ASSERT ERROR: Bad property passed to function GetRomProperty, " sProperty ".`n")
@@ -243,16 +243,16 @@ class emulators_class
 		}
 
 		/**
-		 * Gets a sticky rom propery
+		 * Sets a sticky rom propery
 		 * These properties are native to arcadeEIP
-		 * @param sProperty - May be "favorites" or "ratings"
+		 * @param sProperty - May be "favorites", "ratings", or "volume"
 		 * @param sRom - rom name
 		 * @param sValue - The value to set
 		 * @returns {void} 
 		 */
 		SetRomProperty(sProperty, sRom, sValue)
 		{
-			if (sProperty != "favorites" && sProperty != "ratings")
+			if (sProperty != "favorites" && sProperty != "ratings" && sProperty != "volume")
 			{
 				OutputDebug "assert: SettRomProperty()"
 				LogEntry("ASSERT ERROR: Bad property passed to function SetRomProperty, " sProperty ".`n")
@@ -472,6 +472,10 @@ class emulators_class
 						try {
 							element := objNodeList.item(idx).getElementsByTagName("ApplicationPath")
 							game_rom := element.item(0).text
+
+							;Debug code - use to stop on a particular rom
+							;if InStr(game_rom, "dynablst")
+							;	a:=1
 						}
 						catch as e {
 							LogEntry("WARNING: Unexpected XML read error: " FormatErrorMessage(e) "`n")

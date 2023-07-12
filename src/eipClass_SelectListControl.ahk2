@@ -23,7 +23,7 @@
 ;   The main initialization method is _AddEmulatorItems(), which will run in the background
 ;   while the first game loads (and will display a progress bar if displayed while still
 ;   initializing). This ensures that initialization never blocks or slows game loading,
-;   exiting, or game switching.
+;   exiting, pausing, or game switching.
 ;
 ;4. The select screen currently supports 4 image types.  A system logo to the left of the
 ;   selected game name, a game logo to the right of the selected game name, a favorites icon
@@ -753,7 +753,7 @@ class select_list_control_class
 						else
 							orphaned_rom := false
 
-						;skip if this is a duplicate rom or if there is no enty for this item in the metafile
+						;skip if this is a duplicate rom or if there is no entry for this item in the metafile
 						;Note that the metafile check will only fail if there actually is a metafile.
 						if (!duplicate_test.Has(vec) && properName != "missing_from_metafile" && !orphaned_rom)
 						{	
@@ -926,8 +926,8 @@ class select_list_control_class
 			gGui.guiSelect_ProgText.Text := "Loading games into list: " . initSysText . " (" . initSysText2 . ")"
 
 			f := n + emu_count
-			this._CreateGameListControl(n) ;use ordinary rather than associative array since names might have unusable characters
-			this._CreateGameListControl(f) ;create the associated favorites list (offset by emu_count)
+			this._CreateGameListControl(n) ;base game list index
+			this._CreateGameListControl(f) ;favorites list (base index offset by emu_count)
 			
 			;Use the playlist generated above to create the listview (i.e. visible) list
 			fc := 0
@@ -1141,7 +1141,7 @@ class select_list_control_class
 		return
 	}
 
-	;Might be nice to replace these with image/icons at some point.
+	;Might be nice to replace these polygon figures with image/icons at some point.
 	_CreatePolygonOverlay()
 	{		
 		global gGui
@@ -1152,7 +1152,7 @@ class select_list_control_class
 		barBottom := (this._bottombar_ypos + this._barHeight) + this._barHeight/2
 
 		;**********************************************************************
-		; Draw left triangel
+		; Draw left triangle
 		;**********************************************************************
 
 		gGui.guiTriangleLeft := Gui(, "eipGui - guiTriangleLeft")
@@ -1737,7 +1737,7 @@ class select_list_control_class
 	}
 
 	/**
-	 * Operations on the playlists favorites "sublist"
+	 * Operations on playlist sublists
 	 * @param {any} cmd 
 	 * @returns {void}
 	 */

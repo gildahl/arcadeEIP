@@ -513,6 +513,99 @@ KeyboardStrobeB()
     return
 }
 
+;PauseKeyStrobe() 
+;Supports pausing the attract mode timer and is called every 50ms.
+;When the pause key is pressed for a short period it functions normally;
+;however, if it is pressed for a time exceeding pause_delay milliseconds, it will 
+;toggle the attract mode timer on or off. This provides a method of locking
+;the current game so that game switching will no longer occur during this session,
+;or until it is toggled back again.
+PauseKeyStrobe()
+{
+    global gCfg, g_lockedState
+
+    static pauseKey_timer := 0, pauseKeyState := 0, pauseBaseTickCount := 0
+    static pause_delay := 3000, stateText := ""
+
+    if (!bHotkeysOn)
+        return
+
+    if (gCfg.pause_lock > 1)
+        pause_delay := gCfg.pause_lock
+        
+    if (GetKeyState(gCfg.pause_key, "P"))
+    {
+        ;Wait till key is pressed for %magic_delay% milliseconds before toggling the timer state
+        if (pauseKey_timer > pause_delay && pauseKeyState == 0)
+        {
+            if (!g_pause_state)
+            {
+                ;toggle the game lock state
+                g_lockedState := g_lockedState == 0 ? g_lockedState := 1 : g_lockedState := 0
+
+                guiAlpha.Opt("+AlwaysOnTop")
+
+                if (g_lockedState)
+                {
+                    oDetectInactivity.Suspend() ;turn off the timer
+                    stateText := "Game locked"
+                }
+                else
+                {
+                    oDetectInactivity.Resume() ;turn the timer back on
+                    stateText := "Game Unlocked"
+                }
+
+                ;Display the overlay text
+                gGui.guiAlpha_PauseLabel.Text := stateText
+                gGui.guiAlpha_PauseLabel.Visible := true
+                
+                WinSetTransparent "255", "ahk_id " . guiAlpha.Hwnd 
+                WinSetTransparent 0, "ahk_id " . gGui.guiAlpha_Overlay.Hwnd
+                WinSetTransColor "Black", "ahk_id " . guiAlpha.Hwnd
+
+                Sleep(0) ;without this, the voice will speak before the "Locked" label is displayed            
+
+                oVoice.Speak(stateText, 1, 0)
+
+                Sleep(1000)
+                gGui.guiAlpha_PauseLabel.Visible := false
+                guiAlpha.Opt("-AlwaysOnTop")       
+            }     
+            
+            pauseKeyState := 1 ;key is still down, so don't re-enter
+        }
+        else
+        {
+            ;increment the pauseKey_timer accumulator
+            pauseKey_timer := A_TickCount - pauseBaseTickCount
+        }
+    }
+    else ;key is not down
+    {
+        ;indicates we've released the key
+        pauseKeyState := 0
+        
+        ;if 0 < delay < 500 means key was released before delay expired
+        ;so perform the short stroke action, then reset delay to 0
+
+        if (pauseKey_timer > 0 && pauseKey_timer < pause_delay) ; && !g_guiselect_visible)
+        {
+            ;SoundBeep(700)
+            PauseKey("")
+            Sleep 100
+            PauseKey("Up")
+        }
+
+
+        ;Keep base counter at a delta of zero
+        pauseBaseTickCount := A_TickCount
+        pauseKey_timer := 0
+    }    
+    
+    return
+}
+
 ;Used for the start and exit bookend screen timers.
 ScreenDelay()
 {

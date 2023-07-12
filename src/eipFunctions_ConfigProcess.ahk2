@@ -85,6 +85,7 @@ ReadConfig()
     gCfg.attract_mute := Integer(IniRead(config_file, "Auto_Switch", "mute", 0)) ;0 off, 1 on, >1 unmute delay after game start
     gCfg.attract_auto := Integer(IniRead(config_file, "Auto_Switch", "auto", 1))
     gCfg.attract_timer := IniRead(config_file, "Auto_Switch", "timer", "5") ;This may be a text value
+    gCfg.pause_lock := Integer(IniRead(config_file, "Auto_Switch", "pause_lock", 0)) ;0, 1, or number of milliseconds
 
     ;[Global_Assets]
     gCfg.logo_folder := IniRead(config_file, "GlobalAssets", "logo_folder", ".\Assets\[global_asset_name]\Logo\Rom")
@@ -216,6 +217,7 @@ ProcessIni()
     gCfg.start_screen := IniRead(config_file, config_section, "start_screen", "0,Black")
     gCfg.exit_screen := IniRead(config_file, config_section, "exit_screen", "0,Black")
     gCfg.hide_cursor := Integer(IniRead(config_file, config_section, "hide_cursor", 0))
+    gCfg.hide_taskbar := Integer(IniRead(config_file, config_section, "hide_taskbar", 0))
     gCfg.fe_run_apps := IniRead(config_file, config_section, "run_apps", A_Space)
     gCfg.show_on_pause := IniRead(config_file, config_section, "show_on_pause", A_Space)
 
@@ -261,6 +263,7 @@ ProcessIni()
             gCfg.start_screen := IniRead(config_file, config_section, "start_screen", "-1,Black")
             gCfg.exit_screen := IniRead(config_file, config_section, "exit_screen", "-1,Black")
             gCfg.hide_cursor := Integer(IniRead(config_file, config_section, "hide_cursor", 0))
+            gCfg.hide_taskbar := Integer(IniRead(config_file, config_section, "hide_taskbar", 0))
             gCfg.fe_run_apps := IniRead(config_file, config_section, "run_apps", A_Space)
             gCfg.show_on_pause := IniRead(config_file, config_section, "show_on_pause", A_Space)
 

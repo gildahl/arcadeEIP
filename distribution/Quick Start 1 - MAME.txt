@@ -11,7 +11,7 @@ https://youtu.be/1RueDRhyrao
 *** Use RIGHT ctrl-alt-k to force-exit arcadeEIP if it ever hangs. ***
 =======================================================================
 
-1. Double-click create_cfg.bat to create arcadeEIP.ini and
+1. Double-click create_cfg.bat to create default arcadeEIP.ini and
    arcadeEIP_example.ini
    
 2. Load arcadeEIP.ini into a text editor like notepad or (preferably), 
@@ -21,14 +21,14 @@ https://youtu.be/1RueDRhyrao
    to match your system (don't remove the ",min" option at the end).
 
 4. If your roms are located somewhere other than mame's \rom folder,
-   also edit the search_path= to match the actual location of your roms 
+   also edit the search_path= to match the actual location of your roms. 
 
 5. In the [General] section, set seed_rom= to any favorite rom you 
    know you have.
 
 6. If you'd like to hide the mouse cursor during gameplay, set hide_cursor=1
    in the [Front_End_os] section. (It is recommended to only set this to 1
-   after confirming at least one successful startup) 
+   after confirming at least one successful startup). 
 
 7a. Optional: If you have them, copy a set of game logo files (named
     after your roms) into ..\Assets\MAME\Logos\Rom
@@ -43,8 +43,9 @@ https://youtu.be/1RueDRhyrao
     marquee_folder=D:\LaunchBox\Images\Arcade\Arcade - Marquee
     system_logo=D:\LaunchBox\Images\Platforms\Arcade\Clear Logo\Arcade.png
 
-    (see the file LaunchBox.txt in the "Docs\[Front_End] examples" folder
-     for more information about integration with LaunchBox)
+    When you do this, your game list in arcadeEIP should match the one in
+    LaunchBox (see the file LaunchBox.txt in the "Docs\[Front_End] examples" 
+    folder for more information about integration with LaunchBox)
 
 Now...just double-click on eip.exe to run your seed game...
 
@@ -56,11 +57,11 @@ Or at a command prompt run:
 
 While in any game:
 
-1. Press the period key (.) to exit.
+1. Press the tilde key (~) to exit (or hold period key for 2+ seconds).
 2. Press comma (,) to pause.  While in pause, use left/right arrow
    keys or joystick to page through controls and info screens.
-3. Press apostrophe (') or hold the period key (.) for 2+ sec to toggle the
-   game selection menu on/off:
+3. Press period key (.) or apostrophe (') key to toggle the game selection 
+   menu on/off:
 4. Navigate using the arrow keys or joystick.
 5. Select a new game to play using the LCtrl key.
 6. Use "M" key to mark a game as a favorite or "S" to change star rating

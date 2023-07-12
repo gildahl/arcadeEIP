@@ -248,9 +248,11 @@ PauseKey(keyState, theHotkey:="")
         }
     }
 
-    ;Display the appropriate pause visuals
+    ;Run any pause apps and display the appropriate pause visuals
     if (paused)
     {
+        RunApps(gCfg.asset_name, gCfg.rom_name, gCfg.pause_apps)
+
         oDetectInactivity.Suspend()
         g_pause_state := true
         g_mouse_clicks_off := 1
@@ -273,6 +275,8 @@ PauseKey(keyState, theHotkey:="")
     }
     else
     {
+        RunApps(gCfg.asset_name, gCfg.rom_name, gCfg.pause_apps, "-")
+
         if (!g_guiselect_visible && oPauseControl.HasContent())
         {      
             SoundBeep
@@ -1258,19 +1262,17 @@ AddHotkeys()
             last_previous_key := gCfg.previous_key
         }
 
+        if (gCfg.lock_game_key) {
+            fLockGame := LockGame
+            Loop Parse gCfg.lock_game_key, "CSV" 
+                Hotkey "~" . A_LoopField, fLockGame, "On"
+        }
+
         if (gCfg.panic_key) {
             fKillApp := KillApp
             Hotkey gCfg.panic_key, fKillApp, "On"
-        }        
+        }    
         
-        if (gCfg.pause_key != "" && gCfg.magic_key != gCfg.pause_key) 
-        { 
-            fPauseKeyUp := PauseKey.Bind("Up")
-            fPauseKey := PauseKey.Bind("")
-            Hotkey gCfg.pause_key, fPauseKey, "On"
-            Hotkey gCfg.pause_key . " Up", fPauseKeyUp, "On"
-        }
-
         if (gCfg.exit_key != "" && gCfg.magic_key != gCfg.exit_key)
         {
             fExitKeyUp := ExitKeyUp
@@ -1285,6 +1287,18 @@ AddHotkeys()
             fQuitKey := ExitKey.Bind("1")
             HotKey gCfg.quit_key, fQuitKey, "On"
             HotKey gCfg.quit_key . " Up", fQuitKeyUp, "On"
+        }
+
+        ;if pause_lock is turned on the pause key will be handled by PauseKeyStrobe()
+        if (gCfg.pause_lock == 0)
+        {
+            if (gCfg.pause_key != "" && gCfg.magic_key != gCfg.pause_key) 
+            { 
+                fPauseKeyUp := PauseKey.Bind("Up")
+                fPauseKey := PauseKey.Bind("")
+                Hotkey gCfg.pause_key, fPauseKey, "On"
+                Hotkey gCfg.pause_key . " Up", fPauseKeyUp, "On"
+            }
         }
 
         ;Magic key can operate as a conventional hotkey if magic_delay=0, displaying the picker 
@@ -1421,4 +1435,46 @@ AttractPrevious(theHotkey:="")
     }
     
     return
+}
+
+LockGame(theHotKey:="")
+{
+    global gGui, g_lockedState
+    static stateText := ""
+
+    ;exit if attract mode is turned off by default
+    if (gCfg.attract_delay == 0)
+        return
+
+    ;toggle the game lock state
+    g_lockedState := g_lockedState == 0 ? g_lockedState := 1 : g_lockedState := 0
+
+    guiAlpha.Opt("+AlwaysOnTop")
+
+    if (g_lockedState)
+    {
+        oDetectInactivity.Suspend() ;turn off the timer
+        stateText := "Game locked"
+    }
+    else
+    {
+        oDetectInactivity.Resume() ;turn the timer back on
+        stateText := "Game Unlocked"
+    }
+
+    ;Display the overlay text
+    gGui.guiAlpha_PauseLabel.Text := stateText
+    gGui.guiAlpha_PauseLabel.Visible := true
+    
+    WinSetTransparent "255", "ahk_id " . guiAlpha.Hwnd 
+    WinSetTransparent 0, "ahk_id " . gGui.guiAlpha_Overlay.Hwnd
+    WinSetTransColor "Black", "ahk_id " . guiAlpha.Hwnd
+
+    Sleep(0) ;without this, the voice will speak before the "Locked" label is displayed            
+
+    oVoice.Speak(stateText, 1, 0)
+
+    Sleep(1000)
+    gGui.guiAlpha_PauseLabel.Visible := false
+    guiAlpha.Opt("-AlwaysOnTop")  
 }

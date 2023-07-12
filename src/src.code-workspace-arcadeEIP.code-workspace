@@ -20,6 +20,18 @@
 				"stopOnEntry": false,
 				"maxChildren": 10000
 			},
+
+			{
+				"name": "No Params (-video gdi)",
+				"request": "launch",
+				"type": "autohotkey",
+				"runtime_v1": "AutoHotkey.exe",
+				"runtime_v2": "v2/AutoHotkey.exe",
+				"program": "${file}",
+				"args": ["-video", "gdi"],
+				"stopOnEntry": false,
+				"maxChildren": 10000
+			},
 		
 			{
 				"name": "(marquee) -quiet",
@@ -65,6 +77,18 @@
 				"runtime_v2": "v2/AutoHotkey.exe",
 				"program": "${file}",
 				"args": ["mame", "1942"],
+				"stopOnEntry": false,
+				"maxChildren": 10000
+			},
+
+			{
+				"name": "eip (qbert)",
+				"request": "launch",
+				"type": "autohotkey",
+				"runtime_v1": "AutoHotkey.exe",
+				"runtime_v2": "v2/AutoHotkey.exe",
+				"program": "${file}",
+				"args": ["mame", "qbert"],
 				"stopOnEntry": false,
 				"maxChildren": 10000
 			},

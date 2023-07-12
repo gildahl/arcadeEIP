@@ -5,10 +5,40 @@ Arcade Emulator Integration Player
 Update Log
 ========================================
 
+0.4.0.2 Feature and documentation update: 
+* Volume normalization. Added a new feature which provides the ability to 
+  specify sound volume adjustments for individual roms. See end of readme.txt in  
+  ..\Assets folder for more information about how to use volume.ini to do this.
+* Attract mode timer pause. Added a new feature that will temporarily
+  pause automatic game switching to lock your arcade machine to the currently 
+  active game by using the hotkey ctrl-alt-l, or by holding the pause key down
+  for several seconds. The latter method is disabled by default, but may be turned
+  on by setting the pause_lock= setting in arcadeEIP.ini.  See Configuration Reference 
+  Guide.pdf for more information.
+* Kiosk Mode is now turned on by default. This better reflects how arcadeEIP
+  is intended to work stand-alone (i.e. a short press of the period key
+  will toggle the menu and a long press exits). You may reverse this behavior by 
+  setting kiosk_mode=0, which may be preferred if you are using arcadeEIP as a
+  launcher from another Front End.
+* Corrected documentation to clarify the use of util.exe to run the -sound 
+  option (instead of eip.exe).
+* Removed non-game records from default .meta file for MAME to better declutter
+  the default MAME game list.
+* Added preliminary instructions for integrating LEDBlinky with arcadeEIP to
+  ..\Docs\[Application]\LEDBlinky.txt (thanks to JaysArcade)
+* Added new pause_apps= setting to [System] sections of arcadeEIP.ini to permit 
+  triggering applications to run upon pause/unpause. See Configuration Reference
+  Guide.pdf for more information.
+* Removed feature that automatically enabled/disabled Windows taskbar autohide
+  setting. Replaced this with a new hide_taskbar= option in [Front_End] sections of
+  arcadeEIP.ini. See Configuration Reference Guide.pdf for more information. 
+* Fixed bug preventing run once apps specified with a "+" in the run_apps setting
+  of [Front_End_os] from running.
+
 0.4.0.1 Hot-fix: added missing favorites/star rating icons to 
 ..\Resource\Icons folder.
 
-0.4.0.0 Port to AHK 2.0, code refactor, oublic source code release.
+0.4.0.0 Port to AHK 2.0, code refactor, public source code release.
 * Ported arcadeEIP from AHK 1.1 to 2.0, while also performing some major
   refactoring, regression testing, and bug fixing. Should remain compatible
   with prior versions, so hopefully this should work as a drop in replacement
@@ -20,10 +50,10 @@ Update Log
   use paths that contain commas.
 * The delimiter between separate search_paths has been changed from a single
   pipe character to a double pipe ("||").
-* While eip.exe remains the primary executable, console commands have been
-  moved to a new executable (util.exe). These include -sound, -createproxy,
-  -systems, -find, -list, etc.  See the "Command Line Reference Guide.pdf"
-  for more information.
+* While eip.exe remains the primary executable, console commands having text
+  output have been moved to a new executable (util.exe). These include -sound,
+  -createproxy, -systems, -find, -list, etc.  See the "Command Line Reference 
+  Guide.pdf" for more information.
 * Removed "change_root" rule from default MAME configuration. To use this
   feature, refer to the Rules Reference Guide.
 

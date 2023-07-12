@@ -4,6 +4,7 @@
 ;Various functions either obtained in full or inspired from various web sites.
 ;All are presumed to be in the public domain.
 
+
 ;https://www.autohotkey.com/docs/v2/lib/DllCall.htm
 ;Function to turn the system cursor on or off
 SystemCursor(cmd)  ; cmd = "On|Off|Toggle|Reload"
@@ -188,6 +189,7 @@ ThouSep(X)
 ;Hide or show the Windows taskbar
 ;true hides taskbar, 
 ;false shows taskbar
+/*
 HideShowTaskbar(action) 
 {
      ;https://www.autohotkey.com/boards/viewtopic.php?t=39123 (converted to AHK2 by DGD)
@@ -195,6 +197,7 @@ HideShowTaskbar(action)
      NumPut("UInt", action, APPBARDATA, A_PtrSize=8?40:32)
      DllCall("shell32\SHAppBarMessage", "UInt", 0xA, "Ptr", APPBARDATA, "UPtr")
 }
+*/
  
 ;Gets the Windows taskbar state
 ;https://www.autohotkey.com/boards/viewtopic.php?t=39123 (converted to AHK2 by DGD)
@@ -206,6 +209,7 @@ HideShowTaskbar(action)
 
 ;A return value of true means taskbar is hidden
 ;A return value of false means taskbar is visible (i.e. not hidden)
+/*
 GetTaskbarState()
 {
     local state, vState, APPBARDATA
@@ -216,6 +220,7 @@ GetTaskbarState()
 
     return vState
 }
+*/
 
 ;MD5 crypto functions for license processing
 ;http://www.autohotkey.com/board/topic/117347-dynamic-md5-hash-generation-for-a-string/

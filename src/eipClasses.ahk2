@@ -129,6 +129,56 @@ class config_file_class
 	}
 }
 
+;Speech class.
+;Inspired by https://www.autohotkey.com/boards/viewtopic.php?p=431416#p431416
+class voice_class
+{
+	_enabled := true
+	_voice := []
+	_voices := []
+
+	__New()
+	{
+		this._voice := ComObject("SAPI.SpVoice")
+		this._voices := this._voice.GetVoices()
+
+		if gCfg.sound_device > 1
+		{
+			try {
+				this._voice.AudioOutput := this._voice.GetAudioOutputs.Item[gCfg.sound_device]
+				this._enabled := true
+			}
+			catch
+			{
+				this._enabled := false
+			}
+		}
+
+		;Disables speech if an error occurs
+		this.Speak("")
+	}
+
+	Speak(phrase, voiceNumber := 1, rate := 0, vol := 100) 
+	{
+		if (this._enabled)
+		{
+			try
+			{
+				this._voice.Volume := vol
+				this._voice.Rate := rate
+				this._voice.Voice:= this._voices.Item(voiceNumber - 1)
+				this._voice.WaitUntilDone(True)
+				
+				this._voice.Speak(phrase)
+			}
+			catch
+			{
+				this._enabled := false
+			}
+		}
+	}
+}
+
 ;class used to store full rom vector and match information
 class rom_class
 {
@@ -262,6 +312,16 @@ class MasterSound
         if (master_mute == "On")
 			SoundSetMute +1
 	}
+
+	static GetVolume()
+	{
+		return SoundGetVolume()
+	}
+
+	static SetVolume(val)
+	{
+		SoundSetVolume(val)
+	}
 }
 
 ;static class supporting enabling and disabling controls
@@ -284,6 +344,9 @@ class ControlActivationState
 
 		Loop Parse gCfg.previous_key, "CSV"
 			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.lock_game_key, "CSV"
+			Hotkey A_LoopField, "Off"
 	}
 
 	static DisablePauseControls()
@@ -302,6 +365,9 @@ class ControlActivationState
 			Hotkey A_LoopField, "On"
 
 		Loop Parse gCfg.previous_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.lock_game_key, "CSV"
 			Hotkey A_LoopField, "On"
 	}
 
@@ -399,6 +465,9 @@ class ControlActivationState
 
 		Loop Parse gCfg.previous_key, "CSV"
 			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.lock_game_key, "CSV"
+			Hotkey A_LoopField, "Off"
 	}
 
 	static DisableSelectControls()
@@ -422,6 +491,9 @@ class ControlActivationState
 				Hotkey A_LoopField, "On"
 
 			Loop Parse gCfg.previous_key, "CSV"
+				Hotkey A_LoopField, "On"
+
+			Loop Parse gCfg.lock_game_key, "CSV"
 				Hotkey A_LoopField, "On"
 		}
 

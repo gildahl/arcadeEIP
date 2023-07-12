@@ -574,6 +574,7 @@ ProcessRules()
                 gCfg.logo_folder := IniRead(partial_config_file, partial_config_section, "logo_folder", gCfg.logo_folder)
                 gCfg.system_logo := IniRead(partial_config_file, partial_config_section, "system_logo", gCfg.system_logo)
                 gCfg.run_apps := IniRead(partial_config_file, partial_config_section, "run_apps", gCfg.run_apps)
+                gCfg.pause_apps := IniRead(partial_config_file, partial_config_section, "pause_apps", gCfg.pause_apps)
                 gCfg.map_exit := IniRead(partial_config_file, partial_config_section, "map_exit", gCfg.map_exit)
                 gCfg.map_pause := IniRead(partial_config_file, partial_config_section, "map_pause", gCfg.map_pause)
 

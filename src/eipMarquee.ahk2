@@ -4,15 +4,15 @@
 
 ;This file implements the arcadeEIP marquee (complile as marquee.exe).
 ;This is intended to put a marquee image on an independent marquee monitor. 
-;The marquee image should automatically ;scale and display at its native aspect 
-;ratio.  The image filename and some ;metadata, including current high score,
-;are delivered to the marquee via a pseudo ;pipe file. Whenever this file is
+;The marquee image should automatically scale and display at its native aspect 
+;ratio.  The image filename and some metadata, including current high score,
+;are delivered to the marquee via a pseudo pipe file. Whenever this file is
 ;updated the image will change. Any high score data will be displayed at the 
 ;bottom of the marquee monitor.
 
 ;Compiler directives
 ;***********************************************************
-global CodeVersion := "0.4.0.0"
+global CodeVersion := "0.4.0.2"
 ;@Ahk2Exe-Let version = %A_PriorLine~U)^(.+"){1}(.+)".*$~$2%
 ;@Ahk2Exe-SetCopyright (c) 2023 David G. Dahlstrom
 ;@Ahk2Exe-SetProductName arcadeEIP Marquee Player
@@ -223,7 +223,7 @@ ShowMarquee(image_file, system, top_score)
         oFadeMarqueeAlpha.Start(255,0,20,16)
     }
 
-    ;Get a handle to this window we have created in order to update it later
+    ;Get a handle to the window we have created in order to update it later
     hwnd := gGui.%gui_id%.Hwnd
 
     pBitmap := Gdip_CreateBitmapFromFile(image_file)
@@ -263,8 +263,8 @@ ShowMarquee(image_file, system, top_score)
     Gdip_DrawImage(G, pBitmap, 0 + image_L, 0 + image_T, pic_w + image_W, pic_h + image_H, 0, 0, Width, Height)
     Gdip_DeleteGraphics(G)
     
-    ;Update the specified window we have created (hwnd1) with a handle to our 
-    ;bitmap (hdc), specifying the x,y,w,h we want it positioned on our screen	
+    ;Update the specified window we have created (hwnd) with a handle to our 
+    ;bitmap (hdc), specifying the x,y,w,h where we want it positioned on our screen	
     UpdateLayeredWindow(hwnd, hdc, pic_x, pic_y, pic_w, pic_h)
     SelectObject(hdc, obm)
     DeleteObject(hbm)
@@ -303,7 +303,7 @@ Move_MsgBox(wParam, lParam, msg, hwnd)
         ThisProcessPID := ProcessExist()
 
         ;Make sure dialog still exists (32770 is class id for a Windows standard dialog)
-        ;Note that we need DetectHiddenWindows turned on for this
+        ;Note that we need DetectHiddenWindows turned on for this to work.
         if WinExist("ahk_class #32770 ahk_pid " ThisProcessPID)	
         {
             WinGetPos ,,&mW, &mH

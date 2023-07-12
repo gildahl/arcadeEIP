@@ -3,7 +3,7 @@ arcadeEIP
 Arcade Emulator Integration Player
 https://github.com/gildahl/arcadeEIP
 ========================================
-Readme.txt for version, 0.4.0.0 beta
+Readme.txt for version, 0.4.0.2 beta
 ========================================
 
 QUICK START GUIDES
@@ -45,6 +45,7 @@ A short overview of arcadeEIP's fuller list of features includes:
 * Native support for multiple parallel versions of emulators such as MAME;
 * Dynamic marquee monitor support with display of high scores on the marquee;
 * A custom rules engine;
+* Game specific sound volume adjustments;
 * Sidecar rom re-directs transparent to front-ends;
 * And even a unique command-line front-end tool using simple <system> <title> vectors to run any
   game from any system.
@@ -88,11 +89,13 @@ Here is a list of key defaults.
 Basic controls - available while a game is playing (relies on correct configuration)
 -------------------------------------------------------------------------------
 Menu:                 '                Toggle game selection menu
-Pause:                , (comma)        Pause emulator.
-Exit (normal):        . (period)       Exits emulator, then arcadeEIP.
-Magic Key:            . (period)       Hold 2-3 seconds to display the game selection menu 
+Exit:                 ~                Exits emulator, then arcadeEIP
+Magic Key (menu):     .                Toggle game selection menu
+Magic Key (exit):     .                Hold 2-3 seconds to exit 
+Pause:                ,                Pause emulator.
 Previous Game:        [   or q         Go back to previous game in autoplay list
 Next Game:            ]   or w         Advance to next game in autoplay list
+Lock Game:            Ctrl-Alt-l       Pause/resume autoswitching
 Exit (panic):         Ctrl-Alt-k       (Use RIGHT Ctrl-Alt) Exit (during hang, black screen, etc.)
 
 Quick-Switch game picker menu controls (only used when in the menu)
@@ -157,6 +160,6 @@ Current development environment is Visual Studio Code using the following extens
 * vscode-autohotkey-debug
 
 ========================================
-arcadeEIP 0.4.0.0 beta
+arcadeEIP 0.4.0.2 beta
 Copyright (c) 2023 by David G. Dahlstrom
 https://github.com/gildahl/arcadeEIP

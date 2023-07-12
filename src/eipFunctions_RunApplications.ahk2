@@ -49,8 +49,8 @@ Launch(runStyle, fullPath, paramList, typeApp, runOption:="", windowStyle:="", a
         success := true
     }
     else
-    { msg_type := typeApp == "EMULATOR" ? "ERROR" : "NOTICE"
-        LogEntry(msg_type . ": LAUNCH: " . typeApp . ": SKIPPED (exe not found): " . runStyle . loggedRunOption . " " . fullCommandLine . "`n")
+    { msg_type := typeApp == "EMULATOR" ? "ERROR: " : ""
+        LogEntry(msg_type . "LAUNCH: " . typeApp . ": SKIPPED (exe not found): " . runStyle . loggedRunOption . " " . fullCommandLine . "`n")
     }
     
     return success
@@ -248,9 +248,9 @@ RunApps(assetName, romName, appList, appFilter:="")
                 }
                 else
                     if InStr(param.fe_skip, gCfg.fe_key)
-                    LogEntry("NOTICE: LAUNCH APPLICATION (" . this_app . "): SKIPPED (fe_skip=" . gCfg.fe_key . "): " . runStyle . " " . cl . " " . this_param_list . "`n")
+                    LogEntry("LAUNCH: APPLICATION (" . this_app . "): SKIPPED (fe_skip=" . gCfg.fe_key . "): " . runStyle . " " . cl . " " . this_param_list . "`n")
                 else
-                    LogEntry("NOTICE: LAUNCH APPLICATION (" . this_app . "): SKIPPED (profile not found): " . runStyle . " " . cl . " " . this_param_list . "`n")
+                    LogEntry("LAUNCH: APPLICATION (" . this_app . "): SKIPPED (profile not found): " . runStyle . " " . cl . " " . this_param_list . "`n")
             }
         }
     }

@@ -51,7 +51,7 @@ SetWorkingDir A_ScriptDir
 
 ;Compiler directives
 ;***********************************************************
-global CodeVersion := "0.4.0.0"
+global CodeVersion := "0.4.0.2"
 ;@Ahk2Exe-Let version = %A_PriorLine~U)^(.+"){1}(.+)".*$~$2%
 ;@Ahk2Exe-SetCopyright © 2023 David G. Dahlstrom
 ;@Ahk2Exe-SetProductName arcadeEIP
@@ -185,14 +185,14 @@ else
 ;  7. g_cycle              : tracks the number of games launched in this session
 
 global g_guiselect_visible := g_guiselect_loaded := g_pause_state := g_guipause_visible := false
-global g_exit_code := "", g_directswitch_args := "", g_cycle := 0
+global g_exit_code := "", g_directswitch_args := "", g_cycle := g_lockedState := 0
 
 ;Miscellaneous global state flags and handles
 global bSearchGlobal := false ;true if only the rom (and no emu) is specified on the command line
 global bEmuRunning := bEmuWindowActive := bSuppressLogging := bDoRuleVector := false
 global exit_key_off := pause_key_off := magic_key_off := false
 global pid_emulator := emu_hwnd := cur_emu := fe_pid := pid_screen := marquee_pid := 0
-global original_taskbar_state
+;global original_taskbar_state
 ;---------------------------------------------------------------------------------
 
 ;Initialize the global configuration structure
@@ -229,6 +229,7 @@ gCfg.exit_key := "."
 gCfg.magic_key := "."
 gCfg.previous_key := "q,["
 gCfg.next_key := "w,]"
+gCfg.lock_game_key := "^!l"
 gCfg.launch_key := "LCtrl"
 gCfg.list_mode_key := "LAlt"
 gCfg.add_remove_key := "Space"
@@ -290,6 +291,7 @@ gCfg.attract_mute := 0
 gCfg.attract_delay := 180
 gCfg.attract_timer := "5"
 gCfg.attract_random := 0
+gCfg.pause_lock := 0
 
 ;[Global_Assets]
 gCfg.logo_folder := ""
@@ -305,6 +307,7 @@ gCfg.fe_key := ""
 gCfg.fe_asset_name := ""
 gCfg.fe_proper_name := ""
 gCfg.hide_cursor := 0
+gCfg.hide_taskbar := 0
 gCfg.start_screen := 1
 gCfg.exit_screen := 1
 gCfg.show_on_pause := ""
@@ -328,6 +331,7 @@ gCfg.autoswitch := 1
 gCfg.search_path := ""
 gCfg.rom_folder_parent := ""
 gCfg.run_apps := ""
+gCfg.pause_apps := ""
 gCfg.map_exiet := ""
 gCfg.map_pause := ""
 
@@ -347,7 +351,7 @@ global oSelectListControl := ""
 global oDetectInactivity 
 
 ;Miscellaneous inits and declarations
-global current_volume := -1
+global current_volume := -1, override_volume := 0
 global exit_key_off, pause_key_off, orig_run_apps
 global play_next := play_previous := search_tag := ""
 global license_text := proxy_type := ""
@@ -358,6 +362,9 @@ global start_back_color := exit_back_color := "Black"
 global cl_start_screen := cl_exit_screen := cl_run_apps := ""
 global default_start_back_color := default_exit_back_color := "Black"
 global default_start_show_time := default_exit_show_time := start_show_time := exit_show_time := "-1"
+
+GroupAdd "DesktopGroup", "ahk_class Progman" ; Adding both classes of desktop to the group "DesktopGroup" 
+GroupAdd "DesktopGroup", "ahk_class WorkerW" ; 
 
 ;Colors
 global color_dark       := "0a0a0a" ;"171B1B" dark ;"1F2425" light ;0a0a0a darkest
@@ -536,6 +543,10 @@ if (!ReadConfig())
 if (gCfg.status_beeps)
     DoBeep()
 
+;initialize speech
+global oVoice := voice_class()
+;oVoice.Speak("Starting arcade E I P")
+
 ;check the license (.lic) file
 ValidateLicense()
 
@@ -611,6 +622,7 @@ if (A_Args.Length == 1)
             {
                 emulator.DeleteRomProperies("favorites")
                 emulator.DeleteRomProperies("ratings")
+                emulator.DeleteRomProperies("volume")
             }          
         }
         
@@ -634,8 +646,9 @@ if (A_Args.Length == 1)
 }
 
 ;---------------------------------------------------------------------------------
-; Store the original taskbar state, then hide it
+; Store the original taskbar state, then hide it (Deprecated)
 ;---------------------------------------------------------------------------------
+/* 
 original_taskbar_state := GetTaskbarState() ;true means hidden
 if (original_taskbar_state == false)
     LogEntry("INFO: Original taskbar state is: visible`n")
@@ -647,6 +660,7 @@ if (!original_taskbar_state) ;if taskbar visible
     HideShowTaskbar(true)  ;hide it
     LogEntry("INFO: Hiding the taskbar.`n")
 } 
+*/
 
 ;---------------------------------------------------------------------------------
 ; Make sure config file (arcadeEIP.ini) exists. Write error otherwise.
@@ -850,7 +864,7 @@ if (gCfg.marquee_active && gCfg.marquee_autostart)
     }
 }
 
-;If launched with no args and there is playlist defined, then
+;If launched with no args and there is a playlist defined, then
 ;start playing the list.
 if (A_Args.Length == 0)
 {
@@ -861,9 +875,9 @@ if (A_Args.Length == 0)
         g_directswitch_args := ""
         VectorNow(run_this)
     }
-    else if (gCfg.seed_rom)
+    else if (gCfg.seed_rom) ;use the seed rom if a list wasn't defined
     {
-        LogEntry("NOTICE: Attempting to launch the seed_rom: " gCfg.seed_rom "`n")
+        LogEntry("INFO: Attempting to launch the seed_rom: " gCfg.seed_rom "`n")
         VectorNow(gCfg.seed_rom)	
     }
     else
@@ -931,13 +945,13 @@ Vector:
     {
         ;Goto can only be called from the main thread in AHK2, so if a rule wants to
         ;vector to an alternate game it sets bDoRuleVector to true, calls VectorNow() to
-        ;to rebuild A_Args, then returns here (the main thread) to execute the Goto. 
+        ;rebuild A_Args, then returns here (the main thread) to execute the Goto. 
         bDoRuleVector := false
         Goto Vector
     }
 
     ;---------------------------------------------------------------------------------
-    ; Add Hot Keys (do here since some may have been added/modified by rules) 
+    ; Add Hot Keys (do here since some may have been added/modified by ProcessRules()) 
     ;---------------------------------------------------------------------------------
     AddHotKeys()
 
@@ -1007,10 +1021,35 @@ Vector:
             else
                 SetTimer KeyboardStrobeB, 50
         }
+
+        ;support for pause_lock (turns off attract time, locking current game by
+        ;holding down the pause key)
+        if (gCfg.pause_lock && gCfg.attract_delay != 0)
+            SetTimer PauseKeyStrobe, 50
+
+        ;Run any "+" apps from the "os" front end
+        if (StrLower(gCfg.fe_key) == "os")
+            RunApps(gCfg.fe_asset_name, gCfg.fe_asset_name, gCfg.fe_run_apps, "+")
     }
 
     ;Add game to the play log
     mPlayLog["log"].Push(gCfg.sys_key " " gCfg.rom_name)
+
+    ;Apply any game-specific volume overrides from volume.ini
+    ;(or return to default volume if necessary)
+    overrideVolume := Integer(oEmulators.Emulators[gCfg.sys_key].GetRomProperty("volume", gCfg.rom_file))
+    currentVolume := MasterSound.GetVolume()
+
+    ;modify overrideVolume if necessary to keep new volume between 0 and 100
+    newVol := currentVolume - override_volume + overrideVolume
+    if (newVol > 100)
+        overrideVolume := OverrideVolume + (100 - newVol)
+    if (newVol < 0)
+        overrideVolume := OverrideVolume + newVol
+
+    MasterSound.SetVolume(currentVolume - override_volume + overrideVolume)
+
+    override_volume := overrideVolume ;override_volume is global
 
     ;---------------------------------------------------------------------------------
     ; Graphics related prep and display.
@@ -1021,6 +1060,16 @@ Vector:
     {
         LogEntry("INFO: hide_cursor=1; Cursor will be turned off during runtime.`n")
         SystemCursor("Off") 
+    }
+
+    if (gCfg.hide_taskbar && !test_mode && !gCfg.debug_mode)
+    {
+        try
+            WinHide "ahk_class Shell_TrayWnd"
+        catch
+            LogEntry("NOTICE: hide_taskbar=1; Could not hide taskbar.`n")
+        else
+            LogEntry("INFO: hide_taskbar=1; Windows taskbar will be turned off during runtime.`n")
     }
     
     gCfg.logo_full_path := SetAssetFullPath("logo", gCfg.rom_name, gCfg.logo_folder, gCfg.system_logo, gCfg.global_asset_name)
@@ -1250,7 +1299,7 @@ Vector:
             ;----------------------------------------------------------------------------------------------
             ;**********************************************************************************************
 
-            SetWorkingDir A_ScriptDir
+            SetWorkingDir A_ScriptDir ;re-establish in case it was changed
         }
         catch as e
         {		
@@ -1432,7 +1481,19 @@ ExitFunction(ExitReason, ExitCode)
 
     MasterSound.On() ;make sure sound is turned on
 
-    ;restore original taskbar state
+    ;Restore taskbar
+    if (gCfg.hide_taskbar == 1)
+    {
+        try
+            WinShow "ahk_class Shell_TrayWnd"
+        catch 
+            LogEntry("INFO: Could not restore original taskbar state.`n")
+        else 
+            LogEntry("INFO: Restored original taskbar state.`n")
+    }
+
+    ;restore original taskbar state (Deprecated)
+    /*
     if (IsSet(original_taskbar_state))
     {
         if (original_taskbar_state != GetTaskbarState())
@@ -1441,6 +1502,7 @@ ExitFunction(ExitReason, ExitCode)
             LogEntry("INFO: Restored original taskbar state.`n")
         }
     }
+    */
 
     ;diagnostic mode is normally on
     if (diag_mode) 
@@ -1469,7 +1531,6 @@ KillApp(theHotkey:="")
 {
     LogEntry("INFO: " theHotkey " pressed. Terminating " cProductName ".`n")
     ExitApp
-    return
 }
 
 ;Mouse clicks get passed through (via ~ prefix), but we need to deal with

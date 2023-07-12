@@ -1,0 +1,46 @@
+LEDBlinky – Arcade LED Control Software
+=======================================
+These instructions are a work-in-progress. Since I don't personally use LEDBlinky,
+thanks to JaysArcade on the LaunchBox forums for testing some of this out.
+
+LEDBlinky can be used with arcadeEIP by setting it up in stand-alone mode. This is
+done by setting the front end (FE) in the Configure LEDBlinky tool to "Other Front-End".
+It is likely that you will also need to turn on the "Use MAME to trigger the Game 
+Start/Stop Events" option.
+
+Minimally, the following command line functions in LEDBlinky can be supported:
+
+* Game Start Event
+  LEDBlinky.exe <rom> <emulator>
+
+* FE Quit Event
+  LEDBlinky.exe 2
+
+These can be setup in arcadeEIP by first creating an [Application] section for
+each one in arcadeEIP.ini
+
+[Application_startledblinky]
+app_key=startledblinky
+proper_name=StartLEDBlinky
+exe_full_path=C:\LEDBlinky\LEDBlinky.exe,nowait
+param_list="[rom_file]" "[asset_name]"
+
+[Application_quitledblinky]
+app_key=quitledblinky
+proper_name=QuitLEDBlinky
+exe_full_path=C:\LEDBlinky\LEDBlinky.exe,nowait
+param_list=2
+
+These applications can then be called by editing the run_apps= lines as shown
+in these examples:
+
+[System_mame]
+run_apps=startledblinky
+
+[Front_End_os]
+run_apps=quitledblinky
+
+Additional LEDBlinky event commands should also be possible by adding additional
+[Application] sections and adding these to run_apps and/or pause_apps as needed. 
+If you find more options that work, let me know so I can add those to this 
+documentation.

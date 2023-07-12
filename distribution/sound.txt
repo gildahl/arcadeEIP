@@ -1,6 +1,6 @@
 Sound
 =====
-As of beta v.0.3.3.0, arcadeEIP now supports sound effects via the bass.dll library.
+arcadeEIP supports sound effects via the bass.dll library.
 
 To enable sound, you must download the third party bass.dll library file and place it in the
 root folder of arcadeEIP.  You may obtain this file from:
@@ -50,7 +50,7 @@ use your main, default audio card (i.e. the one your speakers are connected to).
 
 2.  At a command line prompt in your arcadeEIP folder, run 
 
-    >eip.exe -sound
+    >util.exe -sound
 
 This will list all your audio devices. Identify the number associated with your *secondary* audio card.
 For example, when I ran this, I found that my secondary (Realtek) card was device 6.

@@ -43,6 +43,12 @@ ValidateConfig()
         ExitApp
     }
 
+    ;pause_lock
+    if (!IsInteger(gCfg.pause_lock)) {
+        LogEntry("ERROR: Exiting. The [General] 'pause_lock' setting must be an integer. Current value is: " . gCfg.pause_lock . ".`n")
+        ExitApp
+    }
+
     ;[Picker_Preferences]
     
     ;joy_vert
