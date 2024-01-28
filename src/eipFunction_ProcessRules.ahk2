@@ -1,11 +1,11 @@
 ; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
-; © 2023 David G. Dahlstrom
+; © 2024 David G. Dahlstrom
 ; File: eipFunction_ProcessRules.ahk2
 
 ;Implements the arcadeEIP rules engine
 ProcessRules()
 {
-    global mRules, gCfg, aEmuArgs, bDoRuleVector, proxy_type, proxy_contents, search_tag, oEmulators
+    global mRules, gCfg, aEmuArgs, bDoVector, proxy_type, proxy_contents, search_tag, oEmulators
     
     for n, this_rule in mRules
     {
@@ -178,32 +178,38 @@ ProcessRules()
             {		
                 if (this_rule.policy = "")
                 {
+                    oTempArray := Array()
                     for n, cl in aEmuArgs
                     {
-                        if (cl = A_LoopField)
-                            aEmuArgs.Delete(n)
+                        if (cl != A_LoopField)
+                            oTempArray.Push(cl)
                     }
+                    aEmuArgs := oTempArray
                 }
                 if (this_rule.policy = "if_rom_in_list")
                 {
                     if InStr(this_rule.arg_2, gCfg.rom_name)
                     {
+                        oTempArray := Array()
                         for n, cl in aEmuArgs
                         {
-                            if (cl = A_LoopField)
-                                aEmuArgs.Delete(n)
+                            if (cl != A_LoopField)
+                                oTempArray.Push(cl)
                         }
+                        aEmuArgs := oTempArray
                     }
                 }
                 if (this_rule.policy = "if_rom_not_in_list")
                 {
                     if !InStr(this_rule.arg_2, gCfg.rom_name)
                     {
+                        oTempArray := Array()
                         for n, cl in aEmuArgs
                         {
-                            if (cl = A_LoopField)
-                                aEmuArgs.Delete(n)
+                            if (cl != A_LoopField)
+                                oTempArray.Push(cl)
                         }
+                        aEmuArgs := oTempArray
                     }
                 }
             }
@@ -211,7 +217,9 @@ ProcessRules()
             ;rebuild param_list
             gCfg.param_list := ""
             for n, param in aEmuArgs
-                gCfg.param_list := gCfg.param_list " " param
+                 gCfg.param_list := gCfg.param_list " " param
+
+            gCfg.param_list := Trim(gCfg.param_list)
         }
         
         ;*** [append_params] ***
@@ -255,7 +263,7 @@ ProcessRules()
 			policy := this_rule.policy
 			arg_2 := this_rule.arg_2
 			
-			bDoRuleVector := false
+			bDoVector := false
 			
 			;if arg_1 in %sys_key_list%
 			if (oEmulators.IsValidKey(arg_1))
@@ -274,7 +282,7 @@ ProcessRules()
 					if (FileExist(this_rom_full_path))
 					{	
 						vector_args := arg_1 " " Trim(this_rom_full_path, omitchars := "`"")
-						bDoRuleVector := true
+						bDoVector := true
 					}
 				}
 				;Uses same rom in same folder as the original passed in on the cl, but in
@@ -293,7 +301,7 @@ ProcessRules()
 							else
 								vector_args := arg_1 " " Trim(gCfg.rom_name, omitchars := "`"")
 							
-							bDoRuleVector := true
+							bDoVector := true
 							
 							break
 						}
@@ -311,7 +319,7 @@ ProcessRules()
 				ExitApp
 			}
 			
-			if (bDoRuleVector)
+			if (bDoVector)
 			{
 				LogEntry("INFO: " fnc ": Vectoring by a vector_ rule as: " vector_args "`n")
 				VectorNow(vector_args)
@@ -454,7 +462,7 @@ ProcessRules()
                     }
                     
                     LogEntry("INFO: " fnc ": Vectoring by a use_proxy vector rule as: " vector_args "`n")
-                    bDoRuleVector := true
+                    bDoVector := true
                     VectorNow(proxy_contents[1]) 
                 }
             }
@@ -556,7 +564,7 @@ ProcessRules()
 
             if FileExist(partial_config_file)
             {
-                LogEntry("INFO: Found partial " cConfigFileName " file: " partial_config_file ". Procesing.`n")
+                LogEntry("INFO: Found partial " cConfigFileName " file: " partial_config_file ". Processing.`n")
 
                 ;[General]
                 gCfg.pause_key := IniRead(partial_config_file, "General", "pause_key", gCfg.pause_key)

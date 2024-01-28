@@ -1,5 +1,5 @@
 ; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
-; © 2023 David G. Dahlstrom
+; © 2024 David G. Dahlstrom
 ; File: eipFunction_ProcessDirectives.ahk2
 
 ;This function provides implementation of several command line functions.

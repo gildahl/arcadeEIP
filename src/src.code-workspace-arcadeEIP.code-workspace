@@ -9,6 +9,8 @@
 		"version": "0.2.0",
 		"configurations": [
 
+
+
 			{
 				"name": "No Params",
 				"request": "launch",
@@ -32,6 +34,54 @@
 				"stopOnEntry": false,
 				"maxChildren": 10000
 			},
+
+			{
+				"name": "(marquee_launcher Galaga)",
+				"request": "launch",
+				"type": "autohotkey",
+				"runtime_v1": "AutoHotkey.exe",
+				"runtime_v2": "v2/AutoHotkey.exe",
+				"program": "${file}",
+				"args": ["-image","D:\\arcadeEIP\\Assets\\MAME\\Marquee\\Rom\\galaga.png","-scorecard","Test Galaga Scorecard"],
+				"stopOnEntry": false,
+				"maxChildren": 10000
+			},
+
+			{
+				"name": "(marquee_launcher 1942w)",
+				"request": "launch",
+				"type": "autohotkey",
+				"runtime_v1": "AutoHotkey.exe",
+				"runtime_v2": "v2/AutoHotkey.exe",
+				"program": "${file}",
+				"args": ["-image","D:\\arcadeEIP\\Assets\\MAME\\Marquee\\Rom\\1942w.png","-scorecard","Test 1942w Scorecard"],
+				"stopOnEntry": false,
+				"maxChildren": 10000
+			},
+
+			{
+				"name": "(marquee_launcher NULL)",
+				"request": "launch",
+				"type": "autohotkey",
+				"runtime_v1": "AutoHotkey.exe",
+				"runtime_v2": "v2/AutoHotkey.exe",
+				"program": "${file}",
+				"args": ["-off"],
+				"stopOnEntry": false,
+				"maxChildren": 10000
+			},
+
+			{
+				"name": "(marquee_launcher no params)",
+				"request": "launch",
+				"type": "autohotkey",
+				"runtime_v1": "AutoHotkey.exe",
+				"runtime_v2": "v2/AutoHotkey.exe",
+				"program": "${file}",
+				"args": [],
+				"stopOnEntry": false,
+				"maxChildren": 10000
+			},
 		
 			{
 				"name": "(marquee) -quiet",
@@ -41,6 +91,18 @@
 				"runtime_v2": "v2/AutoHotkey.exe",
 				"program": "${file}",
 				"args": ["-quiet"],
+				"stopOnEntry": false,
+				"maxChildren": 10000
+			},
+
+			{
+				"name": "MAME bbbxing",
+				"request": "launch",
+				"type": "autohotkey",
+				"runtime_v1": "AutoHotkey.exe",
+				"runtime_v2": "v2/AutoHotkey.exe",
+				"program": "${file}",
+				"args": ["mame", "bbbxing"],
 				"stopOnEntry": false,
 				"maxChildren": 10000
 			},
@@ -82,13 +144,13 @@
 			},
 
 			{
-				"name": "eip (qbert)",
+				"name": "eip (zax)",
 				"request": "launch",
 				"type": "autohotkey",
 				"runtime_v1": "AutoHotkey.exe",
 				"runtime_v2": "v2/AutoHotkey.exe",
 				"program": "${file}",
-				"args": ["mame", "qbert"],
+				"args": ["donk"],
 				"stopOnEntry": false,
 				"maxChildren": 10000
 			},
@@ -101,6 +163,18 @@
 				"runtime_v2": "v2/AutoHotkey.exe",
 				"program": "${file}",
 				"args": ["mame", "galaga", "-video", "gdi"],
+				"stopOnEntry": false,
+				"maxChildren": 10000
+			},
+
+			{
+				"name": "eip (coleco Heist, The.rom)",
+				"request": "launch",
+				"type": "autohotkey",
+				"runtime_v1": "AutoHotkey.exe",
+				"runtime_v2": "v2/AutoHotkey.exe",
+				"program": "${file}",
+				"args": ["coleco", "Heist, The.rom"],
 				"stopOnEntry": false,
 				"maxChildren": 10000
 			},

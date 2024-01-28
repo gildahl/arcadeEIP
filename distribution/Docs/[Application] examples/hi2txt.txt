@@ -1,0 +1,5 @@
+hi2txt support
+==============
+
+See "Quick Start 2 - MARQUEE.txt" in the root folder for information about setting
+up hi2txt support in arcadeEIP.

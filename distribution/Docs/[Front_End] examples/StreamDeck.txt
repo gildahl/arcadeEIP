@@ -1,5 +1,7 @@
 Elgato Stream Deck Integration Tips
-===================================
+=====================================
+For arcadeEIP versions 0.4.1.0 and up
+===================================== 
 
 The Elgato Stream Deck is a programmable button appliance that can take advantage of 
 arcadeEIP's direct launch and hotkey functions to craft a button-based interface that can
@@ -9,6 +11,65 @@ standalone mode or when integrated with another front-end like BigBox or GameEx.
 
 This guide assumes you know how to program an Elgato Stream Deck profile and just provides 
 guidance on a few things that are specific to arcadeEIP when using it with the Stream Deck. 
+
+Prerequisties
+==========================================================================================
+* Successfully complete the MAME Quick Start guide (or otherwise already up-and-running).
+* Be familiar with how to configure Elgato Stream Deck button profiles.
+==========================================================================================
+
+1. To configure a button on the Stream Deck to launch a game:
+
+   A. Configure a button in the Stream Deck by drag/dropping an "Open" action onto it from
+      the "System" group.
+
+   B. The "Title" should be the name of the game, and the "App/File" should be a command line
+      in the format:
+      
+         <path>eip.exe <sys_key> <rom>
+
+      Where <path> is the path to your arcadeEIP folder; <sys_key> is the sys_key specifying
+      one of your emulated systems from a [System] section in arcadeEIP.ini; and <rom>
+      is the name of the game rom.
+
+      For example:
+
+            "D:\arcadeEIP\eip.exe" mame asteroid
+
+	 or (with optional quotes around <rom>)
+
+            "D:\arcadeEIP\eip.exe" coleco "Boulder Dash.rom"
+
+         or (with no quotes around <rom>)
+
+            "D:\arcadeEIP\eip.exe" atari2600 Centipede (1982) (Atari - GCC) (CX2676).bin
+
+         or (partial names ok too, as long as text is unique in the set)
+
+            "D:\arcadeEIP\eip.exe" atari2600 Centipede
+
+    C. Configure at least one other game button before testing.
+
+    D. If you wish, also create an Exit button. To do this, drag/drop a "Hotkey" button from
+       the "System" group, and give it the title, "Exit" and assign it to the "~" key. See
+       the readme.txt file for a list of other hotkeys you could assign.
+
+    D. To test, press one of the game buttons. You may perform this test directly from your
+       desktop. Once the game is loaded, wait about 10 seconds then press the other game's
+       button. The game should switch.  After the second game is loaded, wait about 10
+       seconds, then press the first game button again upon which you should be switched
+       back to that game. You may exit by using the Exit button on your control panel or
+       using the Exit button on your Stream Deck (if you configured one).
+
+Once configured, you should be able to launch and switch games at almost anytime. This includes
+from the desktop, from within other non-exclusive apps; and will even launch games (and return)
+from anywhere within BigBox's GUI, not just its launch menu!
+
+
+==========================================================================================
+==========================================================================================
+Legacy "hotstring" method. This still works, but is no longer the recommended method for
+configuring the Elgato Stream Deck to work with arcadeEIP.
 
 Prerequisties
 ==========================================================================================

@@ -1,5 +1,5 @@
 ; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
-; © 2023 David G. Dahlstrom
+; © 2024 David G. Dahlstrom
 ; File: eipClass_PauseControl.ahk2
 
 ;This class supports the display of images and information on pause.
@@ -105,6 +105,8 @@ class pause_control_class
 			case "hide":
 				;make sure Alpha is returned to black so select screen fades correctly
 				guiAlpha.BackColor := "Black" 
+				try (gGui.%pages[thisPage]["control1"]%).Visible := false
+				try (gGui.%pages[thisPage]["control2"]%).Visible := false
 				return
 			case "start":
 				newPage := 1
@@ -160,8 +162,6 @@ class pause_control_class
 			; Info display
 			;*********************************
 
-			;Set GuiAlpha as default since we're in a different thread than it
-			;was created in.
 			edit_width := nScreenWidth // 2
 			edit_height := nScreenHeight			
 
@@ -344,6 +344,7 @@ class pause_control_class
 			try systemAsset := gCfg.%"system_" assetType% 
 		
 			asset_full_path := SetAssetFullPath(assetType, gCfg.rom_name, assetFolder, systemAsset, gCfg.global_asset_name)
+		
 			if (FileExist(asset_full_path))
 			{
 				gGui.guiAlpha_PauseImage%assetType% := guiAlpha.AddPicture("BackgroundTrans vPauseImage%" . assetType . "%", asset_full_path)

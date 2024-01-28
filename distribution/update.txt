@@ -5,6 +5,104 @@ Arcade Emulator Integration Player
 Update Log
 ========================================
 
+0.4.1.0 Major feature and bug fix release 
+Note that this version contains fairly major changes including changes to default
+key assignments and new arcadeEIP.ini keys. It is therefore highly recommended that
+you do a full reinstall of arcadeEIP to ensure full synchronization with the new
+feature set.
+
+* A major change was made to drastically improve the ease of configuration,
+  compatibility, and intuitiveness of launching and switching games using button
+  panels such as the Elgato StreamDeck. Use of hot strings and macros to do this is
+  no longer needed as games can now be both launched AND switched using the standard
+  command line "eip.exe <sys_key> <rom>" (for example, "eip.exe mame galaga.zip").
+  See StreamDeck.txt in the Docs\[Front_End] examples folder for more information.  
+* Added the ability to manually save high scores and take a snapshot for any game in any
+  system. See readme.txt file in the ..\Assets folder. This makes it possible for the
+  dynamic marquee to show high scores for any game and have these persist independendent
+  of vram state. Use RIGHT Ctrl-Alt-D to snap a picture and enter your high score.
+  The screenshot will be stored in the ..\Assets/<system>\HighScore\Rom folder. Turn 
+  the feature on/off using the highscore_screenshots key in arcadeEIP.ini.
+* Added a new executable called marquee_manager.exe. This is not used by arcadeEIP
+  but allows the dynamic marquee feature to be used by external programs such as batch
+  files or other front ends via through a command line interface. See the "Using Marquee
+  Manager.txt" file for complete instructions. (thanks MKChamp for the suggestion)
+* Marquee scorecard text could contain garbage characters due to being left in their
+  native encoding format. This has been fixed by implementing Unicode translation.
+* Async communications between arcadeEIP and the marquee switcher has been overhauled
+  to use a (cleaner) COM interface method rather than a pseudo pipe file method.
+* Fixed some regressions in the run_apps= setting inside the [Picker_Preferences] 
+  setting and added a new whitelist= setting to accompany it. Whitelisting games
+  will cause apps to run ONLY if one of the white-listed games is running. For
+  example, if you are running a game like Q*Bert, its diagonal-only profile, could 
+  cause issues in the menu. Using this new capability, you can now have the menu
+  update the joystick to use a normal 4-way profile in the menu only when Q*Bert 
+  (and/or other games that need it) is running, rather than for all games. For more
+  information, search Configuration Reference Guide.pdf for the text, "whitelist".
+* Fixed a regression that caused an assertion error when trying to launch a rom
+  without specifying a sys_key. This is legal to do but broke after the code update
+  to AHK 2.  This is now fixed.
+* Fixed another AHK 2 related regression that would cause a crash if attempting
+  to use the next_key function before the game list was fully loaded. Also used this
+  opportunity to improve user messages related to next_key/previous_key game switching.
+* Fixed another AHK 2 related regression that could cause a crash while processing
+  the <remove_param> rule.
+* Fixed another AHK 2 related regression that could cause a crash if bass.dll was missing.
+* Addressed an issue where if arcadeEIP lost an emulator's process id (due to it being
+  reset or closed, etc.) it could exhibit odd behavior, such as an empty game menu.
+  This is now better detected and will provide a message to the user, then close 
+  (hopefully) gracefully. 
+* For those using a second audio card to support sound in arcadeEIP when using MAME
+  port audio, it was (annoyingly) probable that sound could stop working if Windows 
+  re-indexed your audio devices. For this reason, the sound_device= setting now uses
+  the name of the audio device rather than its index.  See sound.txt for more info. 
+* Added support for paging through game lists by alphanumeric leading character.
+  This should help in navigating through very long game lists much more quickly.
+  By default, pressing z moves up and x moves down by letter/number. These keys 
+  can be changed via new settings in the [Key_Map] section of arcadeEIP.ini called
+  lcup= and lcdn=
+* Focus could be lost when returning to Big Box under certain conditions (for
+  example, this was found to happen when using the hi2txt feature). To address this,
+  a new window_name= setting was added to the Front End sections of arcadeEIP.ini 
+  to permit configuration of more aggressive focus re-acquisition. In the case of 
+  Big Box, if you are having this issue, add "window_name=LaunchBox Big Box" to 
+  the [Front_End_bigbox] section.
+* A crash bug could be encountered when setting show_license=0 in the [General]
+  section of arcadeEIP.ini.  This has been fixed.
+* Exiting arcadeEIP before full initialization could result in the game menu's last
+  saved state being reset. This has been fixed. 
+* ...Additionally, reading the last saved state could cause a crash if system or game
+  information had changed between sessions (such as by hiding systems, adding/removing
+  systems, adding/removing roms, etc.). A full overhaul was made to the state-reading
+  code, which should fix those issues. 
+* ...Additionally, the menu's saved state now stores the last selected menu. If you
+  would like the default menu on startup to be the last selected one, just clear the
+  value of default_list= in [Picker_Preferences], making it empty.
+* Removed support for omit.txt file, which was a hack used to skip specific games
+  from hi2txt processing. This is because the nvram corruption issue it was meant to 
+  address (and didn't) should rather be done by removing the game's xml files 
+  from hi2txt itself (i.e. since such corruption is a hi2txt issue, not an arcadeEIP
+  issue).
+* Fixed an issue in which unpausing while mameinfo text was displayed would result in
+  that text being re-displayed when locking/unlocking a game. Also corrected the 
+  arcadeEIP.ini entry for lock-game, which was being created as lock_game= rather than
+  lock_game_key=  
+* Changed "picks" star icon from yellow to white for aesthetic reasons.
+* The default key assignment for the "panic_key" was changed from ctrl-alt-k (^!k) to 
+  explicitly use the right ctrl and alt keys (>^>!k) since use of the left keys could
+  conflict with key assignments (and so not work) in the game selection menu.  
+* The default key assignments for list_mode_key, add_remove_key, and edit_mode_key have
+  been changed to i, j, and k respectively. This is a refinement to address issues with
+  the previous assignments (Alt, Space, & Shift) that made it too easy for users to 
+  accidentally edit (due to double-mapping with common MAME keys), among other issues.
+* Added deeper validation checking of arcadeEIP.ini. Now detects sys_key duplication
+  and certain section name errors that are easy to miss.
+* Miscellaneous bug fixes including several unhandled exceptions in edge cases that
+  could cause crashes.
+* Miscellaneous graphic refinements, especially in alpha fading effects.
+* Associated updates to documentation, including a thorough review of the Configuration
+  and Command-Line guides to correct errors and add missing items.
+
 0.4.0.2 Feature and documentation update: 
 * Volume normalization. Added a new feature which provides the ability to 
   specify sound volume adjustments for individual roms. See end of readme.txt in  

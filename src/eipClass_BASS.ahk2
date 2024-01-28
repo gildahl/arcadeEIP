@@ -23,9 +23,29 @@ class BASS_class
 
 	__New()
 	{
+		bfoundDevice := false
 		this._active := 1 ;sound is on
 		this._available := 1 ;sound is available
-		this._device := gCfg.sound_device ;sound_device is a global set in arcadeEIP.ini [General] section.
+		this._device := 1  ;1 is the default sound device
+
+		;override this._device if another was set in arcadeEIP.ini
+		devList := this.GetInfo() ;gets all sound devices readable by BASS.
+		for i, j in devList
+		{
+			if (j["name"] == gCfg.sound_device) 
+			{
+				this._device := i-1
+				bfoundDevice := true
+				break
+			}
+		}
+
+		;Exit if sound_device is incorrectly configured
+		if (gCfg.sound_device != "1" && !bfoundDevice) ;recall that sound_device="Default" is changed to "1" internally when read.
+		{
+			LogEntry("ERROR: Exiting. The [General] 'sound_device' setting must be either `"Default`" or a valid sound device name. Current value is: `"" . gCfg.sound_device . "`".`n")
+			ExitApp
+		}
 	}
 
 	Init()
@@ -142,7 +162,22 @@ class BASS_class
 		fSoundFile:= A_ScriptDir . "\Resources\Sound\menu.wav"
 		hMedia                 := DLLCall(this._samp, "Int", 0, "AStr", fSoundFile, "Int64", 0, "Uint", 0, "Uint", 1, "Uint", 0)
 		mederr                 := DllCall(this._err)
-		this._channel_menu    := DLLCall(this._chan, "Int", hMedia, "Uint", 0)
+		this._channel_menu     := DLLCall(this._chan, "Int", hMedia, "Uint", 0)
+
+		fSoundFile:= A_ScriptDir . "\Resources\Sound\shutter.wav"
+		hMedia                 := DLLCall(this._samp, "Int", 0, "AStr", fSoundFile, "Int64", 0, "Uint", 0, "Uint", 1, "Uint", 0)
+		mederr                 := DllCall(this._err)
+		this._channel_shutter  := DLLCall(this._chan, "Int", hMedia, "Uint", 0)
+
+		fSoundFile:= A_ScriptDir . "\Resources\Sound\highscore.wav"
+		hMedia                 := DLLCall(this._samp, "Int", 0, "AStr", fSoundFile, "Int64", 0, "Uint", 0, "Uint", 1, "Uint", 0)
+		mederr                 := DllCall(this._err)
+		this._channel_highscore := DLLCall(this._chan, "Int", hMedia, "Uint", 0)
+
+		fSoundFile:= A_ScriptDir . "\Resources\Sound\click.wav"
+		hMedia                 := DLLCall(this._samp, "Int", 0, "AStr", fSoundFile, "Int64", 0, "Uint", 0, "Uint", 1, "Uint", 0)
+		mederr                 := DllCall(this._err)
+		this._channel_click := DLLCall(this._chan, "Int", hMedia, "Uint", 0)
 		
 		;OutputDebug initerr:%initerr%, mederr:%mederr%, start:%BASS_start%, hMedia:%hMedia%, channel:%channel%, samp:%samp%`n
 	}
@@ -158,9 +193,13 @@ class BASS_class
 				BASS_ChannelPlay := DllCall(this._play, "UInt", this._channel_error, "Int", 1)
 			case "menu":
 				BASS_ChannelPlay := DllCall(this._play, "UInt", this._channel_menu, "Int", 1)
+			case "shutter":
+				BASS_ChannelPlay := DllCall(this._play, "UInt", this._channel_shutter, "Int", 1)
+			case "highscore":
+				BASS_ChannelPlay := DllCall(this._play, "UInt", this._channel_highscore, "Int", 1)
 		}
 
-		if (!g_guiselect_loaded || !g_guiselect_visible)
+		if ((!g_guiselect_loaded || !g_guiselect_visible) && !g_guihighscore)
 			return
 
 		Switch soundToPlay 
@@ -195,6 +234,8 @@ class BASS_class
 				BASS_ChannelPlay := DllCall(this._play, "UInt", this._channel_edit_on, "Int", 1)
 			case "edit_off":
 				BASS_ChannelPlay := DllCall(this._play, "UInt", this._channel_edit_off, "Int", 1)
+			case "click":
+				BASS_ChannelPlay := DllCall(this._play, "UInt", this._channel_click, "Int", 1)
 		}		
 	}
 
@@ -209,8 +250,9 @@ class BASS_class
 			return
 
 		Loop 
-		{			
-			BASS_dev := DllCall(this._dev, "UInt", idx, "Ptr", info)
+		{		
+			BASS_dev := 0	
+			try BASS_dev := DllCall(this._dev, "UInt", idx, "Ptr", info)
 			if (BASS_dev == 0)
 				break
 

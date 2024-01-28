@@ -1,5 +1,5 @@
 ﻿; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
-; © 2023 David G. Dahlstrom
+; © 2024 David G. Dahlstrom
 ; File: eip.ahk2
 
 ;arcadeEIP main thread
@@ -35,7 +35,7 @@
 #Requires AutoHotkey v2.0
 
 ;#Warn All, Off
-#SingleInstance ignore ;multiple instance not allowed (to prevent front-ends like BigBox from launching multiple copies)
+#SingleInstance Off ;multiple instance not allowed (to prevent front-ends like BigBox from launching multiple copies)
 InstallKeybdHook 1
 InstallMouseHook 1
 A_MaxHotkeysPerInterval := 200 ;prevents hotkey warnning after 71 keystrokes in a short period
@@ -51,9 +51,9 @@ SetWorkingDir A_ScriptDir
 
 ;Compiler directives
 ;***********************************************************
-global CodeVersion := "0.4.0.2"
+global CodeVersion := "0.4.1.0"
 ;@Ahk2Exe-Let version = %A_PriorLine~U)^(.+"){1}(.+)".*$~$2%
-;@Ahk2Exe-SetCopyright © 2023 David G. Dahlstrom
+;@Ahk2Exe-SetCopyright © 2024 David G. Dahlstrom
 ;@Ahk2Exe-SetProductName arcadeEIP
 ;@Ahk2Exe-SetDescription arcadeEIP
 ;@Ahk2Exe-SetProductVersion %U_version% beta
@@ -67,10 +67,7 @@ global CodeVersion := "0.4.0.2"
 ;Note that certain effects (like Alpha) may not work quite right in test mode.
 ;This is different than debug_mode which is a special simulation mode that runs 
 ;arcadeEIP and logs its actions without actually launching any emulators or applications.
-;Among other things, keeps mouse on and suppresses always on top methods
-;to enable access to the debugger (most of the time) during runtime.
-;Also recommended to disable window_name= lines in the ini file.
-;Finally, diag_mode adds some diagnostic info to the logs. Since this is pretty 
+;diag_mode adds some diagnostic info to the logs. Since this is pretty 
 ;lightweight, it is currently left on all the time.
 
 global test_mode := false     ;set to true to suppress AlwaysOnTop and keep the mouse cursor on.                         
@@ -85,6 +82,48 @@ global start_tick := A_TickCount, start_time := A_Now
 global g_mouse_clicks_off := 0
 global oPauseProc := suspend_process_class()
 
+;---------------------------------------------------------------------------------
+;Handle re-entry scenario for direct game switching via command-line
+global oRemoteActiveMsg
+
+;get instance of oActiveMsg from any already running arcadeEIP instance (if exists)
+try oRemoteActiveMsg := ComObjActive("{0682b31f-d22a-48c9-9ed5-ac3bff0cf5fb}") 
+if (IsSet(oRemoteActiveMsg))
+{
+    if (oRemoteActiveMsg["Active"] == 1) ;tells us that another instance is already running
+    {    
+        ;if more than 2 args, assume rom name is multi-word with no quotes.
+        ;So concatenate these.
+        if (A_Args.Length > 2)
+        {
+            temp := A_Args[2]
+            {
+                loop A_Args.Length - 2
+                {
+                    temp := temp " " A_Args[A_Index + 2]
+                }
+                A_Args[2] := temp
+            }
+        }
+        ;if less than 2 args, then we can't process since direct switching requires
+        ;both a <sys_key> and <rom>
+        if (A_Args.Length >= 2) 
+        {
+            ;Put the vector in the oActiveMsg object which is shared across processes
+            ;(oRemoteActiveMsg in this stub, and as oActiveMsg in the main process)
+            ;When a vector is detected in this field, the main process will perform
+            ;a DirectSwitch() to it in the RunWaitTimer()
+            try
+            {	
+                oRemoteActiveMsg["Vector"] := A_Args[1] " " A_Args[2]
+            }
+        }
+
+        ;Exit. The other instance will now take care of running the game.
+        ExitApp
+    }
+}
+    
 ;---------------------------------------------------------------------------------
 ;Validate any console mode command-line options
 global oConsoleOptions := ["-createproxy", "-find", "-f", "-findall", "-fa", "-help", "-list", "-log", "-show_log", "-sound", "-systems"]
@@ -142,10 +181,13 @@ else
 ; File Includes
 ;---------------------------------------------------------------------------------
 #include eipClass_BASS.ahk2                     ;Support for the BASS sound library
+#include eipClass_CreateGui.ahk2                ;Create the main gui screens
+#include eipClass_HighScoreDialog.ahk2          ;High score dialog support class
 #include eipClass_DetectInactivity.ahk2         ;Supports auto game switching after a period of inactivity
 #include eipClass_Emulators.ahk2                ;Emulator management and information class
 #include eipClass_FadeWindow.ahk2               ;Fades a window in and out
 #include eipClass_Gdip.ahk2                     ;Graphics library (GDI+)
+#include eipClass_HighScore.ahk2                ;Support for hi2txt and high score display in marquee
 #include eipClass_History.ahk2                  ;Game history management and file serialization
 #include eipClass_LaunchBox.ahk2                ;Support LaunchBox/BigBox content management
 #include eipClass_LVColors.ahk2                 ;Support colors in ListView control
@@ -158,12 +200,10 @@ else
 #include eipFunction_CheckLicense.ahk2          ;checkLicense & Hash functions
 #include eipFunction_ConfigCreate.ahk2          ;Creates default arcadeEIP.ini files
 #include eipFunction_ConfigValidate.ahk2        ;Validate several arcadeEIP.ini settings
-#include eipFunction_GetHighScores.ahk2         ;Support for hi2txt and high score display in marquee
 #include eipFunction_ProcessRules.ahk2		    ;Custom rules processor
 #include eipFunctions_AttractMode.ahk2          ;Attract mode game switching functions
 #include eipFunctions_Attributed.ahk2           ;Attributed/Public domain functions from the web
 #include eipFunctions_ConfigProcess.ahk2        ;Functions supporting config file processing
-#include eipFunctions_CreateGui.ahk2            ;Create the main gui screens
 #include eipFunctions_ProcessDirectives.ahk2    ;Process command line directives
 #include eipFunctions_ProcessHotkeys.ahk2       ;Hotkey management and functions
 #include eipFunctions_RunApplications.ahk2      ;Functions that launch/run applications
@@ -176,20 +216,22 @@ else
 ;---------------------------------------------------------------------------------
 
 ;Note that some particularly important state global state flags are:
-;  1. g_guiselect_visible  : whether the game selection screen is displayed.
-;  2. g_guiselect_loaded   : whether the game selection screen has completed initialization
-;  3. g_pause_state        : whether we are currently paused
-;  4. g_guipause_visible   : whether the pause screen is currently displayed
-;  5. g_exit_code          : tells how an exit command was issued (see ExitKey() function)
-;  6. g_directswitch_args  : if this contains a game vector, arcadeEIP will switch to that game on next exit
-;  7. g_cycle              : tracks the number of games launched in this session
+;  1. g_guiselect_visible     : whether the game selection screen is displayed.
+;  2. g_guiselect_loaded      : whether the game selection screen has completed initialization
+;  3. g_pause_state           : whether we are currently paused
+;  4. g_guipause_visible      : whether the pause screen is currently displayed
+;  5. g_exit_code             : tells how an exit command was issued (see ExitKey() function)
+;  6. g_guihighscore          : Whether the high score entry screen is visible
+;  7. g_directswitch_args     : if this contains a game vector, arcadeEIP will switch to that game on next exit
+;  8. g_cycle                 : tracks the number of games launched in this session
+;  9. g_ran_fe                : this instance ran in front-end launch mode
 
-global g_guiselect_visible := g_guiselect_loaded := g_pause_state := g_guipause_visible := false
-global g_exit_code := "", g_directswitch_args := "", g_cycle := g_lockedState := 0
+global g_guiselect_visible := g_guiselect_loaded := g_pause_state := g_guipause_visible := g_ran_fe := g_guihighscore := false
+global g_exit_code := "", g_directswitch_args := "", g_cycle := g_lockedState := g_abort_now := 0
 
 ;Miscellaneous global state flags and handles
 global bSearchGlobal := false ;true if only the rom (and no emu) is specified on the command line
-global bEmuRunning := bEmuWindowActive := bSuppressLogging := bDoRuleVector := false
+global bEmuRunning := bEmuWindowActive := bSuppressLogging := bDoVector := false
 global exit_key_off := pause_key_off := magic_key_off := false
 global pid_emulator := emu_hwnd := cur_emu := fe_pid := pid_screen := marquee_pid := 0
 ;global original_taskbar_state
@@ -206,9 +248,10 @@ gCfg.use_log := 1
 gCfg.fast_load := 0
 gCfg.status_beeps := false
 gCfg.alpha_effect := 1
-gCfg.sound_device := 1
+gCfg.sound_device := "1" ;internal value is "1", while .ini default is "Default"
 gCfg.sync_volume := 0
 gCfg.show_license := 1
+gCfg.highscore_screenshots := 1
 gCfg.hotstring_prefix:="@!@"
 gCfg.seed_rom := "mame galaga.zip"
 
@@ -217,9 +260,10 @@ gCfg.marquee_active := 0
 gCfg.marquee_monitor := 2
 gCfg.marquee_autostart := 0
 gCfg.marquee_autoexit := 0
+gCfg.marquee_show_high_scores := 1
 
 ;[Key_Map]
-gCfg.panic_key := "^!k"
+gCfg.panic_key := ">^>!k"
 gCfg.pause_key := ","
 gCfg.menu_toggle_key := "'"
 gCfg.menu_show_key := "="
@@ -230,16 +274,19 @@ gCfg.magic_key := "."
 gCfg.previous_key := "q,["
 gCfg.next_key := "w,]"
 gCfg.lock_game_key := "^!l"
+gCfg.highscore_key := ">^>!d"
 gCfg.launch_key := "LCtrl"
-gCfg.list_mode_key := "LAlt"
-gCfg.add_remove_key := "Space"
-gCfg.edit_mode_key := "LShift"
+gCfg.list_mode_key := "i"
+gCfg.add_remove_key := "j"
+gCfg.edit_mode_key := "k"
 gCfg.left_key := "Left"
 gCfg.right_key := "Right"
 gCfg.up_key := "Up"
 gCfg.down_key := "Down"
 gCfg.pgup_key := "PgUp,1"
 gCfg.pgdn_key := "PgDn,2"
+gCfg.lcup_key := "z"
+gCfg.lcdn_key := "x"
 gCfg.home_key := "Home,5"
 gCfg.end_key := "End,6"
 gCfg.favorite_key := "m"
@@ -269,6 +316,7 @@ gCfg.mouse_vert := "off"
 gCfg.mouse_horiz := "off"
 gCfg.picker_asset :="EIP_Picker"    ;set through asset_name setting
 gCfg.picker_apps := ""              ;set though run_apps setting
+gCfg.whitelist := ""
 gCfg.all_picks_label := "All Picks"
 gCfg.top_picks_label := "Top Picks"
 gCfg.lst_max_rows := 100
@@ -301,14 +349,16 @@ gCfg.system_marquee := ""
 gCfg.controls_folder := ""
 gCfg.system_controls := ""
 gCfg.meta_names := ""
+gCfg.highscore_folder := ""
 
 ;[Front_End]
 gCfg.fe_key := ""
 gCfg.fe_asset_name := ""
 gCfg.fe_proper_name := ""
+gCfg.fe_window_name := ""
 gCfg.hide_cursor := 0
 gCfg.hide_taskbar := 0
-gCfg.start_screen := 1
+gCfg.start_screen := 0
 gCfg.exit_screen := 1
 gCfg.show_on_pause := ""
 gCfg.fe_run_apps := ""
@@ -366,18 +416,30 @@ global default_start_show_time := default_exit_show_time := start_show_time := e
 GroupAdd "DesktopGroup", "ahk_class Progman" ; Adding both classes of desktop to the group "DesktopGroup" 
 GroupAdd "DesktopGroup", "ahk_class WorkerW" ; 
 
-;Colors
-global color_dark       := "0a0a0a" ;"171B1B" dark ;"1F2425" light ;0a0a0a darkest
-global color_maroon     := "0x800000"
+;Base Colors
+global color_black      := "0x000000"
 global color_gray       := "0x808080"
-global color_light_gray := "0xD3D3D3"
+global color_silver     := "-"
 global color_white      := "0xFFFFFF"
-global color_dark_gray  := "0x1F2425"
-global color_green      := "0x006400"
+global color_maroon     := "0x800000"
+global color_red        := "0xFF0000"
+global color_purple     := "0x800080"
+global color_fuchsia    := "0xFF00FF"
+global color_green      := "0x008000"
+global color_lime       := "0x00FF00"
+global color_olive      := "0x808000"
 global color_yellow     := "0xFFFF00"
+global color_navy       := "0x000080"
+global color_blue       := "0x0000FF"
+global color_teal       := "0x008080"
+global color_aqua       := "0x00FFFF"
 
-;hi score inits
-global hiscore_folder := "", hiscoredat_folder := "", mHighscores := Map(), top_score := ""
+;Extended Colors
+global color_dark       := "0a0a0a" ;"171B1B" dark ;"1F2425" light ;0a0a0a darkest
+global color_light_gray := "0xD3D3D3"
+global color_dark_gray  := "0x1F2425"
+global color_dark_green := "0x006400"
+global color_dark_yellow:= "0xFFD800"
 
 ;Diagnostic and unit test
 global ut_runwait_avg := 0, ut_runwait_cycle := 0, ut_runwait_timer := 0
@@ -390,7 +452,7 @@ global oOriginalArgs := A_Args.Clone()
 global nScreenWidth := A_ScreenWidth * 96 // A_ScreenDPI
 global nScreenHeight := A_ScreenHeight * 96 // A_ScreenDPI
 
-OnExit(ExitFunction)
+OnExit ExitFunction
 
 ;Constants
 global cExeName := "eip.exe"
@@ -422,7 +484,7 @@ global cPoker_Period := 1000
 global cSchedule_Period := 1000
 global cInactivityTest_Period := 1000
 
-;Define global folders
+;Define/set global folders
 global favorite_on_icon_file := A_ScriptDir "\Resources\Icons\" cFavoriteOnIconFileName
 global favorite_off_icon_file := A_ScriptDir "\Resources\Icons\" cFavoriteOffIconFileName
 global rating_icon_file := A_ScriptDir "\Resources\Icons\" cRatingIconFileName
@@ -443,7 +505,6 @@ global history_file := A_ScriptDir "\.history"
 global idle_log_file := A_ScriptDir "\idle.log"
 global marqueePipeFile := A_ScriptDir "\marquee.txt"
 global hi2txt_exe := A_ScriptDir "\hi2txt\hi2txt.exe"
-global hi2txt_omit := A_ScriptDir "\hi2txt\omit.txt"
 
 ;Create object to manage config (ini) cFELogFileName
 global oConfigFile := config_file_class(config_file)
@@ -598,7 +659,7 @@ if (A_Args.Length == 1)
     }
     else if (A_Args[1] == "-clean") ;Reverts environment to defaults -- doesn't touch arcadeEIP.ini though
     {        
-        msgAnswer := MsgBox("Press Yes to revert back to defaults. This will erase all picks, custom lists, state, history, ratings, and favorites. Configuration will be unaffected.  `n`nPress No to cancel this dialog and do nothing.", cProductName . " - Restore Clean Settings", 52)
+        msgAnswer := MsgBox("Press Yes to revert back to defaults. This will erase all picks, custom lists, state, history, ratings, highscores, and favorites. Configuration will be unaffected.  `n`nPress No to cancel this dialog and do nothing.", cProductName . " - Restore Clean Settings", 52)
         if (msgAnswer == "Yes")
         {
             LogEntry("INFO: " cProductName " called with -clean.`n")
@@ -623,6 +684,7 @@ if (A_Args.Length == 1)
                 emulator.DeleteRomProperies("favorites")
                 emulator.DeleteRomProperies("ratings")
                 emulator.DeleteRomProperies("volume")
+                emulator.DeleteRomProperies("highscores")
             }          
         }
         
@@ -825,6 +887,21 @@ if (A_Args.Length = 1)
     }
 }
 
+;Now that we know that this is not the Front-End wrapper instance, register an active object to inform
+;other instances that this one is running. This is used to support remote game switching via command-line (through
+;a DirectSwitch() operation in the RunWaitTimer() ).
+global oActiveMsg := Map()
+oActiveMsg["Active"] := 1   ;indicates this instance is active
+oActiveMsg["Vector"] := ""  ;initialize the vector field
+ObjRegisterActive(oActiveMsg, "{0682b31f-d22a-48c9-9ed5-ac3bff0cf5fb}") ;guid for the oActiveMsg
+
+;Also register an object to communicate with the marquee manager.
+global oMarqueeMsg := Map()
+oMarqueeMsg["Key"] := ""
+oMarqueeMsg["Path"] := ""
+oMarqueeMsg["Highscore"] := ""
+ObjRegisterActive(oMarqueeMsg, "{cf63540b-c460-489a-9310-62fe83e6e748}") ;guid for the oMarqueeMsg
+
 ;Startup the auto-switch (a.k.a. attract mode) inactivity monitor
 fnc := AttractSwitch.Bind()
 oDetectInactivity := DetectInactivity_Class(fnc, gCfg.attract_delay, gCfg.attract_mute)
@@ -898,7 +975,6 @@ Vector:
     winset_style := ""
     search_tag := ""
     gCfg.use_hi2txt := 0
-    top_score := ""
     if (g_cycle > 0)
         oPauseControl.Clear()
     oConfigFile.ReadSection("Key_Map")
@@ -912,6 +988,7 @@ Vector:
     gCfg.controls_folder := ""
     gCfg.system_controls := ""
     gCfg.meta_names := ""
+    gCfg.highscore_folder := ""
     gCfg.mameinfo_folder := ""
 
     ;It is possible for users to create custom image types to use as pause
@@ -941,12 +1018,12 @@ Vector:
     ; Run rules engine 
     ;---------------------------------------------------------------------------------
     ProcessRules()
-    if (bDoRuleVector) 
+    if (bDoVector) 
     {
         ;Goto can only be called from the main thread in AHK2, so if a rule wants to
-        ;vector to an alternate game it sets bDoRuleVector to true, calls VectorNow() to
+        ;vector to an alternate game it sets bDoVector to true, calls VectorNow() to
         ;rebuild A_Args, then returns here (the main thread) to execute the Goto. 
-        bDoRuleVector := false
+        bDoVector := false
         Goto Vector
     }
 
@@ -956,8 +1033,12 @@ Vector:
     AddHotKeys()
 
     ;Attempt to get highscores for this rom (mame plug-in feature)
-    if (gCfg.use_hi2txt == 1)
-        GetHighScores(gCfg.rom_name . ".hi")
+    if (gCfg.marquee_show_high_scores == 1)
+    {
+        ;This function gets the high scores. Once called, the individual components of the 
+        ;high score (if any) may then be read from the HighScore object's properties.
+        HighScore.ReadHighScore(gCfg.rom_name)
+    }
 
     ;Marquee support initialization
     marquee_full_path := SetAssetFullPath("marquee", gCfg.rom_name, gCfg.marquee_folder, gCfg.system_marquee, gCfg.global_asset_name)
@@ -966,29 +1047,22 @@ Vector:
     ;If marquee mode is configured and active and marquee.exe is running...
     if (marquee_full_path && gCfg.marquee_active && (ProcessExist(marquee_pid) || ProcessExist("marquee.exe")))
     {
-        LogEntry("INFO: Sending marquee mode update.`n")        		
+        LogEntry("INFO: Sending game and score information to marquee.`n")        		
 
         try
         {	
-            ;use a pseudo pipe file to communicate with marquee.exe process
-            if (FileExist(marqueePipeFile))
-                FileDelete(marqueePipeFile)
+            oMarqueeMsg["Key"] := gCfg.sys_key
+            oMarqueeMsg["Path"] := marquee_full_path
+            oMarqueeMsg["Autoexit"] := gCfg.marquee_autoexit
 
-            pipeFile := FileOpen(marqueePipeFile, "w `n")
-            
-            ;Send these values to the marquee.exe process
-            pipeFile.WriteLine(gCfg.sys_key)
-            pipeFile.WriteLine(marquee_full_path)
-
-            if (top_score != "")
-                pipeFile.WriteLine(top_score)
+            if (HighScore.FormattedHighScore != "")
+            {
+                oMarqueeMsg["Highscore"] := HighScore.FormattedHighScore
+            }
             else
-                pipeFile.WriteLine("NULL")
-            
-            pipeFile.Close
-            Sleep 100
-
-            FileSetAttrib "+H", marqueePipeFile
+            {
+                oMarqueeMsg["Highscore"] := "NULL"
+            }
         }
         catch as e
         {		
@@ -1093,9 +1167,9 @@ Vector:
             ;screens normally, otherwise do a refresh only (which skips
             ;re-creating the background).
             if (!g_directswitch_args)
-                ScreenCreate()
+                CreateGUI.CreateScreens()
             else
-                ScreenRefresh()
+                CreateGUI.ScreenRefresh()
         }
         else
         {
@@ -1127,9 +1201,14 @@ Vector:
         ;   the first game switch (and then agan after subsequent game switches.) 
         ;3. Make sure Alpha fading still works THE RIGHT WAY.
         ;---------------------------------------------------------------------------------
-        guiAlpha.Opt("-AlwaysOnTop")
-            
+
+        ;Show the Dialog screen
+        guiDialog.Opt("-AlwaysOnTop")
+        guiDialog.Show("W" nScreenWidth " H" nScreenHeight " X0 Y0")
+        WinSetTransColor "Black", "ahk_id " guiDialog.Hwnd
+          
         ;Show the Alpha screen
+        guiAlpha.Opt("-AlwaysOnTop")
         guiAlpha.Show("W" nScreenWidth " H" nScreenHeight " X0 Y0")
 
         ;Set the Alpha screen's transparency
@@ -1142,6 +1221,8 @@ Vector:
 
         guiSelect.Show("W" nScreenWidth " H" nScreenHeight " X0 Y0")
         guiBackground.Show("W" nScreenWidth " H" nScreenHeight " X0 Y0")
+
+        CreateGUI.ShowStartScreenControls()
         guiStart.Show("W" nScreenWidth " H" nScreenHeight " X0 Y0 NA")           
 
         ;Alpha fade-in start screen when switching games
@@ -1325,6 +1406,7 @@ Vector:
 
     if (exit_show_time > -1)
     {
+        CreateGUI.ShowExitScreenControls()
         guiExit.Show("W" nScreenWidth " H" nScreenHeight " X0 Y0")
     }
     
@@ -1395,137 +1477,6 @@ Vector:
 ExitApp
 ;*********************************************************************************************
 ;*********************************************************************************************
-
-;Call this function when exiting arcadeEIP to close and free resources
-ExitFunction(ExitReason, ExitCode)
-{
-    global
-    
-    local logFileName
-
-    ;Send appropriate exit message to marquee.exe if marquee mode active
-    if (gCfg.marquee_active && ProcessExist("marquee.exe"))
-    {
-        LogEntry("INFO: Notifying marquee.exe that eip.exe is exiting (autoexit=" gCfg.marquee_autoexit ").`n")        		
-        
-        try
-        {	
-            if (FileExist(marqueePipeFile))
-                FileDelete marqueePipeFile
-
-            pipeFile := FileOpen(marqueePipeFile, "w `n")
-            
-            if (gCfg.marquee_autoexit)
-                pipeFile.WriteLine("!Exit!")
-            else
-                pipeFile.WriteLine("!Clear!")
-            
-            pipeFile.Close
-            Sleep 100
-            FileSetAttrib "+H", marqueePipeFile
-        }
-        catch as e
-        {		
-            LogEntry("ERROR: Closing marquee mode: " FormatErrorMessage(e) "`n")
-        }
-    }
-
-    ;Destroy Guis
-    if (start_show_time > -1 || exit_show_time > -1)
-    {
-        try guiBackground.Destroy()
-        try guiSelect.Destroy()
-        oSelectListControl := {}
-        try guiAlpha.Destroy()
-        try guiStart.Destroy()
-        try guiExit.Destroy()
-    }
-    
-    SystemCursor("On")
-
-    if (IsSet(oDetectInactivity))
-        oDetectInactivity.Inactivate()
-    
-    ;special case.
-    ;remove cfg subfolder if it gets created during runtime.
-    ;Important to check the time it was created just in case someone
-    ;runs eip.exe in the mame folder, otherwise it could delete
-    ;all of the cfg profiles!
-    if (FileExist("cfg"))
-    {
-        cfg_time := FileGetTime("cfg", "C")
-        cfg_time := DateDiff(cfg_time, start_time, "seconds") 
-        if (cfg_time > 0) ;i.e. if cfg_time is after start_time
-            try DirDelete "cfg", 1
-    }
-    
-    if (FileExist("help.txt"))
-    {
-        help_time := FileGetTime("help.txt", "C")
-        help_time := DateDiff(help_time, start_time, "seconds")
-        if (help_time > 0)
-            try DirDelete "help.txt", 1
-    }
-    
-    if (gCfg.debug_mode)
-    {
-        SplitPath log_file, &logFileName
-        ShowLog(logFileName)	
-    }
-    
-    if (!bSuppressExitMessage)
-        LogEntry("Exiting " cExeName "`n")
-    
-    if (gCfg.status_beeps)
-        DoBeep()
-
-    MasterSound.On() ;make sure sound is turned on
-
-    ;Restore taskbar
-    if (gCfg.hide_taskbar == 1)
-    {
-        try
-            WinShow "ahk_class Shell_TrayWnd"
-        catch 
-            LogEntry("INFO: Could not restore original taskbar state.`n")
-        else 
-            LogEntry("INFO: Restored original taskbar state.`n")
-    }
-
-    ;restore original taskbar state (Deprecated)
-    /*
-    if (IsSet(original_taskbar_state))
-    {
-        if (original_taskbar_state != GetTaskbarState())
-        {
-            HideShowTaskbar(original_taskbar_state)
-            LogEntry("INFO: Restored original taskbar state.`n")
-        }
-    }
-    */
-
-    ;diagnostic mode is normally on
-    if (diag_mode) 
-    {
-        if (ut_runwait_cycle == 0)
-            ut_runwait_avg := 0
-
-        LogEntry("INFO: Runwait cycle average: " ut_runwait_avg " ms. Peak was: " ut_runwait_peak " ms.`n")
-    }
-
-    ;if we started from a front end, make sure it gets the focus back
-    ;(GameEx didn't need, but BigBox does)
-    if (fe_pid)
-       WinActivate "ahk_pid " . fe_pid
-
-    ;Turn off timer threads
-    SetTimer RunWaitTimer, 0
-    SetTimer KeepActive, 0
-    if (gCfg.kiosk_mode)
-        SetTimer KeyboardStrobeA, 0
-    else
-        SetTimer KeyboardStrobeB, 0
-}
 
 KillApp(theHotkey:="") 
 {

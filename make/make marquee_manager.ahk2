@@ -1,0 +1,1 @@
+Run '"C:\Program Files\AutoHotkey\Compiler\Ahk2Exe.exe" /base "C:\Program Files\AutoHotkey\v2\AutoHotkey64.exe" /in "D:\Development\Repository\arcadeEIP\src\eipMarqueeManager.ahk2" /out "D:\Development\Repository\arcadeEIP\make\marquee_manager.exe" /icon "D:\Development\Repository\arcadeEIP\make\marquee.ico" /mpress 1'

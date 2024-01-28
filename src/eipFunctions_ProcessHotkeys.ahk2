@@ -1,5 +1,5 @@
 ; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
-; © 2023 David G. Dahlstrom
+; © 2024 David G. Dahlstrom
 ; File: eipFunctions_ProcessHotkeys.ahk2
 
 ;Since arcadeEIP mainly runs on top of emulators, it never takes the focus.
@@ -10,16 +10,17 @@
 ;Most of this hotkey management is performed using the functions in this file.
 
 ;This is the main function for showing and hiding the game select screen (guiSelect)
-;Note that "option" is not actually used at this time.
+;option can be "0" (not switching a game) or "1" (switching to a new game)
 MagicKey(option, theHotkey:="")
 {
     global gCfg, g_mouse_clicks_off, g_guiselect_visible
+    static sbRanPickerApps := false
 
     ;*** HOUSE OF CARDS ALERT ***
     ;BEWARE that the sequence of events in this function are
     ;very delicate.  Test throroughly if changing anything here.
    
-    if (magic_key_off || !bEmuWindowActive)
+    if (magic_key_off || !bEmuWindowActive || g_guihighscore)
     {
         oBASS.Play("error")
         return
@@ -36,11 +37,28 @@ MagicKey(option, theHotkey:="")
         ;if picker screen does not dismiss, check to see if magic_key is mapped to pause_key or exit_key
         ;and then ensure that pause_key or exit_key is mapped the same in the picker cp configuration as in
         ;the game's cp configuration.          
-        MouseGetPos ,, &pid_screen
+        ;MouseGetPos ,, &pid_screen
+        ;OutputDebug "Pid: " pid_screen "`n"
 
         oMouseDelta.SetState(1) 
         oDetectInactivity.Suspend()
         g_mouse_clicks_off := 1
+
+        ;Wait for picker apps to load
+        if (gCfg.picker_apps)
+        {
+            if (gCfg.whitelist == "" || InStr(gCfg.whitelist, gCfg.sys_key " " gCfg.rom_file))
+            {
+                Hotkey gCfg.magic_key, "Off"
+
+                ShowHideBanner("Please Wait...")
+                RunApps(gCfg.picker_asset, "", gCfg.picker_apps)
+                ShowHideBanner()          
+
+                Hotkey gCfg.magic_key, "On"
+                sbRanPickerApps := true
+            }
+        }
     
         guiAlpha.Opt("+AlwaysOnTop")
         WinSetTransColor "Black 240", "ahk_id " . guiSelect.Hwnd
@@ -52,16 +70,6 @@ MagicKey(option, theHotkey:="")
         
         oFadeAlphaWindow.Start(1,150,20,16) ;dim the alpha screen
 
-        ;Wait for picker apps to load
-        if (gCfg.picker_apps)
-        {
-            Hotkey gCfg.magic_key, "Off"
-            ShowControls("guiPause")
-            RunApps(gCfg.picker_asset, "", gCfg.picker_apps)
-            HideControls("guiPause")
-            Hotkey gCfg.magic_key, "On"
-        }
-
         oBASS.Play("menu")
         guiSelect.Opt("+AlwaysOnTop")
 
@@ -72,7 +80,7 @@ MagicKey(option, theHotkey:="")
     {   
         if (g_pause_state)
             oFadeAlphaOverlay.Start(200,0,20,16) ;undim the alpha (pause) overlay   
-
+ 
         oFadeAlphaWindow.Start(150,0,20,16) ;undim the alpha screen
         
         oDetectInactivity.Resume()
@@ -85,30 +93,34 @@ MagicKey(option, theHotkey:="")
         ;a pause screen, we don't want to bury it.)
         if (!oPauseProc.Active && !g_guipause_visible) 
         {
-            ControlFocus(WinGetID("ahk_pid " . pid_emulator))
+            try ControlFocus(WinGetID("ahk_pid " . pid_emulator))
         }
 
         g_mouse_clicks_off := 0
 
         g_guiselect_visible := false
-        HideControls("guiSelect")  
-
-        ;Wait for apps to reload
-        ;option 0 means we're returning to the current game so no point
-        ;to reload the current game's profile.
-        if (gCfg.picker_apps && option == "0") 
-        {   
-            Hotkey gCfg.magic_key, "Off"
-            ShowControls("guiPause")
-            RunApps(gCfg.asset_name, gCfg.rom_name, orig_run_apps)
-            HideControls("guiPause")
-            Hotkey gCfg.magic_key, "On"
-        }
+        HideControls("guiSelect") 
 
         ;Reset RunWaitTimer to default frequecy
         SetTimer RunWaitTimer, runwait_default_freq
 
         ModifyHotkeys("passthrough")
+
+        ;Wait for apps to reload
+        ;option 1 means we're switching to a new game so no point
+        ;to reload the current game's profile.
+        if (gCfg.picker_apps && option == "0" && sbRanPickerApps) 
+        {   
+            Hotkey gCfg.magic_key, "Off"
+           
+            ShowHideBanner("Please Wait...")
+            RunApps(gCfg.asset_name, gCfg.rom_name, orig_run_apps)
+            ShowHideBanner()
+            
+            Hotkey gCfg.magic_key, "On"
+        }
+
+        sbRanPickerApps := false
     }
 
     KeyWait gCfg.magic_key ;blocks auto-repeat 
@@ -120,11 +132,14 @@ MagicKey(option, theHotkey:="")
 ;Possible keyState values are "", (Down), or "Up"
 PauseKey(keyState, theHotkey:="")
 {
-    global g_pause_state, g_guipause_visible, g_mouse_clicks_off
+    global g_pause_state, g_guipause_visible, g_mouse_clicks_off, pause_key_off
 
     static paused := false
     static lastTick := 0
     static lastKeyState := "Up"
+
+    if (pause_key_off)
+        return
 
     ;Enforce a delay between pause keystrokes to avoid "button mashing" side effects.
     ;if last key was "down", then allow "up" with no restriction
@@ -188,10 +203,16 @@ PauseKey(keyState, theHotkey:="")
         {
             if (!paused) ;Synthetic PAUSE
             {
-                SetTimer RunWaitTimer, 0 ;prevents pid from being used in RunWaitTimer while paused
+                ;this line interfered is image switching during pause...seems ok without it, but keep eye on.
+                ;SetTimer RunWaitTimer, 0 ;prevents pid from being used in RunWaitTimer while paused
+                
                 oDetectInactivity.Suspend()
-                if (!g_guiselect_visible) ;avoid bringing guiAlpha to the top when guiSelect is displayed.
-                    guiAlpha.Opt("+AlwaysOnTop") ;we will need it on top if guiSelect is not displayed
+
+                if (!g_guihighscore)
+                {
+                    if (!g_guiselect_visible) ;avoid bringing guiAlpha to the top when guiSelect is displayed.
+                        guiAlpha.Opt("+AlwaysOnTop") ;we will need it on top if guiSelect is not displayed
+                }
              
                 MasterSound.Off() ;pausing the process while a sound is active can produce a hum.
                 oPauseProc.Suspend()
@@ -205,9 +226,10 @@ PauseKey(keyState, theHotkey:="")
                 Sleep 200 ;needed to prevent ControlFocus from being called before proc has finished resuming which can result in a crash
         
                 MouseGetPos &OutputVarX, &OutputVarY, &OutputVarWin, &OutputVarControl, 2
-                ControlFocus OutputVarControl, "ahk_pid " . pid_emulator
+                try ControlFocus OutputVarControl, "ahk_pid " . pid_emulator
                 
-                SetTimer RunWaitTimer, cRunWaitTimer_Period
+                ;this line interfered is image switching during pause...seems ok without it, but keep eye on.
+                ;SetTimer RunWaitTimer, cRunWaitTimer_Period
             }
             paused := paused ? false : true
         }
@@ -257,37 +279,42 @@ PauseKey(keyState, theHotkey:="")
         g_pause_state := true
         g_mouse_clicks_off := 1
 
-        if (!g_guiselect_visible && oPauseControl.HasContent())
+        if (!g_guihighscore) ;don't show pause images if pausing from within the scorecard dialog
         {
-            SoundBeep
-            guiAlpha.Opt("+AlwaysOnTop")    
-            WinSetTransparent 0, "ahk_id " . gGui.guiAlpha_Overlay.Hwnd ;0 is transparent, 255 is opaque
-            oFadeAlphaWindow.Start(100,255,20,16)             
-            ShowControls("guiPause") ;shows pause images, if any, and turns hotkeys on
-            g_guipause_visible := true
-        }
-        else if (gCfg.map_pause == "{PauseProc}") ;only called if there are no pause images to show
-        {
-            guiAlpha.Opt("+AlwaysOnTop") 
-            oFadeAlphaWindow.Start(1,150,20,16) ;just fade the screen
+            if (!g_guiselect_visible && oPauseControl.HasContent())
+            {
+                guiAlpha.Opt("+AlwaysOnTop")    
+                WinSetTransparent 0, "ahk_id " . gGui.guiAlpha_Overlay.Hwnd ;0 is transparent, 255 is opaque
+                oFadeAlphaWindow.Start(100,255,20,16)             
+                ShowControls("guiPause") ;shows pause images, if any, and turns hotkeys on
+                g_guipause_visible := true
+            }
+            else if (gCfg.map_pause == "{PauseProc}") ;only called if there are no pause images to show
+            {
+                guiAlpha.Opt("+AlwaysOnTop") 
+                oFadeAlphaWindow.Start(1,150,20,16) ;just fade the screen
+            }
         }
         oBASS.Play("pause")
     }
-    else
+    else ;unpaused
     {
         RunApps(gCfg.asset_name, gCfg.rom_name, gCfg.pause_apps, "-")
 
-        if (!g_guiselect_visible && oPauseControl.HasContent())
-        {      
-            SoundBeep
-            SoundBeep      
-            HideControls("guiPause") ;hides pause images, if any, and turns hotkeys off 
-            oFadeAlphaWindow.Start(255,0,20,16)
-            WinSetTransparent 255, "ahk_id " . gGui.guiAlpha_Overlay.Hwnd ;0 is transparent, 255 is opaque 
-            g_guipause_visible := false
-        }
-        else if (gCfg.map_pause == "{PauseProc}")
-            oFadeAlphaWindow.Start(150,0,20,16)   
+        if (!g_guihighscore)
+        {
+            if (!g_guiselect_visible && oPauseControl.HasContent())
+            {      
+                SoundBeep
+                SoundBeep      
+                HideControls("guiPause") ;hides pause images, if any, and turns hotkeys off 
+                oFadeAlphaWindow.Start(255,0,20,16)
+                WinSetTransparent 255, "ahk_id " . gGui.guiAlpha_Overlay.Hwnd ;0 is transparent, 255 is opaque 
+                g_guipause_visible := false
+            }
+            else if (gCfg.map_pause == "{PauseProc}")
+                oFadeAlphaWindow.Start(150,0,20,16)  
+        } 
 
         oDetectInactivity.Resume()
         g_pause_state := false
@@ -320,7 +347,7 @@ ExitKey(internal, theHotkey:="")
 
     ;Exit the game select screen if it is currently visible
     if (g_guiselect_visible)
-        MagicKey(0)
+        MagicKey("0")
 
     ;Unpause if we are paused. Particularly important if 
     ;we have paused the process (i.e. synthetic pause)
@@ -553,21 +580,6 @@ ShowControls(guiName)
         oSelectListControl.Show()
         ControlActivationState.EnableSelectControls()
     }
-
-    if (guiName == "guiStart")
-    {
-        gGui.guiStart_Label.Visible := true
-        gGui.guiStart_Rom.Visible := true
-        gGui.guiStart_Logo.Visible := true
-        gGui.guiStart_LicenseBanner.Visible := true
-    }
-
-    if (guiName == "guiExit")
-    {
-        gGui.guiExit_Label.Visible := true
-        gGui.guiExit_Rom.Visible := true
-        gGui.guiExit_Logo.Visible := true
-    }
 }
 
 ;Creates hotkeys/hotstrings for direct game switching
@@ -631,6 +643,36 @@ AddDirectSwitchHotKeys()
 ;Support scrolling functions in guiSelect and the pause screen.
 ScrollList(direction, theHotkey:="")
 {
+    ;if the high score entry screen is active
+    if (g_guihighscore)
+    {
+        ;OutputDebug "Direction: " direction "`n"
+        Switch direction
+        {
+            Case "r":  
+                Loop Parse gCfg.left_key, "CSV"
+                    Hotkey A_LoopField, "Off"
+
+                try HighScoreDialog.HighScoreNavigate(direction)
+                
+                Loop Parse gCfg.left_key, "CSV"
+                    Hotkey A_LoopField, "On"
+
+            Case "l":
+                Loop Parse gCfg.right_key, "CSV"
+                    Hotkey A_LoopField, "Off"
+
+                try HighScoreDialog.HighScoreNavigate(direction)
+                
+                Loop Parse gCfg.right_key, "CSV"
+                    Hotkey A_LoopField, "On"
+            Case "s":
+                try HighScoreDialog.HighScoreNavigate(direction)
+        }
+
+        return
+    }
+
     Switch direction
     {
         ;handle paging in the pause screen
@@ -671,9 +713,9 @@ ScrollList(direction, theHotkey:="")
 
     Switch direction
     {
-        Case "d","u","home","end","pu","pd":  ;navigation
+        Case "d","u","home","end","pu","pd","lu","ld":  ;navigation
             Critical "On"
-            oSelectListControl.ScrollVertical(direction)
+            try oSelectListControl.ScrollVertical(direction)
             Critical "Off"
         Case "s": ;launch game (i.e. "select")
             if (g_directswitch_args)
@@ -694,7 +736,8 @@ ScrollList(direction, theHotkey:="")
             Loop Parse gCfg.left_key, "CSV"
                 Hotkey A_LoopField, "Off"
 
-            oSelectListControl.ScrollHorizontal(direction)
+            try oSelectListControl.ScrollHorizontal(direction)
+            try HighScoreDialog.HighScoreNavigate(direction)
             
             Loop Parse gCfg.left_key, "CSV"
                 Hotkey A_LoopField, "On"
@@ -703,21 +746,22 @@ ScrollList(direction, theHotkey:="")
             Loop Parse gCfg.right_key, "CSV"
                 Hotkey A_LoopField, "Off"
 
-            oSelectListControl.ScrollHorizontal(direction)
+            try oSelectListControl.ScrollHorizontal(direction)
+            try HighScoreDialog.HighScoreNavigate(direction)
             
             Loop Parse gCfg.right_key, "CSV"
                 Hotkey A_LoopField, "On"
 
         Case "picks","tog","targ":  ;picks toggles the picks (formerly favorites) list, "tog" adds/removes single item, "targ" toggles edit mode
             Critical "On"
-            oSelectListControl.SublistCommand(direction)
+            try oSelectListControl.SublistCommand(direction)
             Critical "Off"
         Case "all", "genre","year", "publisher","developer","players","favorites","rating":
-            oSelectListControl.SublistCommand(direction)
+            try oSelectListControl.SublistCommand(direction)
         Case "mark": ;mark as favorite
-            oSelectListControl.SublistCommand(direction)
+            try oSelectListControl.SublistCommand(direction)
         Case "star5", "star4", "star3", "star2", "star1", "star0", "star":
-            oSelectListControl.SublistCommand(direction)
+            try oSelectListControl.SublistCommand(direction)
     }
 
     return
@@ -790,6 +834,14 @@ ModifyHotkeys(hk_style)
             if (gCfg.pgup_key)
                 Loop Parse gCfg.pgup_key, "CSV"
                     Hotkey "~" . A_LoopField, fPageUp
+
+            if (gCfg.lcdn_key)
+                Loop Parse gCfg.lcdn_key, "CSV"
+                    Hotkey "~" . A_LoopField, fLeadingCharacterDown
+
+            if (gCfg.lcup_key)
+                Loop Parse gCfg.lcup_key, "CSV"
+                    Hotkey "~" . A_LoopField, fLeadingCharacterUp
 
             if (gCfg.home_key)
                 Loop Parse gCfg.home_key, "CSV"
@@ -878,6 +930,10 @@ ModifyHotkeys(hk_style)
             if (gCfg.add_remove_key)
                 Loop Parse gCfg.add_remove_key, "CSV"
                     Hotkey "~" . A_LoopField, fToggle
+
+            if (gCfg.highscore_key)
+                Loop Parse gCfg.highscore_key, "CSV" 
+                    Hotkey "~" . A_LoopField, fHighScore
         }
         ;This style is used when in the picker gui, and blocks the
         ;keys from passing through to the game
@@ -918,6 +974,14 @@ ModifyHotkeys(hk_style)
             if (gCfg.pgup_key)
                 Loop Parse gCfg.pgup_key, "CSV"
                     Hotkey A_LoopField, fPageUp
+
+            if (gCfg.lcdn_key)
+                Loop Parse gCfg.lcdn_key, "CSV"
+                    Hotkey A_LoopField, fLeadingCharacterDown
+
+            if (gCfg.lcup_key)
+                Loop Parse gCfg.lcup_key, "CSV"
+                    Hotkey A_LoopField, fLeadingCharacterUp
 
             if (gCfg.home_key)
                 Loop Parse gCfg.home_key, "CSV"
@@ -1002,6 +1066,10 @@ ModifyHotkeys(hk_style)
             if (gCfg.add_remove_key)
                 Loop Parse gCfg.add_remove_key, "CSV"
                     Hotkey A_LoopField, fToggle
+
+            if (gCfg.highscore_key)
+                Loop Parse gCfg.highscore_key, "CSV"
+                    Hotkey A_LoopField, fHighScore
         }
     }
     catch as e
@@ -1018,7 +1086,7 @@ ModifyHotkeys(hk_style)
 ShowHideMenu(mode, theHotkey:="")
 {
     if ((g_guiselect_visible && mode == "0") || (!g_guiselect_visible && mode == "1") || mode == "2")
-        MagicKey(0)
+        MagicKey("0") ;0 sent to MagicKey means we're not switching a game
 
     return
 }
@@ -1031,9 +1099,7 @@ AddHotkeys()
 
     static last_next_key := "", last_previous_key := ""
 
-    local fLaunchHotkeyApp, fExitHotkeyApp
-    local e, n, o, cl, hKey, app, key_style, hKeyVal
-    local exit_cmd
+    local e
     
     try
     {
@@ -1102,6 +1168,18 @@ AddHotkeys()
             fPageUp := ScrollList.Bind("pu")
             Loop Parse gCfg.pgup_key, "CSV" 
                 Hotkey "~" . A_LoopField, fPageUp, "On"
+        }
+
+        if (gCfg.lcdn_key) {
+            fLeadingCharacterDown := ScrollList.Bind("ld")
+            Loop Parse gCfg.lcdn_key, "CSV"
+                Hotkey "~" . A_LoopField, fLeadingCharacterDown, "On"
+        }
+
+        if (gCfg.lcup_key) {
+            fLeadingCharacterUp := ScrollList.Bind("lu")
+            Loop Parse gCfg.lcup_key, "CSV" 
+                Hotkey "~" . A_LoopField, fLeadingCharacterUp, "On"
         }
 
         if (gCfg.home_key) {
@@ -1268,6 +1346,12 @@ AddHotkeys()
                 Hotkey "~" . A_LoopField, fLockGame, "On"
         }
 
+        if (gCfg.highscore_key) {
+            fHighScore := HighScoreDialog.HighScore
+            Loop Parse gCfg.highscore_key, "CSV" 
+                Hotkey "~" . A_LoopField, fHighScore, "On"
+        }
+
         if (gCfg.panic_key) {
             fKillApp := KillApp
             Hotkey gCfg.panic_key, fKillApp, "On"
@@ -1363,22 +1447,11 @@ InActivateHotKeys()
 ;Switch to the next game in the attract list.
 AttractNext(theHotkey:="")
 {   
-    global gGui, magic_key_off
-    
     ;If startup initialization is still occurring, we can't switch till its done.
     ;So put up a message.
     if (!g_guiselect_loaded)
-    {
-        ;Display "Please Wait..." while select gui finishes loading
-        guiAlpha.Opt("+AlwaysOnTop")
-        oFadeAlphaWindow.Start(0,255,20,16)
-        gGui.guiAlpha_PauseLabel.Text := "Game list still loading. Please wait..."
-        WinSetTransparent 0, "ahk_id " . gGui.guiAlpha_Overlay.Hwnd
-        gGui.guiAlpha_PauseLabel.Visible := true
-  
-        Hotkey gCfg.pause_key, "Off"
-        Hotkey gCfg.pause_key . " Up", "Off"
-        magic_key_off := true
+    {        
+        ShowTimedBanner("Game list still loading. Please wait...")
     }
 
     if (g_exit_code == 0 || g_exit_code == 1)
@@ -1401,7 +1474,10 @@ AttractPrevious(theHotkey:="")
     static last_cycle := 0
 
     if (!g_guiselect_loaded)
+    {
+        ShowTimedBanner("At list beginning. No previous title to switch to.")
         return
+    }
 
     if (g_exit_code == 0 || g_exit_code == 1)
         return
@@ -1410,7 +1486,10 @@ AttractPrevious(theHotkey:="")
     {
         ;can't go back past the first played game
         if (mPlayLog["log"].Length == 1)
+        {
+            ShowTimedBanner("At list beginning. No previous title to switch to.")
             return
+        }
 
         if (mPlayLog["log"][mPlayLog["log"].Length] == mPlayLog["log"][mPlayLog["log"].Length-1])
             mPlayLog["log"].Pop() ;pop off any duplicate predecessors
@@ -1418,7 +1497,10 @@ AttractPrevious(theHotkey:="")
         if (mPlayLog["log"].Length > 1)
             mPlayLog["log"].Pop() ;pop off the current game
         else
+        {
+            ShowTimedBanner("At list beginning. No previous title to switch to.")
             return ;we must be back at the beginning
+        }
         
         vct := mPlayLog["log"][mPlayLog["log"].Length]
 
@@ -1450,6 +1532,7 @@ LockGame(theHotKey:="")
     g_lockedState := g_lockedState == 0 ? g_lockedState := 1 : g_lockedState := 0
 
     guiAlpha.Opt("+AlwaysOnTop")
+    guiDialog.Opt("+AlwaysOnTop")
 
     if (g_lockedState)
     {
@@ -1463,18 +1546,79 @@ LockGame(theHotKey:="")
     }
 
     ;Display the overlay text
-    gGui.guiAlpha_PauseLabel.Text := stateText
-    gGui.guiAlpha_PauseLabel.Visible := true
-    
-    WinSetTransparent "255", "ahk_id " . guiAlpha.Hwnd 
+    gGui.guiDialog_Banner.Text := stateText
+    gGui.guiDialog_Banner.Visible := true
+
     WinSetTransparent 0, "ahk_id " . gGui.guiAlpha_Overlay.Hwnd
-    WinSetTransColor "Black", "ahk_id " . guiAlpha.Hwnd
+    oFadeAlphaWindow.Start(1,150,20,16) ;dim the alpha screen
 
-    Sleep(0) ;without this, the voice will speak before the "Locked" label is displayed            
+    Sleep(750) ;without this, the voice will speak before the "Locked" label is displayed            
 
+    ;OutputDebug MasterSound.GetVolume()
     oVoice.Speak(stateText, 1, 0)
+    ;SoundBeep
 
-    Sleep(1000)
-    gGui.guiAlpha_PauseLabel.Visible := false
+    gGui.guiDialog_Banner.Visible := false
+    oFadeAlphaWindow.Start(150,0,20,16) ;undim the alpha screen
+    Sleep(750)
     guiAlpha.Opt("-AlwaysOnTop")  
+
+    return
+}
+
+/**
+ * Show a text banner in the middle of the screen.
+ * sMessageText is the text to display. Call a second time
+ * with a blank sMessageText to hide the banner.
+ * 
+ * @param {string} sMessageText 
+ * @returns {void} 
+ */
+ShowHideBanner(sMessageText:="")
+{
+    global gGui
+
+    if (sMessageText != "")
+        DisplayBanner(sMessageText)
+    else
+        HideBanner()
+
+    return
+}
+
+/**
+ * Dims the screen and displays sMessageText in the center of the screen for 5 seconds
+ * 
+ * @param sMessageText 
+ */
+ShowTimedBanner(sMessageText)
+{
+    global gGui
+
+    ControlActivationState.EnableSimpleDialog()
+    DisplayBanner(sMessageText)
+    Sleep(5000)            
+    HideBanner()
+    ControlActivationState.DisableSimpleDialog()
+}
+
+DisplayBanner(sMessageText:="")
+{
+    guiAlpha.Opt("+AlwaysOnTop")
+    guiDialog.Opt("+AlwaysOnTop")
+
+    ;Display the overlay text
+    gGui.guiDialog_Banner.Text := sMessageText
+    gGui.guiDialog_Banner.Visible := true
+
+    WinSetTransparent 0, "ahk_id " . gGui.guiAlpha_Overlay.Hwnd
+    oFadeAlphaWindow.Start(1,150,20,16) ;dim the alpha screen
+}
+
+HideBanner()
+{
+    gGui.guiDialog_Banner.Visible := false
+    oFadeAlphaWindow.Start(150,0,20,16) ;undim the alpha screen
+    Sleep(750)
+    guiAlpha.Opt("-AlwaysOnTop")
 }

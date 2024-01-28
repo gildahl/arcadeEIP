@@ -34,8 +34,8 @@ https://youtu.be/1RueDRhyrao
     after your roms) into ..\Assets\MAME\Logos\Rom
     (or set logo_folder= in [Global_Assets] to where they are.)
 
-7b. Optional: Instead of following step 6a, if you use LaunchBox, you may use
-    it as your content manager instead.  Just add the following lines (with 
+7b. Optional: Instead of following step 7a, if you use LaunchBox, you may use
+    it for your content manager instead.  Just add the following lines (with 
     paths adjusted to your machine) to the [System_mame] section.  In this 
     case, we assume that the name of the LaunchBox platform for MAME is "Arcade".
 
@@ -43,9 +43,10 @@ https://youtu.be/1RueDRhyrao
     marquee_folder=D:\LaunchBox\Images\Arcade\Arcade - Marquee
     system_logo=D:\LaunchBox\Images\Platforms\Arcade\Clear Logo\Arcade.png
 
-    When you do this, your game list in arcadeEIP should match the one in
-    LaunchBox (see the file LaunchBox.txt in the "Docs\[Front_End] examples" 
-    folder for more information about integration with LaunchBox)
+    When you do this, your game list in arcadeEIP should automatically
+    synchronize with the one you have in LaunchBox (see the file LaunchBox.txt
+    in the "Docs\[Front_End] examples"folder for more information about 
+    integration with LaunchBox)
 
 Now...just double-click on eip.exe to run your seed game...
 
@@ -64,8 +65,8 @@ While in any game:
    menu on/off:
 4. Navigate using the arrow keys or joystick.
 5. Select a new game to play using the LCtrl key.
-6. Use "M" key to mark a game as a favorite or "S" to change star rating
-7. Use Space to add a game to the "Picks" list for the system and "LAlt" to
+6. Use "m" key to mark a game as a favorite or "S" to change star rating
+7. Use "j" to add a game to the "Picks" list for the system and "i" to
    view that list.
 8. See readme.txt and docs for many more commands and functions.
 

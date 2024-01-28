@@ -3,6 +3,125 @@
 ; File: eipFunctions.ahk2
 
 ;Miscellaneous support functions
+;Call this function when exiting arcadeEIP to close and free resources
+ExitFunction(ExitReason, ExitCode)
+{
+    global
+    
+    local logFileName
+
+    ;Revoke the oActiveMsg GUID since this instance is about to be closed.
+    try ObjRegisterActive(oActiveMsg, "")
+
+    ;Destroy Guis
+    if (start_show_time > -1 || exit_show_time > -1)
+    {
+        try guiBackground.Destroy()
+        try guiSelect.Destroy()
+        try oSelectListControl := {}
+        try guiAlpha.Destroy()
+        try guiStart.Destroy()
+        try guiExit.Destroy()
+        try guiDialog.Destroy()
+    }
+    
+    SystemCursor("On")
+
+    if (IsSet(oDetectInactivity))
+        try oDetectInactivity.Inactivate()
+    
+    ;special case.
+    ;remove cfg subfolder if it gets created during runtime.
+    ;Important to check the time it was created just in case someone
+    ;runs eip.exe in the mame folder, otherwise it could delete
+    ;all of the cfg profiles!
+    if (FileExist("cfg"))
+    {
+        cfg_time := FileGetTime("cfg", "C")
+        cfg_time := DateDiff(cfg_time, start_time, "seconds") 
+        if (cfg_time > 0) ;i.e. if cfg_time is after start_time
+            try DirDelete "cfg", 1
+    }
+    
+    if (FileExist("help.txt"))
+    {
+        help_time := FileGetTime("help.txt", "C")
+        help_time := DateDiff(help_time, start_time, "seconds")
+        if (help_time > 0)
+            try DirDelete "help.txt", 1
+    }
+    
+    if (gCfg.debug_mode)
+    {
+        SplitPath log_file, &logFileName
+        ShowLog(logFileName)	
+    }
+    
+    if (!bSuppressExitMessage)
+        LogEntry("Exiting " cExeName "`n")
+    
+    if (gCfg.status_beeps)
+        DoBeep()
+
+    MasterSound.On() ;make sure sound is turned on
+
+    ;Restore taskbar
+    if (gCfg.hide_taskbar == 1)
+    {
+        try
+            WinShow "ahk_class Shell_TrayWnd"
+        catch 
+            LogEntry("INFO: Could not restore original taskbar state.`n")
+        else 
+            LogEntry("INFO: Restored original taskbar state.`n")
+    }
+
+    ;restore original taskbar state (Deprecated)
+    /*
+    if (IsSet(original_taskbar_state))
+    {
+        if (original_taskbar_state != GetTaskbarState())
+        {
+            HideShowTaskbar(original_taskbar_state)
+            LogEntry("INFO: Restored original taskbar state.`n")
+        }
+    }
+    */
+
+    ;diagnostic mode is normally on
+    if (diag_mode) 
+    {
+        if (ut_runwait_cycle == 0)
+            ut_runwait_avg := 0
+
+        LogEntry("INFO: Runwait cycle average: " ut_runwait_avg " ms. Peak was: " ut_runwait_peak " ms.`n")
+    }
+
+    ;Turn off timer threads
+    SetTimer RunWaitTimer, 0
+    SetTimer KeepActive, 0
+    if (gCfg.kiosk_mode)
+        SetTimer KeyboardStrobeA, 0
+    else
+        SetTimer KeyboardStrobeB, 0
+
+    ;if we started from a front end, make sure it gets the focus back
+    ;(GameEx didn't need, but BigBox does)
+    if (fe_pid)
+    {
+        try WinActivate "ahk_pid " . fe_pid
+        LogEntry("INFO: Re-activating front-end using PID: " fe_pid "`n")
+
+        ;Added this method after discovering that BigBox wouldn't regain focus if the use_hi2tx
+        ;option was being used.
+        if (gCfg.fe_window_name)
+        {
+            try WinActivate gCfg.fe_window_name
+            LogEntry("INFO: Re-activating front-end using window name: " gCfg.fe_window_name "`n")
+        }
+        
+    }
+}
 
 ;Vector to another emulator/game. This function prepares A_Args to vector to a new game. After
 ;calling this function, the caller will normally execute a Goto Vector: in the main thread.
@@ -443,16 +562,17 @@ ProcessParamListTemplates()
             ExitApp
         }
         else
-        { ;the default "best" rom found is always returned in romList[1]
+        { ;The default "best" rom found is always returned in romList[1]
+          ;This case occurs when a rom is specified without an emulator, so that the default emulator 
+          ;must be changed. Once this is done, we must call VectorNow and set the bDoVector flag to true
+          ;to force the update.
             if (romList[1].system != gCfg.sys_key)
             {
-                OutputDebug "assert_goto_scenario"
-				LogEntry("ASSERT GOTO SCENARIO: Investigate this case.`n")
-				ExitApp
-
                 LogEntry("INFO: Vectoring to: " . romList[1].system . " " . romList[1].fullPath . " from within ProcessParamListTemplates.`n")
-                VectorNow(romList[1].system . " " . romList[1].fullPath)
-            
+                
+                global bDoVector := true
+                VectorNow(romList[1].system . " " . romList[1].fullPath)                
+                
                 return
             }
             else
@@ -858,13 +978,11 @@ ParseSearchPath(sysKey)
 
 FrontEndStartup()
 {
-    global gCfg, log_file
-    
-    ran_fe := false
+    global gCfg, log_file, g_ran_fe
     
     ;get list of apps to run after front end exits back to the OS
     ;also get the os asset_name and do some validation
-    config_section := "Front_End_OS"
+    config_section := "Front_End_os"
     os_fe_key := IniRead(config_file, config_section, "fe_key", A_Space)
     os_exe_full_path := TokenizePath(IniRead(config_file, config_section, "exe_full_path", A_Space))
     os_asset_name := IniRead(config_file, config_section, "asset_name", A_Space)
@@ -872,27 +990,27 @@ FrontEndStartup()
     
     if (os_fe_key != "os")
     {	
-        LogEntry("ERROR: CONFIGURATION: fe_key in default [Front_End_OS] section must be set to `"os`".`n")
+        LogEntry("ERROR: CONFIGURATION: fe_key in default [Front_End_os] section must be set to `"os`".`n")
         ExitApp
     }
     
     else if (os_exe_full_path)
     {
-        LogEntry("ERROR: CONFIGURATION: [Front_End_OS] section in " cConfigFileName " does not support the exe_full_path key.`n")
+        LogEntry("ERROR: CONFIGURATION: [Front_End_os] section in " cConfigFileName " does not support the exe_full_path key.`n")
         ExitApp
     }
     
     fe_sections := oConfigFile.GetGroupSections("Front_End")
     for i, config_section in fe_sections
     {
-        if (config_section == "Front_End_OS") ;we already processed this one above
+        if (config_section = "Front_End_os") ;we already processed this one above
             continue
 
         this_fe_key := IniRead(config_file, config_section, "fe_key", A_Space)
         
         ;Check to see if eip.exe was called with a valid front-end as an argument
         ;if so, we'll run in front-end mode.
-        if (A_Args[1] == this_fe_key) 
+        if (A_Args[1] = this_fe_key) 
         {			
             ;We have confirmed that arcadeEIP was launched in front-end mode so lets rename
             ;the log file and continue logging in that file so that it won't be overwritten
@@ -914,6 +1032,7 @@ FrontEndStartup()
                 ExitApp
             }				
             
+            this_window_name := IniRead(config_file, config_section, "window_name", A_Space)
             this_asset_name := IniRead(config_file, config_section, "asset_name", A_Space)
             this_run_apps := IniRead(config_file, config_section, "run_apps", A_Space)
             this_exe_full_path := TokenizePath(IniRead(config_file, config_section, "exe_full_path", A_Space))
@@ -933,6 +1052,16 @@ FrontEndStartup()
             try
             {
                 Launch("RunWait", this_exe_full_path, "", "FRONT-END")
+                LogEntry("INFO: window_name defined: " this_window_name "`n")
+                if (this_window_name)
+                {
+                    LogEntry("INFO: Waiting for window to open: " this_window_name "`n")
+                    WinWaitActive this_window_name
+
+                    LogEntry("INFO: Waiting for window to close: " this_window_name "`n")
+                    WinWaitClose this_window_name
+                }
+
                 LogEntry("INFO: Exiting Front-end.`n")
             }
             catch as e
@@ -944,11 +1073,11 @@ FrontEndStartup()
             RunApps(this_asset_name, this_asset_name, this_run_apps,"-")
             RunApps(os_asset_name, os_asset_name, os_run_apps)
             
-            ran_fe := true
+            g_ran_fe := true
         }
     }
     
-    return ran_fe
+    return g_ran_fe
 }
 
 ;Replace any commas past the last \ character with the currently
@@ -993,14 +1122,22 @@ CreateDirAndLog(d)
     if (!InStr(FileExist(d), "D"))
     {
         try
+        {
             DirCreate d
+        }
         catch
+        {
             LogEntry("NOTICE: Failed to create folder, " d ".`n")
+            return false
+        }
         else        
-            LogEntry("INFO: Created folder, " d ".`n")            
+        {
+            LogEntry("INFO: Created folder, " d ".`n")  
+            return true
+        }         
     }
 
-    return
+    return true
 }
 
 ;Delete a file or folder and log the activity
@@ -1028,7 +1165,7 @@ DeleteAndLog(t, f)
         if (FileExist(f)) 
         {
             try {
-                DirDelete(f, 1)
+                DirDelete(f, true) ;true deletes even if files exist in folder
             }
             catch as e {
                 LogEntry("INFO: Folder could not be deleted: " f ". Error was: " FormatErrorMessage(e) "`n")

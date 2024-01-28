@@ -1,6 +1,6 @@
 ; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
-; © 2023 David G. Dahlstrom
-; File: eipFunctions_TimerThread.ahk2
+; © 2024 David G. Dahlstrom
+; File: eipFunctions_TimerThreads.ahk2
 
 ;Functions in this file are called via timers so as to operate in their own independent
 ;pseudo threads (i.e. AHK2 style threads). These are generally critical to the way 
@@ -9,7 +9,7 @@
 ;Create guiSelect here (in the background while initial game loads) to provide fast startup.
 SelectControlTimer()
 {
-    global oSelectListControl
+    global oSelectListControl, g_abort_now
 
     ;Could possibly use WinExist("ahk_pid " pid_emulator) here instead
     if (IsEmulatorActive() && g_guiselect_loaded == false) 
@@ -24,6 +24,8 @@ SelectControlTimer()
                                                         gCfg.lst_font_size, gCfg.lst_game_font_size, gCfg.lst_sys_font_size, 
                                                         gCfg.lst_list_margin) 
         oSelectListControl.AddEmulatorItems()
+        g_abort_now := oSelectListControl.AbortThread
+
         oDetectInactivity.Resume()
     }
     return
@@ -74,6 +76,16 @@ RunWaitTimer()
         }
     }
 
+    ;Attempt a graceful exit if a process needs to abort prematurely
+    if (g_abort_now == 1 && !g_exit_code)
+    {
+        gGui.guiExit_Label.Value := "Exiting Emulator..."
+
+        ExitKey(0)
+        Sleep 100
+        ExitKeyUp()
+    }    
+
     ;Games with border and taskbar suppression issues need to have 
     ;mouse pointer in a place where it won't raise the taskbar or menu.
     if (winset_style) 
@@ -117,13 +129,16 @@ RunWaitTimer()
     ;Also handle the joystick in here
     if (bEmuRunning)
     {
-        if (g_guiselect_visible)
+        if (g_guihighscore)
+        {
+            HighScoreDialog.HighScoreNavigate(oDetectInactivity.GetJoyState())
+        }
+        else if (g_guiselect_visible)
         {
             ;Move scroll list if any of the joysticks moved
             ScrollList(oDetectInactivity.GetJoyState())
-        }
-        
-        if (g_pause_state && !g_guiselect_visible)
+        }        
+        else if (g_pause_state && !g_guiselect_visible)
         {
             PauseScroll(oDetectInactivity.GetJoyState())
         }
@@ -131,7 +146,7 @@ RunWaitTimer()
 
     ;Do volume sync if feature is turned on and an alternate sound device
     ;other than the default device (1) has been specified in sound_device.
-    if (oBASS.Active && gCfg.sync_volume && gCfg.sound_device != 1)
+    if (oBASS.Active && gCfg.sync_volume && gCfg.sound_device != "1") ;recall that .ini value "Default" is replaced with "1" when read.
     {
         result := oBASS.SetDevice(1)
         currentVolume := oBASS.GetVolume() ;get the default device volume
@@ -139,7 +154,8 @@ RunWaitTimer()
         ;if the volume has changed...
         if (currentVolume != current_volume)  ;current_volume is global
         {
-            result := oBASS.SetDevice(gCfg.sound_device)
+            devList := oBASS.GetInfo()
+            result := oBASS.SetDevice(oBASS.GetDevice())
             result := oBASS.SetVolume(currentVolume) ;set alternate device to same volume as default
             current_volume := currentVolume
         }
@@ -153,6 +169,17 @@ RunWaitTimer()
         ut_runwait_avg := ut_runwait_timer_total / ut_runwait_cycle
         if (ut_runwait_avg > ut_runwait_peak)
             ut_runwait_peak := ut_runwait_avg   
+    }
+
+    ;If remote process sent a request for a direct switch, process it now.
+    try 
+    {
+        directSwitchVector := oActiveMsg["Vector"]
+        if (directSwitchVector)
+        {
+            oActiveMsg["Vector"] := ""
+            DirectSwitch(directSwitchVector)
+        }
     }
 
     ;if ten seconds have passed and the emulator has not yet exited then inform the 
@@ -231,7 +258,14 @@ KeepActive()
            
             ;This command keeps the emulator window active
             if (WinExist(emu_hwnd))
-                WinActivate emu_hwnd
+            {   
+                try {
+                    WinActivate emu_hwnd
+                }
+                catch as e {
+                    LogEntry("WARNING: Failed attempt to activate window in KeepActive(): " . FormatErrorMessage(e) . "`n")
+                }
+            }
 
            ;The following loop is mainly in support of Demul (Naomi) since it takes some time
            ;for its main screen to become active. We don't want this loop most of the time since 
@@ -246,7 +280,7 @@ KeepActive()
                         if (WinActive(emu_hwnd))
                             break
 
-                        WinActivate emu_hwnd
+                        try WinActivate emu_hwnd
                     }
                     Sleep 100
                 }
@@ -620,6 +654,7 @@ ScreenClear()
     if (bkend_relinquish || gCfg.debug_mode || test_mode)
     {
         ;relinquish always-on-top priority
+        try guiDialog.Opt("-AlwaysOnTop")
         try guiBackground.Opt("-AlwaysOnTop")
         try guiSelect.Opt("-AlwaysOnTop")
         try guiAlpha.Opt("-AlwaysOnTop")

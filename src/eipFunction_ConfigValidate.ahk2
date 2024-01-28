@@ -1,5 +1,5 @@
 ; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
-; © 2023 David G. Dahlstrom
+; © 2024 David G. Dahlstrom
 ; File: eipFunction_ConfigValidate.ahk2
 
 ;Use this function to implement basic initialization validation rules for arcadeEIP.ini.
@@ -9,6 +9,61 @@ ValidateConfig()
     ;---------------------------------------------------------------------------------
     ; config.ini validation
     ;---------------------------------------------------------------------------------
+
+    ;Check each section name for proper formatting if they contain a key (sys_key, fe_key, list_key, or app_key)
+    aKeySections := Array()
+    sSections := IniRead(config_file)
+    aSections := StrSplit(sSections, "`n")
+    for i, sSectionName in aSections
+    {
+        ;Validate [System...] section names
+        sKey := IniRead(config_file, sSectionName, "sys_key",  A_Space)
+        if (sKey && sSectionName != "System_" sKey)
+        {
+            LogEntry("ERROR: Exiting. Section [" sSectionName "] contains the sys_key `"" sKey "`". Expected section name should be [System_" sKey "].`n")
+            ExitApp
+        }
+        if (sSectionName == "System_" sKey)
+            aKeySections.Push(sKey)
+
+        ;Validate [Front_End...] section names
+        sKey := IniRead(config_file, sSectionName, "fe_key",  A_Space)
+        if (sKey && sSectionName != "Front_End_" sKey)
+        {
+            LogEntry("ERROR: Exiting. Section [" sSectionName "] contains the fe_key `"" sKey "`". Expected section name should be [Front_End_" sKey "].`n")
+            ExitApp
+        }
+        if (sSectionName == "Front_End_" sKey)
+            aKeySections.Push(sKey)
+
+        ;Validate [List...] section names
+        sKey := IniRead(config_file, sSectionName, "list_key",  A_Space)
+        if (sKey && sSectionName != "List_" sKey)
+        {
+            LogEntry("ERROR: Exiting. Section [" sSectionName "] contains the list_key `"" sKey "`". Expected section name should be [List_" sKey "].`n")
+            ExitApp
+        }
+        if (sSectionName == "List_" sKey)
+            aKeySections.Push(sKey)
+
+        ;Validate [Application...] section names
+        sKey := IniRead(config_file, sSectionName, "app_key",  A_Space)
+        if (sKey && sSectionName != "Application_" sKey)
+        {
+            LogEntry("ERROR: Exiting. Section [" sSectionName "] contains the app_key `"" sKey "`". Expected section name should be [Application_" sKey "].`n")
+            ExitApp
+        }
+        if (sSectionName == "Application_" sKey)
+            aKeySections.Push(sKey)
+    }
+
+    ;Look for duplicate keys
+    sDuplicate := FindDuplicate(aKeySections)
+    if (sDuplicate)
+    {
+        LogEntry("ERROR: Exiting. A duplicate key was found, `"" sDuplicate "`". Make sure each sys_key, fe_key, list_key, and app_key in arcadeEIP.ini is unique.`n")
+        ExitApp
+    }
 
     ;[General]
     ;debug_mode ( validated in ProcessIni() )
@@ -26,13 +81,13 @@ ValidateConfig()
     }
 
     ;sound_device
-    if (!IsInteger(gCfg.sound_device)) {
-        LogEntry("ERROR: Exiting. The [General] 'sound_device' setting must be an integer (1 is the default device). Current value is: " . gCfg.sound_device . ".`n")
+    if (gCfg.sound_device != "1" && IsNumber(gCfg.sound_device)) {
+        LogEntry("ERROR: Exiting. The [General] 'sound_device' setting must be a string value. Current value is: " . gCfg.sound_device . ".`n")
         ExitApp
     }
 
     ;sync_volume
-    if (!IsInteger(gCfg.sync_volume) || (gCfg.sync_volume > 0 && gCfg.sound_device == 1)) {
+    if (!IsInteger(gCfg.sync_volume) || (gCfg.sync_volume > 0 && gCfg.sound_device == "1")) {
         LogEntry("ERROR: Exiting. The [General] 'sound_device' setting must be an integer and only used when sound_device is greater than 0. Current value is: " . gCfg.sync_volume . ".`n")
         ExitApp
     }

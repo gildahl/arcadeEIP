@@ -57,11 +57,11 @@ For example, when I ran this, I found that my secondary (Realtek) card was devic
 
     6: Speakers (2- Realtek High Definition Audio)
 
-3.  In the [General] section of arcadeEIP.ini, set sound_device to the device number of this secondary
-card.  For example, because my secondary card was device 6, I specified:
+3.  In the [General] section of arcadeEIP.ini, change sound_device from "Default" to the device 
+description of this secondary card (omitting the "6." prefix).  For example:
 
     [General]
-    sound_device=6
+    sound_device=Speakers (2- Realtek High Definition Audio)
 
 4.  Next, plug the speaker outputs of both sound cards into the inputs of the hardware mixer, and plug
 your speakers into the hardware mixer's output.

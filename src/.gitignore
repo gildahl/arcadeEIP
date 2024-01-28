@@ -5,6 +5,7 @@ marquee.txt
 *.lic
 *.log
 *.exe
+*.bak
 extra/
 license-generator/
 Assets/

@@ -286,3 +286,181 @@ CalcStringHash(string, algid, encoding := "UTF-8", &hash := 0, &hashlength := 0)
          return false
  }
  */
+
+/*
+;https://www.autohotkey.com/boards/viewtopic.php?t=6148
+
+    ObjRegisterActive(Object, CLSID, Flags:=0)
+    
+        Registers an object as the active object for a given class ID.
+        Requires AutoHotkey v1.1.17+; may crash earlier versions.
+    
+    Object:
+            Any AutoHotkey object.
+    CLSID:
+            A GUID or ProgID of your own making.
+            Pass an empty string to revoke (unregister) the object.
+    Flags:
+            One of the following values:
+              0 (ACTIVEOBJECT_STRONG)
+              1 (ACTIVEOBJECT_WEAK)
+            Defaults to 0.
+    
+    Related:
+        http://goo.gl/KJS4Dp - RegisterActiveObject
+        http://goo.gl/no6XAS - ProgID
+        http://goo.gl/obfmDc - CreateGUID()
+*/
+
+/*
+ObjRegisterActive(Object, CLSID, Flags:=0) {
+    static cookieJar := {}
+    if (!CLSID) {
+        if (cookie := cookieJar.Remove(Object)) != ""
+            DllCall("oleaut32\RevokeActiveObject", "uint", cookie, "ptr", 0)
+        return
+    }
+    if cookieJar[Object]
+        throw Exception("Object is already registered", -1)
+    VarSetCapacity(_clsid, 16, 0)
+    if (hr := DllCall("ole32\CLSIDFromString", "wstr", CLSID, "ptr", &_clsid)) < 0
+        throw Exception("Invalid CLSID", -1, CLSID)
+    hr := DllCall("oleaut32\RegisterActiveObject"
+        , "ptr", &Object, "ptr", &_clsid, "uint", Flags, "uint*", cookie
+        , "uint")
+    if hr < 0
+        throw Exception(format("Error 0x{:x}", hr), -1)
+    cookieJar[Object] := cookie
+	*/
+
+;AHK v2 version
+;https://www.autohotkey.com/boards/viewtopic.php?f=82&t=115333
+ObjRegisterActive(Object, CLSID, Flags := 0) 
+{
+    static cookieJar := Map()
+    cookie := 0
+    if (!CLSID) 
+    {
+        if !(cookie := cookieJar.Has(Object)) || (cookie := cookieJar.Delete(Object)) != ""
+            DllCall("oleaut32\RevokeActiveObject", "uint", cookie, "ptr", 0)
+        return
+    }
+    if cookieJar.Has(Object)
+        throw Error("Object is already registered", -1)
+    _clsid := Buffer(16, 0)
+    if (hr := DllCall("ole32\CLSIDFromString", "wstr", CLSID, "ptr", _clsid)) < 0
+        throw Error("Invalid CLSID", -1, CLSID)
+
+    hr := DllCall("oleaut32\RegisterActiveObject", "ptr", ObjPtr(Object), "ptr", _clsid, "uint", Flags, "uint*", &cookie, "uint")
+    if (hr < 0)
+        throw Error(format("Error 0x{:x}", hr), -1)
+    cookieJar[Object] := cookie
+}
+
+/*
+;Sample code (v1.1)
+;***************************************************************************
+;  Registrar - receiver
+;***************************************************************************
+; Register our object so that other scripts can get to it.  The second
+; parameter is a GUID which I generated.  You should generate one unique
+; to your script.  You can use [CreateGUID](http://goo.gl/obfmDc).
+;  
+ObjRegisterActive(ActiveObject, "{6B39CAA1-A320-4CB0-8DB4-352AA81E460E}")
+
+#Persistent
+OnExit Revoke
+return
+
+Revoke:
+; This "revokes" the object, preventing any new clients from connecting
+; to it, but doesn't disconnect any clients that are already connected.
+; In practice, it's quite unnecessary to do this on exit.
+ObjRegisterActive(ActiveObject, "")
+ExitApp
+
+; This is a simple class (object) that clients will interact with.
+; You can register any object; it doesn't have to be a class.
+class ActiveObject {
+    ; Simple message-passing example.
+    Message(Data) {
+        MsgBox Received message: %Data%
+        return 42
+    }
+    ; "Worker thread" example.
+    static WorkQueue := []
+    BeginWork(WorkOrder) {
+        this.WorkQueue.Insert(WorkOrder)
+        SetTimer Work, -100
+        return
+        Work:
+        ActiveObject.Work()
+        return
+    }
+    Work() {
+        work := this.WorkQueue.Remove(1)
+        ; Pretend we're working.
+        Sleep 5000
+        ; Tell the boss we're finished.
+        work.Complete(this)
+    }
+    Quit() {
+        MsgBox Quit was called.
+        DetectHiddenWindows On  ; WM_CLOSE=0x10
+        PostMessage 0x10,,,, ahk_id %A_ScriptHwnd%
+        ; Now return, so the client's call to Quit() succeeds.
+    }
+}
+
+;***************************************************************************
+;  Sender
+;***************************************************************************
+; Get an active something.
+x := ComObjActive("{6B39CAA1-A320-4CB0-8DB4-352AA81E460E}")
+
+; Make up a property.  It's an AutoHotkey object, after all.
+x.Name := "Bob"
+
+; Call a method.
+x.Message("Hello, world!")
+
+; Queue some work to be done. We'll be notified when it's finished.
+x.BeginWork({Complete: Func("Completed")})
+
+#Persistent
+
+Completed(work, worker) {
+    MsgBox % worker.Name " finished work."
+    worker.Quit()  ; Fire?
+    ; PostMessage allows us to return before closing.
+    DetectHiddenWindows On  ; WM_CLOSE=0x10
+    PostMessage 0x10,,,, ahk_id %A_ScriptHwnd%
+}
+*/
+
+/*
+JEE_StrUtf8BytesToText(ByRef vUtf8Bytes)
+{
+	if A_IsUnicode
+	{
+		VarSetCapacity(vTemp, StrPut(vUtf8Bytes, "CP0"))
+		StrPut(vUtf8Bytes, &vTemp, "CP0")
+		return StrGet(&vTemp, "UTF-8")
+	}
+	else
+		return StrGet(&vUtf8Bytes, "UTF-8")
+}
+
+;==================================================
+
+;e.g. vUtf8Bytes := JEE_StrTextToUtf8Bytes(vText)
+
+JEE_StrTextToUtf8Bytes(ByRef vText)
+{
+	VarSetCapacity(vTemp, StrPut(vText, "UTF-8"))
+	StrPut(vText, &vTemp, "UTF-8")
+	return StrGet(&vTemp, "CP0")
+}
+
+;==================================================
+*/

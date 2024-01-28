@@ -1,5 +1,5 @@
-Marquee quick start guide For tl;dr types.
-==========================================
+Marquee quick start guide
+=========================
 
 Use this quick start after the MAME Quick Start.
 
@@ -36,4 +36,10 @@ To add high score support (MAME only)...
 3. In the [System_mame] section of arcadeEIP, set: use_hi2txt=1
 
 From this point on, any game having a compatible *.hi file in mame's \hi or \hiscore
-folder will display the high score at the bottom of the marquee.
+folder will display the high score at the bottom of the marquee. 
+
+Important: Note that hi2txt is hit-or-miss on what games it works with. If you encounter
+problems with certain games it is far more likely that it is an issue with hi2txt than a
+problem with arcadeEIP. For example, it is not unheard of for high score support to corrupt 
+a MAME nvram file. If this happens, just delete the nvram file, and also consider deleting 
+the xml file supporting that game from the hi2txt game library zip file.

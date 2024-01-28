@@ -1,6 +1,6 @@
 ; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
-; © 2023 David G. Dahlstrom
-; File: eipClass_Classes.ahk2
+; © 2024 David G. Dahlstrom
+; File: eipClasses.ahk2
 
 ;This file contains smaller miscellaneous classes.
 
@@ -131,24 +131,41 @@ class config_file_class
 
 ;Speech class.
 ;Inspired by https://www.autohotkey.com/boards/viewtopic.php?p=431416#p431416
+;Also: https://learn.microsoft.com/en-us/previous-versions/windows/desktop/ms723596(v=vs.85)
 class voice_class
 {
 	_enabled := true
 	_voice := []
 	_voices := []
 
+	SPERR_NO_MORE_ITEMS := 0x80045039 ;When enumerating items, the requested index is greater than the count of items.
+
 	__New()
 	{
+		deviceIndex := 0
+
 		this._voice := ComObject("SAPI.SpVoice")
 		this._voices := this._voice.GetVoices()
 
-		if gCfg.sound_device > 1
+		;Get the device index of the sound device whose description matches
+		;the one defined by the sound_device setting (if not already set to zero)
+		if (gCfg.sound_device != "1") ;recall that the .ini value "Default" is converted to "1" when read.
 		{
-			try {
-				this._voice.AudioOutput := this._voice.GetAudioOutputs.Item[gCfg.sound_device]
+			try 
+			{
+				for i, j in this._voice.GetAudioOutputs()
+				{
+					if (i.GetDescription() == gCfg.sound_device)
+					{
+						deviceIndex := A_Index - 1
+						break
+					}
+				}			
+				
+				this._voice.AudioOutput := this._voice.GetAudioOutputs.Item[deviceIndex]
 				this._enabled := true
 			}
-			catch
+			catch as e
 			{
 				this._enabled := false
 			}
@@ -347,6 +364,9 @@ class ControlActivationState
 
 		Loop Parse gCfg.lock_game_key, "CSV"
 			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.highscore_key, "CSV"
+			Hotkey A_LoopField, "Off"
 	}
 
 	static DisablePauseControls()
@@ -369,6 +389,125 @@ class ControlActivationState
 
 		Loop Parse gCfg.lock_game_key, "CSV"
 			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.highscore_key, "CSV"
+			Hotkey A_LoopField, "On"
+	}
+
+	;Disables hotkeys while displaying simple messages
+	static EnableSimpleDialog()
+	{
+		global 
+
+		exit_key_off := true
+		pause_key_off := true
+		magic_key_off := true
+
+		;Turn off the left/right keys for navigation
+		Loop Parse gCfg.left_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.right_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		;Turn off lock game key
+		Loop Parse gCfg.lock_game_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		;Turn off high score screen
+		Loop Parse gCfg.highscore_key, "CSV"
+			Hotkey A_LoopField, "Off"
+	}
+
+	static DisableSimpleDialog()
+	{
+		global 
+
+		exit_key_off := false
+		pause_key_off := false
+		magic_key_off := false
+
+		if (!bHotkeysOn)
+			InActivateHotKeys()
+
+		;Turn off the left/right keys for navigation
+		Loop Parse gCfg.left_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.right_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		;Turn on lock game key
+		Loop Parse gCfg.lock_game_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		;Turn on high score screen
+		Loop Parse gCfg.highscore_key, "CSV"
+			Hotkey A_LoopField, "On"
+	}
+
+	static EnableHighScoreControls()
+	{
+		global
+
+		;Turn off the left/right keys for navigation
+		Loop Parse gCfg.left_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.right_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		;Turn off lock game key
+		Loop Parse gCfg.lock_game_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		;Turn on keys that work in the high score screen
+		Loop Parse gCfg.left_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.right_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.up_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.down_key, "CSV"
+			Hotkey A_LoopField, "On"
+		
+		Loop Parse gCfg.launch_key, "CSV"
+			Hotkey A_LoopField, "On"
+	}
+
+	static DisableHighScoreControls()
+	{
+		global
+
+		;Turn off the left/right keys for navigation
+		Loop Parse gCfg.left_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.right_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		;Turn on lock game key
+		Loop Parse gCfg.lock_game_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		;Turn off keys used in the high score screen
+		Loop Parse gCfg.left_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.right_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.up_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.down_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.launch_key, "CSV"
+			Hotkey A_LoopField, "Off"		
 	}
 
 	static EnableSelectControls()
@@ -394,6 +533,12 @@ class ControlActivationState
 			Hotkey A_LoopField, "On"
 
 		Loop Parse gCfg.pgup_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.lcdn_key, "CSV"
+			Hotkey A_LoopField, "On"
+
+		Loop Parse gCfg.lcup_key, "CSV"
 			Hotkey A_LoopField, "On"
 
 		Loop Parse gCfg.home_key, "CSV"
@@ -468,6 +613,9 @@ class ControlActivationState
 
 		Loop Parse gCfg.lock_game_key, "CSV"
 			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.highscore_key, "CSV"
+			Hotkey A_LoopField, "Off"
 	}
 
 	static DisableSelectControls()
@@ -495,6 +643,9 @@ class ControlActivationState
 
 			Loop Parse gCfg.lock_game_key, "CSV"
 				Hotkey A_LoopField, "On"
+
+			Loop Parse gCfg.highscore_key, "CSV"
+				Hotkey A_LoopField, "On"
 		}
 
 		Loop Parse gCfg.up_key, "CSV"
@@ -510,6 +661,12 @@ class ControlActivationState
 			Hotkey A_LoopField, "Off"
 
 		Loop Parse gCfg.pgup_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.lcdn_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
+		Loop Parse gCfg.lcup_key, "CSV"
 			Hotkey A_LoopField, "Off"
 
 		Loop Parse gCfg.home_key, "CSV"

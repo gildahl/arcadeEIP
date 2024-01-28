@@ -1,5 +1,5 @@
 ; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
-; © 2023 David G. Dahlstrom
+; © 2024 David G. Dahlstrom
 ; File: eipClass_DetectInactivity.ahk2
 
 ;This class monitors the system for inactivity (user NOT pressing buttons
@@ -122,6 +122,7 @@ class DetectInactivity_Class
 	}
 
 	;Obtain joystick state
+	;Possible states are "r", "l", "u", "d"
 	GetJoyState()
 	{
 		mJoyX := Map()

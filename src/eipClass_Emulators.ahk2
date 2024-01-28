@@ -1,5 +1,5 @@
 ; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
-; © 2023 David G. Dahlstrom
+; © 2024 David G. Dahlstrom
 ; File: eipClass_Emulators.ahk2
 
 ;This class stores information about each emulated system
@@ -215,13 +215,13 @@ class emulators_class
 		/**
 		 * Gets a sticky rom propery
 		 * These properties are native to arcadeEIP
-		 * @param sProperty - May be "favorites", "ratings", or "volume"
+		 * @param sProperty - May be "favorites", "ratings", "volume", or "highscores"
 		 * @param sRom - rom name
-		 * @returns {integer|number} - The value of the property
+		 * @returns {string} for highscores or {integer|number} for others.
 		 */
 		GetRomProperty(sProperty, sRom)
 		{
-			if (sProperty != "favorites" && sProperty != "ratings" && sProperty != "volume")
+			if (sProperty != "favorites" && sProperty != "ratings" && sProperty != "volume" && sProperty != "highscores")
 			{
 				OutputDebug "assert: GetRomProperty()"
 				LogEntry("ASSERT ERROR: Bad property passed to function GetRomProperty, " sProperty ".`n")
@@ -236,7 +236,12 @@ class emulators_class
 				propertyFile := propertyPath "\" sProperty ".ini"
 
 				if (FileExist(propertyFile))
-					return Integer(IniRead(propertyFile, StrTitle(sProperty), sRom, 0))
+				{ 
+					if (sProperty == "highscores")
+						return IniRead(propertyFile, StrTitle(sProperty), sRom, A_Space)
+					else
+						return Integer(IniRead(propertyFile, StrTitle(sProperty), sRom, 0))
+				}
 			}
 
 			return 0
@@ -245,14 +250,14 @@ class emulators_class
 		/**
 		 * Sets a sticky rom propery
 		 * These properties are native to arcadeEIP
-		 * @param sProperty - May be "favorites", "ratings", or "volume"
+		 * @param sProperty - May be "favorites", "ratings", "volume", or "highscores"
 		 * @param sRom - rom name
 		 * @param sValue - The value to set
 		 * @returns {void} 
 		 */
 		SetRomProperty(sProperty, sRom, sValue)
 		{
-			if (sProperty != "favorites" && sProperty != "ratings" && sProperty != "volume")
+			if (sProperty != "favorites" && sProperty != "ratings" && sProperty != "volume" && sProperty != "highscores")
 			{
 				OutputDebug "assert: SettRomProperty()"
 				LogEntry("ASSERT ERROR: Bad property passed to function SetRomProperty, " sProperty ".`n")
@@ -277,7 +282,7 @@ class emulators_class
 
 		/**
 		 * Delete all values for a propery
-		 * @param sPropery - May be "favorites" or "ratings"
+		 * @param sPropery - May be "favorites", "ratings", "volume", or "highscores"
 		 */
 		DeleteRomProperies(sProperty)
 		{

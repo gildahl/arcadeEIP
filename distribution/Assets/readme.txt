@@ -55,15 +55,30 @@ it should be by default).
 * The [asset_name]\Settings folder stores *.ini files that contain individual game settings.
 The following files are currently supported:
 
-  favorites.ini : Where arcadeEIP stores a game's favorite status (0 or 1)
-  ratings.ini   : Where arcadeEIP stores a game's star rating (0 though 5)
+  favorites.ini  : Where arcadeEIP stores a game's favorite status (0 or 1)
+  ratings.ini    : Where arcadeEIP stores a game's star rating (0 though 5)
+  highscores.ini : Where arcadeEIP stores a game's high score information. This file is independent
+                   of hi2txt. If hi2txt is being used, any scores in this file will override those
+                   provided by hi2txt.
 
-  volume.ini    : Game-specific volume adjustments (-100 through 100)
-                  Currently, to use this feature, the user must manually create the file.
-                  For example, to have Galaga play with -10 lower volume than the default
-                  and Zaxxon at +20 higher volume than the default, create a volume.ini 
-                  file in a text editor and add these lines
+                   Format of each highscore is: [score]|<initials>|<stage>
+                   Score should have no separators (digits only). Score is mandatory, but all pipe
+                   separated values following are optional.
 
-                  [Volume]
-                  galaga.zip=-10
-                  zaxxon.zip=20
+		   [Highscores]
+                   robotron.zip=123456|DGD|10
+                   galaga.zip=123456
+
+                   High scores may be viewed and updated by using the scorecard dialog in arcadeEIP.
+                   They may also be viewed at the bottom of marquees if using the dynamic marquee feature
+                   with show_high_scores=1 in the [Marquee] section of arcadeEIP.ini. 
+
+  volume.ini     : Game-specific volume adjustments (-100 through 100)
+                   Currently, to use this feature, the user must manually create the file.
+                   For example, to have Galaga play with -10 lower volume than the default
+                   and Zaxxon at +20 higher volume than the default, create a volume.ini 
+                   file in a text editor and add these lines
+
+                   [Volume]
+                   galaga.zip=-10
+                   zaxxon.zip=20

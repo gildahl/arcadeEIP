@@ -1,5 +1,5 @@
 ; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
-; © 2023 David G. Dahlstrom
+; © 2024 David G. Dahlstrom
 ; File: eipClass_SelectListControl.ahk2
 
 ;Some general notes:
@@ -40,6 +40,7 @@
 ;---------------------------------------------------------------------------------
 ; ;Important state, LV, and playlist fields
 ;---------------------------------------------------------------------------------
+;this._state                       ;a Map() containing realtime state info about the control
 ;this._state[base_pl]["sublist"]   ;which sublist is currently selected (0=base or 1=picks)
 ;this._state[pl]["selectedItem"]   ;== this._current_game == column 2 in LV list -- deprecated
 ;this._state[pl]["selectedObject"] ;== this._current_object == column 3 in LV list
@@ -74,7 +75,8 @@ class select_list_control_class
 	_current_game_name := ""
 	_current_row := 0
 	_state := Map()   
-	_suppressNameUpdate := 0      
+	_suppressNameUpdate := 0   
+	_abort_thread := 0
 
 	__New(maxRows, maxRowsB, lstFontType, lstFontSize, lstGameFontSize, lstSysFontSize, lstListMargin)
 	{
@@ -127,16 +129,21 @@ class select_list_control_class
 		this._serializeState()
 	}
 
+	AbortThread
+	{
+		get => this._abort_thread
+	}
+
 	AddEmulatorItems()
 	{
 		this._AddEmulatorItems()
 	}
 
-	;Read prior states from the .state file
 	_deserializeState()
 	{
-		loop_idx := 0, idx := 0
+		loop_idx := 0, idx := 0, state_count := 0, stateIdx := 0
 
+		;Perform .state file integrity checks
 		if (!FileExist(state_file))
 		{
 			LogEntry("NOTICE: No .state file found. Using default states.`n")
@@ -156,39 +163,81 @@ class select_list_control_class
 		{	
 			oSf[A_Index] := A_LoopField
 		}
-		
-		Loop
+
+		;check1 := Mod(oSf.Count-2, 5) ;number of recs must be a multiple of 5 (less EOF line and last list name)
+		;check2 := oSf[oSf.Count]      ;must end in "EOF"
+		if (Mod(oSf.Count-2, 5) || oSf[oSf.Count] != "EOF")
 		{
-			val := oSf[++loop_idx]
-			if (val == "EOF")
-				break
-			else
-				idx := Integer(val)
+			FileDelete(state_file)
+			LogEntry("WARNING: Invalid .state file or format changed. Deleted file and using default states.`n")
+			return
+		}
 
-			if !IsInteger(idx)
-			{
-				LogEntry("WARNING: Deserializing failed. Index not numeric error.`n")
-				return
-			}
+		;Process the .state file. This file records the state of each game list from the last session.
+		;The very first line is the name of the last selected list, so we'll use that if another list wasn't chosen in the config.
+		if (!gCfg.lst_default_list)
+			gCfg.lst_default_list := oSf[1]
 
-			sys := oSf[++loop_idx]
+		;There is one line per state and 5 states per menu. Format of the file for each list is:
+		;
+		;rec 1: original index (not used here)
+		;rec 2: list name (i.e. sys_key or fe_key)
+		;rec 3: count
+		;rec 4: index of selected game
+		;rec 5: whether picks list is toggled, where 1=yes, 0=no, and ""=N/A (for favorites lists, i.e now called pick lists)
+		;
+		;Base lists are listed first, followed by the cooresponding fav (i.e. pick) lists which have the
+		;same list name as the original but postfixed with "-fav".  For example, if "mame" is the base list,
+		;its cooresponding "pick" list is called "mame-fav". Note that the toggle state (0 or 1) is only 
+		;provided in the base list, and is left blank in the "pick" list states.
+	
+		iListCount := this._maxSystems * 2 ;count is all the base lists plus their cooresponding "pick" (i.e "fav") lists
 
-			if (idx > this._maxSystems)
-				listName := this._playlists[idx-this._maxSystems]["name"] . "-fav"
-			else
-				listName := this._playlists[idx]["name"]
+		;Basically, we just go through every named playlist in the currently running instance, then look in the
+		;.state file to recover its state from the last session.  Since lists CAN change in between sessions 
+		;(by adding/removing systems, hiding systems, renaming systems, adding/removing roms, etc.) we only recover
+		;states if we find both a name and count match.  If we do, then we recover and set the last selected row/game
+		;and the previous toggled state of the pick list.
+		Loop iListCount
+		{
+			if (A_Index > this._maxSystems) ;these are the pick lists (i.e "fav lists")
+				listName := this._playlists[A_Index - this._maxSystems]["name"] . "-fav"
+			else 
+				listName := this._playlists[A_Index]["name"] ;these are the base lists
 
-			if (listName == sys)	
-			{
-				cnt := oSf[++loop_idx]
-				if (this._state[idx]["count"] == cnt)
+			stateIdx := A_Index
+
+			;for each playlist name, get and set its state if available
+			cnt := sel := tog := 0, loop_idx := 1 
+			Loop 
+			{	
+				;advance cursor to beginning of next record (either former index or EOF)	
+				if oSf[++loop_idx] == "EOF" ;reached the end of .state file, so nothing left to search for.
+					break
+
+				;advance cursor to list name
+				if (oSf[++loop_idx] == listname) ;did we find the list name in the .state file?
 				{
-					sel := oSf[++loop_idx]
-					this._state[idx]["selectedRow"] := sel
+					;advance cursor to the count
+					cnt := Integer(oSf[++loop_idx])
+					if (this._state[stateIdx]["count"] != cnt) ;if current count doesn't match old count, skip.
+					{
+						loop_idx+=2 ;advance cursor to beginning of next list
+						break
+					}
 
-					this._current_playlist := idx
+					;advance cursor to line recording the last selected game
+					sel := Integer(oSf[++loop_idx])
 
-					this.Init(idx)
+					;advance cursor to the pick list toggle state
+					temp_tog := oSf[++loop_idx]
+					tog := temp_tog == "" ? 0 : Integer(temp_tog)
+				
+					;update the current list with the recovered states and re-initialize it
+					this._state[stateIdx]["selectedRow"] := sel
+					this._current_playlist := stateIdx
+
+					this.Init(stateIdx)
 					this._initializing := true
 					this.ScrollVertical("index", sel)
 
@@ -205,29 +254,24 @@ class select_list_control_class
 					}
 					oBASS.Active := 1
 
-					tog := oSf[++loop_idx]
 					if (tog == 1)
 					{
-						this._state[idx]["sublist"] := Integer(tog)
+						this._state[stateIdx]["sublist"] := Integer(tog)
 					}
 
 					this._initializing := false
+
+					state_count++
 				}
-				else
+				else ;list name didn't match
 				{
-					loop_idx+=2
+					loop_idx+=3 ;advance cursor to beginning of next list
 				}
 			}
-			else
-			{
-				loop_idx+=3
-			}
-			;Note that EOF should exit the loop before this test.
-			if (loop_idx >= oSf.Count)
-				break
 		}
 
-		LogEntry("INFO: Deserialized " idx " states from .state file.`n")
+		LogEntry("INFO: Deserialized " state_count " states from .state file.`n")
+		return
 	}
 
 	;write the control state to the .state file.
@@ -235,7 +279,7 @@ class select_list_control_class
 	{
 		nVal := 0
 
-		if (!g_guiselect_loaded)
+		if (!g_guiselect_loaded || this._state.Count == 0)
 		{
 			LogEntry("INFO: Premature exit. Did not serialize to .state file.`n")
 			return			
@@ -244,6 +288,16 @@ class select_list_control_class
 		try
 		{
 			fState := FileOpen(state_file, "w")
+
+			;write name of currently selected list as the first item
+			lst := ""
+			sCurList := this._current_playlist
+			if (sCurList > this._maxSystems) ;use name of base list
+				sCurList := sCurList - this._maxSystems
+
+			lst := this._playlists[sCurList]["name"]
+
+			fState.write(lst . "`n")
 
 			for n, s in this._state
 			{
@@ -453,7 +507,8 @@ class select_list_control_class
 			gGui.guiSelect_MetaLabelLeft.Visible := true
 			gGui.guiSelect_MetaLabelTopRight.Visible := true
 			gGui.guiSelect_MetaLabelTopLeft.Visible := true
-			gGui.guiSelect_PickerLicenseBanner.Visible := true
+
+			try gGui.guiSelect_PickerLicenseBanner.Visible := true
 			
 			this.ShowPlaylist(this._current_playlist)
 			if (g_guiselect_visible)
@@ -493,7 +548,8 @@ class select_list_control_class
 		gGui.guiSelect_MetaLabelLeft.Visible := false
 		gGui.guiSelect_MetaLabelTopRight.Visible := false
 		gGui.guiSelect_MetaLabelTopLeft.Visible := false
-		gGui.guiSelect_PickerLicenseBanner.Visible := false
+
+		try gGui.guiSelect_PickerLicenseBanner.Visible := false
 
 		pl_count := this._playlists.Count
 		for n, pl in this._playlists
@@ -515,7 +571,8 @@ class select_list_control_class
 		gGui.guiSelect_MetaLabelLeft.Visible := true
 		gGui.guiSelect_MetaLabelTopRight.Visible := true
 		gGui.guiSelect_MetaLabelTopLeft.Visible := true
-		gGui.guiSelect_PickerLicenseBanner.Visible := true
+
+		try gGui.guiSelect_PickerLicenseBanner.Visible := true
 	}
 
 	_HideMeta()
@@ -527,7 +584,8 @@ class select_list_control_class
 		gGui.guiSelect_MetaLabelLeft.Visible := false
 		gGui.guiSelect_MetaLabelTopRight.Visible := false
 		gGui.guiSelect_MetaLabelTopLeft.Visible := false
-		gGui.guiSelect_PickerLicenseBanner.Visible := false
+
+		try gGui.guiSelect_PickerLicenseBanner.Visible := false
 	}
 
 	HidePlaylist(pl)
@@ -579,7 +637,7 @@ class select_list_control_class
 	;This is the main system/list initialization routine
 	_AddEmulatorItems()
 	{
-		global gGui, fav_idx, g_guiselect_loaded
+		global gGui, fav_idx, g_guiselect_loaded, bEmuWindowActive
 
 		pl_idx_map := Map()
 		cl_idx_map := Map()
@@ -808,6 +866,9 @@ class select_list_control_class
 
 							nRating := oEmulators.Emulators[emulator.sys_key].GetRomProperty("ratings", romFile)
 							this._playlists[pl_idx]["playlist"][gm_idx]["rom_rating"] := nRating
+
+							sHighscore := oEmulators.Emulators[emulator.sys_key].GetRomProperty("highscores", romFile)
+							this._playlists[pl_idx]["playlist"][gm_idx]["rom_highscore"] := sHighscore
 							
 							/*
 							;possibly make this an option
@@ -884,11 +945,12 @@ class select_list_control_class
 						;*****************************************************************************************************
 						; Permit loading to be interrupted if exiting app or switching games
 						;*****************************************************************************************************
-
+						
 						;allows exiting to interrupt if an exit call was made, but it was not for a vector switch
 						if (!IsEmulatorActive() && !g_directswitch_args)
 						{
 							g_guiselect_loaded := true ;not really true, but lets shutdown proceed with no warnings from RunWaitTimer
+							this._abort_thread := true ;gets sent up the stack to the RunWaitTimer to shutdown
 							return
 						}
 
@@ -901,7 +963,7 @@ class select_list_control_class
 						{
 
 							guiSelect.Destroy()
-							CreateSelectScreen()
+							CreateGUI.CreateSelectScreen()
 							SetTimer SelectControlTimer, 100
 							return
 						}
@@ -999,8 +1061,8 @@ class select_list_control_class
 			;allows exiting to interrupt if an exit call was made, but it was not for a vector switch
 			if (!IsEmulatorActive() && !g_directswitch_args)
 			{
-				;Gui, guiSelect:Destroy ;cleans display prior to shutdown
 				g_guiselect_loaded := true ;not really true, but lets shutdown proceed with no warnings from RunWaitTimer
+				this._abort_thread := true ;gets sent up the stack to the RunWaitTimer to shutdown
 				return
 			}
 
@@ -1012,7 +1074,7 @@ class select_list_control_class
 			if (g_directswitch_args)
 			{
 				guiSelect.Destroy()
-				CreateSelectScreen()
+				CreateGUI.CreateSelectScreen()
 				SetTimer SelectControlTimer, 100
 				return
 			}
@@ -1021,19 +1083,19 @@ class select_list_control_class
 
 		this._maxSystems := this._playlists.Count
 
+		;init to first playlist 
+		this._deserializeState()
+
 		;Get the starting list
-		initial_list := fav_idx ;default
+		initial_list := fav_idx ;default - this is the "All Picks" list
 		for n, s_item in this._playlists
 		{
-			if (s_item["name"] == gCfg.lst_default_list)
+			if (s_item["name"] == gCfg.lst_default_list) ;this is the starting list from the config
 			{
 				initial_list := n
 				break
 			}
 		}
-
-		;init to first playlist 
-		this._deserializeState()
 
 		this._current_playlist := initial_list
 		this._current_count := this._state[initial_list]["count"]
@@ -1110,7 +1172,7 @@ class select_list_control_class
 		;Color the "Picks" column yellow
 		oLVC := LV_Colors(gGui.guiSelect_ListViewPlaylist)
 		if (IsObject(oLVC))
-			oLVC.Cell(1, mLists.Length + 1, , color_yellow)
+			oLVC.Cell(1, mLists.Length + 1, , color_dark_yellow)
 		else
 			LogEntry("WARNING: Could not create LV_Colors object.`n")
 
@@ -1250,7 +1312,7 @@ class select_list_control_class
 
 		gGui.guiPlusLeft := Gui(, "eipGui - guiPlusLeft")
 		gGui.guiPlusLeft.Opt("-Caption +ToolWindow +LastFound +AlwaysOnTop")
-		gGui.guiPlusLeft.BackColor := color_green
+		gGui.guiPlusLeft.BackColor := color_dark_green
 
 		x1 := leftMargin + 5
 		y1 := verticalCenter + 2
@@ -1298,7 +1360,7 @@ class select_list_control_class
 
 		gGui.guiPlusRight := Gui(, "eipGui - guiPlusRight")
 		gGui.guiPlusRight.Opt("-Caption +ToolWindow +LastFound +AlwaysOnTop")
-		gGui.guiPlusRight.BackColor := color_green
+		gGui.guiPlusRight.BackColor := color_dark_green
 
 		x1 := leftMargin * 2 - 5
 		y1 := verticalCenter + 2
@@ -2212,6 +2274,10 @@ class select_list_control_class
 						oBASS.Play("edit_off")
 						this._exitListEditMode()
 					}
+					else
+					{
+						oBASS.Play("error")
+					}
 
 					this._editMode := 0
 				}
@@ -2576,25 +2642,30 @@ class select_list_control_class
 		sourceValue := ""
 
 		;Get the source value (i.e. appropriate value from currently selected row)
-		selectedObject := gGui.guiSelect_ListViewBottom%pl%.GetText(cr, 3)
-		oObject := ObjFromPtrAddRef(Integer(selectedObject))
-
-		Switch sourceType 
+		try
 		{
-			case "genre":
-				sourceValue := oObject.Get("rom_category", "")
-			case "year":
-				sourceValue := oObject.Get("rom_year", "")
-			case "publisher":
-				sourceValue := oObject.Get("rom_publisher")
-			case "developer":
-				sourceValue := oObject.Get("rom_developer")
-			case "players":
-				sourceValue := oObject.Get("rom_players")
-			case "favorites":
-				sourceValue := oObject.Get("rom_favorite")
-			case "rating":
-				sourceValue := oObject.Get("rom_rating")
+			selectedObject := gGui.guiSelect_ListViewBottom%pl%.GetText(cr, 3)
+			oObject := ObjFromPtrAddRef(Integer(selectedObject))
+
+			Switch sourceType 
+			{
+				case "genre":
+					sourceValue := oObject.Get("rom_category", "")
+				case "year":
+					sourceValue := oObject.Get("rom_year", "")
+				case "publisher":
+					sourceValue := oObject.Get("rom_publisher")
+				case "developer":
+					sourceValue := oObject.Get("rom_developer")
+				case "players":
+					sourceValue := oObject.Get("rom_players")
+				case "favorites":
+					sourceValue := oObject.Get("rom_favorite")
+				case "rating":
+					sourceValue := oObject.Get("rom_rating")
+				case "highscore":
+					sourceValue := oObject.Get("rom_highscore")
+			}
 		}
 
 		return sourceValue
@@ -2977,6 +3048,46 @@ class select_list_control_class
 			this.ScrollVertical("index", row)
             return
 		}
+
+		;Page up to next leading character group
+		if (direction == "lu")
+		{
+			selectedLetterVal := GetOrdValOfString(gGui.guiSelect_ListViewBottom%pl%.GetText(selectedRow, 1))
+
+			loop selectedRow
+			{
+				if (GetOrdValOfString(gGui.guiSelect_ListViewBottom%pl%.GetText(selectedRow - A_Index, 1)) != selectedLetterVal)
+				{
+					row := selectedRow - A_Index
+					if (row < 1)
+						row := 1
+					this.ScrollVertical("index", row)
+					break
+				}
+			}
+
+			return
+		}
+
+		;Page down to next leading character group
+		if (direction == "ld")
+		{
+			selectedLetterVal := GetOrdValOfString(gGui.guiSelect_ListViewBottom%pl%.GetText(selectedRow, 1))
+
+			loop gGui.guiSelect_ListViewTop%pl%.GetCount() - selectedRow
+			{
+				if (GetOrdValOfString(gGui.guiSelect_ListViewBottom%pl%.GetText(selectedRow + A_Index, 1)) != selectedLetterVal)
+				{
+					row := selectedRow + A_Index
+					if (row > gGui.guiSelect_ListViewTop%pl%.GetCount())
+						row := gGui.guiSelect_ListViewTop%pl%.GetCount()
+					this.ScrollVertical("index", row)
+					break
+				}
+			}
+
+			return
+		}
         
         if (direction == "u")
         {
@@ -3070,6 +3181,7 @@ class select_list_control_class
 		system_logo_file := this._current_object["system_logo"]
 		favorite_icon_file := this._current_object["favorite_icon"] ;use icon from the parent playlist
 		nRating := this._current_object["rom_rating"] ;get rating (0-5) of this rom
+		;nHighscore := this._current_object["rom_highscore"] ;get highscore of this rom (score|initials|stage|date)
 		
 		if (!FileExist(logo_file))
 			logo_file := system_logo_file

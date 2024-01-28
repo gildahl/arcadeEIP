@@ -3,7 +3,7 @@ arcadeEIP
 Arcade Emulator Integration Player
 https://github.com/gildahl/arcadeEIP
 ========================================
-Readme.txt for version, 0.4.0.2 beta
+Readme.txt for version, 0.4.1.0 beta
 ========================================
 
 QUICK START GUIDES
@@ -16,44 +16,53 @@ SUMMARY
 =======
 arcadeEIP is a custom front-end and launch tool I wrote for my arcade machine over a period of 
 several years due to nothing else like it being available. The main reason for writing it was to
-allow my arcade machine to always operate in a walk-up-and-play mode as opposed to the menu-first 
-operation of most front-ends. It achieves this by always having a live game running while in standby,
-and auto-switching games periodically.  The key feature is that the game you see on the screen is
-always playable by just dropping in a token and/or pressing the start button, just like a real 
-arcade machine. Manual game selection is supported too, of course, but via a minimalistic overlay
-menu allowing fast selection and launch of any game without needing to exit the currently running
-game first--something I don't believe any other launcher or front-end supports. arcadeEIP's hotkey
-game switching ability also makes it an ideal companion to the Elgato Stream Deck, which can provide
-your arcade machine with one of the most unobtrusive front-ends possible.
+reduce the amount of "friction" that conventional front ends add to playing a game. Thus, rather
+than force users to *always* have to navigate menus, think of a game to play, choose that game,
+wait for it to load, and manually exit that game and go through the same steps before playing 
+another, I wanted to allow my arcade machine to *always* be immediately playable--just like a 
+real arcade machine; elimimate 'fake' attract modes; and in general, provide a lower friction
+method of changing games. 
+ 
+The answer to this was two-fold:  First, make the software "game-first" rather than reproduce the
+"menu-first" operation of most front-ends. This is achieved by support to always have a live
+game running in its *native* attract mode while in standby, and auto-switching the active game
+periodically in user-customizable ways. The key outcome being that the game you see on the screen
+is always immediately playable by just dropping in a token and/or pressing the start button, just
+a real arcade machine. And when you're done, you can just walk away.
+
+To achieve the second goal--less friction when changing games--the answer was to implement hot
+game-switching, which makes game selection more like changing channels than changing a DVD. While the 
+current game is running, select a new game from an overlay menu or press the new game's button on an 
+Elgato StreamDeck, phone, or other device while the one you were playing is still running and presto,
+the current game exits and the new one loads all in one automated step!
 
 arcadeEIP can be used stand-alone; however, it also has integrated support for LaunchBox, enabling
-you to use LB as a content manager for its game lists, images, and metadata. When used in this way,
-arcadeEIP can also be used as either an alternative or supplement to BigBox as your arcade machine's
-front-end. Integration with other front-ends is also supported, though not as tightly.
+you to use LB as a scraper/content manager for its game lists, images, and metadata. You can also pair
+it with a conventional Front End like BigBox so that arcadeEIP's hot switching, game-first standby,
+AND a conventional graphical front end can be used with it together (that's actually the way I use it).
 
 A short overview of arcadeEIP's fuller list of features includes:
-* Live attract mode with auto (and manual) game-switching;
-* Game list browsing and selection without exiting the currently running game first;
-* Direct game switching using hotkeys/hotstrings making it work well with virtual button panels like
-  the Elgato Stream Deck;
-* Ability to function as a full-feature launching engine for all your games;
-* Many conventional front end features including run before/after apps, support for loading custom
+* Instant gameplay in standby.
+* Direct game switching via an overlay menu or button device;
+* A launcher for all your games in most emulators;
+* Standard front end features including run before/after apps, support for loading custom
   control panel profiles, etc.
-* Support for custom lists,metadata, favorites, and star-ratings;
+* Support for custom lists, metadata, favorites, and star-ratings;
+* Support for manual entry of high scores and the taking of high score screenshots.
 * Display of images such as control panel maps and mame history/mameinfo text on pause;
-* "Bookend" (i.e. startup and exit) screens;
+* Game startup and exit screens;
 * Native support for multiple parallel versions of emulators such as MAME;
-* Dynamic marquee monitor support with display of high scores on the marquee;
+* Dynamic marquee monitor support with optional display of high scores on the marquee;
 * A custom rules engine;
-* Game specific sound volume adjustments;
-* Sidecar rom re-directs transparent to front-ends;
-* And even a unique command-line front-end tool using simple <system> <title> vectors to run any
-  game from any system.
+* Easy command line game launcher.
+* All coded in AHK 2.0 and published on GitHub for easy customizability.
 
 INSTALLATION
 ============
 To install arcadeEIP, create a dedicated folder (e.g. \arcadeEIP or \EIP) and unzip the archive to it. 
-If desired, add eip.exe to your system path to allow running it from anywhere.
+If desired, add eip.exe to your system path to allow running it from anywhere. Make sure that the folder
+has full write access as arcadeEIP will need to create and write both files and directories within that
+folder.
 
 Next, double-click on create_cfg.bat to create a fresh arcadeEIP.ini configuration file.  This will
 also create a file called arcadeEIP_example.ini that contains documentation of all the settings.
@@ -84,12 +93,14 @@ arcadeEIP should work out of the box, using your keyboard and/or a control panel
 MAME key mappings. If you are using a control panel with different key mappings, you can configure
 arcadeEIP to other mappings via its configuration file, arcadeEIP.ini.
 
-Here is a list of key defaults.
+Here is a list of key defaults. See [Key_Map] section of arcadeEIP.ini for more and to change.
 
 Basic controls - available while a game is playing (relies on correct configuration)
 -------------------------------------------------------------------------------
-Menu:                 '                Toggle game selection menu
 Exit:                 ~                Exits emulator, then arcadeEIP
+Menu Toggle:          '                Toggle game selection menu
+Menu Show             =                Show game selection menu
+Menu Hide             -                Hide game selection menu
 Magic Key (menu):     .                Toggle game selection menu
 Magic Key (exit):     .                Hold 2-3 seconds to exit 
 Pause:                ,                Pause emulator.
@@ -97,6 +108,7 @@ Previous Game:        [   or q         Go back to previous game in autoplay list
 Next Game:            ]   or w         Advance to next game in autoplay list
 Lock Game:            Ctrl-Alt-l       Pause/resume autoswitching
 Exit (panic):         Ctrl-Alt-k       (Use RIGHT Ctrl-Alt) Exit (during hang, black screen, etc.)
+Enter High Score      Ctrl-Alt-d       (Use RIGHT Ctrl-Alt) Take screenshot and enter high score.
 
 Quick-Switch game picker menu controls (only used when in the menu)
 --------------------------------------------------------------------------------
@@ -104,9 +116,9 @@ Navigation:           Arrow keys       Can also use mouse/trackball/spinners, or
 Launch                Left-Ctrl        Launch the currently selected game
 Favorite              m                Mark (or unmark) game as a favorite
 Star Rating           s                Change star rating of a game
-List Mode:	      Left-Alt         Toggles "Picks" list for a system or custom list.
-Edit Mode:            Left-Shift       Puts a custom list in edit mode for add/remove.
-Add/Remove:           Space            Add/remove selected game to/from a "Picks" or targeted custom list.
+"Picks" List Mode:    i                Toggles "Picks" list between full or custom list.
+Edit Mode:            k                Puts a custom list in edit mode for add/remove.
+Add/Remove:           j                Add/remove selected game to/from a "Picks" or targeted custom list.
 Add/Remove All:       a                Add/remove all games to/from a "Picks" or tageted custom list
 
 Additional controls used to bulk add/remove games to/from pick lists and custom lists.
@@ -127,6 +139,7 @@ FILE MANIFEST
 =============
 eip.exe                      : main arcadeEIP executable
 marquee.exe                  : marquee player supporting dynamic marquees
+marquee_manager.exe          : display marquees using the command line
 util.exe                     : command line/console utility
 license.txt                  : terms of the license.
 readme.txt                   : this file
@@ -135,8 +148,8 @@ sound.txt                    : information about turning on sound effects
 Quick Start 1 - MAME.txt     : short guide to setting up MAME with EIP.
 Quick Start 2 - MARQUEE.txt  : short guide to using a dynamic marquee monitor with EIP.
 
-Configuration FILE
-------------------
+Configuration FILES
+-------------------
 arcadeEIP.ini                : main configuration file (intended for user editing)
 arcadeEIP_example.ini        : commented configuration file for reference.
 
@@ -160,6 +173,6 @@ Current development environment is Visual Studio Code using the following extens
 * vscode-autohotkey-debug
 
 ========================================
-arcadeEIP 0.4.0.2 beta
-Copyright (c) 2023 by David G. Dahlstrom
+arcadeEIP 0.4.1.0 beta
+Copyright (c) 2024 by David G. Dahlstrom
 https://github.com/gildahl/arcadeEIP

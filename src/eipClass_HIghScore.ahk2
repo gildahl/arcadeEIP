@@ -1,0 +1,256 @@
+; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
+; © 2024 David G. Dahlstrom
+; File: eipClass_HighScore.ahk2
+
+class HighScore
+{
+    _formatted_high_score := ""
+    _high_score := 0
+    _high_initials := ""
+    _high_stage := ""
+
+    static FormattedHighScore
+    {
+        get => this._formatted_high_score
+    }
+
+    static Score
+    {
+        get => this._high_score
+    }
+
+    static Initials
+    {
+        get => this._high_initials
+    }
+
+    static Stage
+    {
+        get => this._high_stage
+    }
+
+    static ClearScore()
+    {
+        this._formatted_high_score := ""
+        this._high_score := -1 ;-1 indicates no valid score recorded
+        this._high_initials := ""
+        this._high_stage := ""
+    }
+
+    static FormatHighScore(hi_label, hi_score, hi_name, hi_stage)
+    {
+        if (IsNumber(hi_score))
+        {
+            hi_score_text := ThouSep(Trim(hi_score))
+            if (Trim(hi_name) != "")
+                hi_name := " by " . hi_name
+            else 
+                hi_name := ""
+
+            if (hi_stage)
+                hi_stage := " (Stage " . Trim(hi_stage) . ")" 
+
+            return hi_label . ": " . hi_score_text . hi_name . hi_stage
+        }
+
+        return ""
+    }
+
+    static SetHighScore(hi_score, hi_name:="", hi_stage:="")
+    {
+        sNewScore := hi_score . "|" . hi_name . "|" hi_stage
+        oEmulators.Emulators[gCfg.sys_key].SetRomProperty("highscores", gCfg.rom_file, sNewScore)
+
+        formatted_hi_score := this.FormatHighScore("High Score", hi_score, hi_name, hi_stage)
+        LogEntry("INFO: Used scorecard to set high score to highscores.ini: " formatted_hi_score "`n")
+
+        oMarqueeMsg["Highscore"] := formatted_hi_score
+
+        this._formatted_high_score := formatted_hi_score
+        this._high_score := IsNumber(hi_score) ? Number(hi_score) : -1 ;-1 indicates no valid score recorded
+        this._high_initials := hi_name
+        this._high_stage := hi_stage
+
+        return
+    }
+
+    ;This should only be caled by GetHi2TxtScores()
+    static GetHighScore()
+    {
+        formatted_hi_score := hi_score := hi_name := hi_stage := ""
+
+        ;See if there is a high score registered in the highscores file.
+        ;This score will override any scores obtained by hi2txt
+        ;Format is score|initials|stage|date
+        sHighscore := oEmulators.Emulators[gCfg.sys_key].GetRomProperty("highscores", gCfg.rom_file)
+        if (sHighscore)
+        {
+            oScores := StrSplit(sHighscore, "|")
+            if (oScores.Has(1))
+            {
+                if (Trim(oScores[1]) && IsNumber(Trim(oScores[1]))) 
+                {
+                    hi_score := Trim(oScores[1])
+
+                    if (oScores.Has(2))
+                        if (Trim(oScores[2]))
+                            hi_name := Trim(oScores[2])
+
+                    if (oScores.Has(3))
+                        if (Trim(oScores[3]))
+                            hi_stage := Trim(oScores[3])
+
+                    formatted_hi_score := HighScore.FormatHighScore("High Score", hi_score, hi_name, hi_stage)
+
+                    LogEntry("INFO: Successfully read high score from highscores.ini: " formatted_hi_score "`n")
+
+                    this._formatted_high_score := formatted_hi_score
+                    this._high_score := IsNumber(hi_score) ? Number(hi_score) : -1 ;-1 indicates no valid score recorded
+                    this._high_initials := hi_name
+                    this._high_stage := hi_stage
+
+                    return true
+                }
+            }
+        }
+
+        return false
+    }
+
+    ;This function will retrieve any high scores recored for this rom.  These high scores
+    ;may be recorded manually or come from hi2txt. If there are scores from both, the manually
+    ;recored ones will take priority.
+    static ReadHighScore(sRomName)
+    {
+        formatted_high_score := hi_score := hi_name := hi_stage := hiscore_folder := hiscoredat_folder := ""
+
+        this.ClearScore()
+
+        ;if there is a highscore in the highscore.ini file then we will use this
+        ;information instead of the hi2txt score.
+        if (HighScore.GetHighScore())
+            return
+
+        ;Check for a high score using hi2txt if enabled
+        ;Note that hi2txt relies on the 3rd party hi2txt project being in the arcadeEIP\hi2txt folder
+        ;use_hi2txt=1 should also be present in the mame system configuration for this to work. 
+        if (!gCfg.use_hi2txt)
+            return
+
+        mHighscores := Map()  ;current highscore list array
+        hiFile := sRomName . ".hi" ;
+
+        ;Find the highscore folders
+        hiscore_folder := gCfg.root_folder . "\hi" ;this is the older location (prior to .237 I believe)
+        if (!FileExist(hiscore_folder))
+        {
+            hiscore_folder := gCfg.root_folder . "\hiscore" ;this is the newest location (.237+)
+            if (!FileExist(hiscore_folder))
+            {
+                LogEntry("INFO: The highscore folder, " . hiscore_folder . " (or \hi) could not be found.`n")
+                return
+            }
+        }
+
+        hiscoredat_folder := gCfg.root_folder . "\plugins\hiscore"
+        if (!FileExist(hiscoredat_folder))
+        {
+            LogEntry("INFO: The highscore.dat location, " . hiscoredat_folder . " could not be found.`n")
+            return
+        }
+
+        hi2txt_cmd := "-hiscoredat " . hiscoredat_folder . "\hiscore.dat -r " . hiscore_folder . "\" . hiFile
+        DetectHiddenWindows True
+
+        ;These first three lines (and the later FreeConsole and ProcessClose)
+        ;are needed to hide the console. Without this, a console window will
+        ;flash briefly on screen during startup.
+        try 
+        {
+            Run A_ComSpec,, "Hide", &com_pid
+            WinWait "ahk_pid " com_pid
+            DllCall("AttachConsole", "UInt", com_pid)
+        
+            WshShell := ComObject("WScript.Shell")
+        }
+        catch as e
+        {		
+            LogEntry("ERROR: Attaching console for GetHi2TxtScores(): " FormatErrorMessage(e) "`n")
+            ExitApp
+        }
+
+        try ;added try block after an occurrence of an invalid memory read/write error crash on the WshShell.Exec line
+        {
+            exec := WshShell.Exec(hi2txt_exe  " "  hi2txt_cmd)
+            stdout := exec.StdOut.ReadAll()
+            stderr := exec.StdErr.ReadAll()
+            if (stderr)
+            {
+                stderr := StrReplace(stderr, "Error" , "Message") ;don't want this to trigger an arcadeEIP error
+                stderr := StrReplace(stderr, "`r`n", "") ;don't need the extra linefeed data
+                LogEntry("INFO: Failed to read high score file `"" . hifile . "`": " . stderr . ".`n")
+            }
+            else
+            { 
+                rawscores := StrSplit(stdout, "`r`n", A_Space)
+                headers := StrSplit(rawscores[1], "|")
+                nScoreCount := rawscores.Length
+                nHeaderCount := headers.Length
+
+                ;Push high score data into the global hiscores array.
+                Loop nHeaderCount
+                {
+                    headerLoop := A_Index
+                    mHighscores[headers[headerLoop]] := Array() ;note highscores is global
+                    
+                    Loop nScoreCount
+                    {
+                        if (A_Index == 1)
+                            continue
+                        thisScore := StrSplit(rawscores[A_Index],"|")                       
+                        if (thisScore.Length >= headerLoop)
+                            mHighscores[headers[headerLoop]].Push(thisScore[headerLoop])
+                    }
+                }
+
+                ;set the top score global for the current game if one exists
+                if (mHighscores.Has("SCORE"))
+                {
+                    if (mHighscores["SCORE"][1] && mHighscores["SCORE"][1] != 0)
+                    {
+                        hi_score := Trim(mHighscores["SCORE"][1])
+
+                        if (mHighscores.Has("NAME"))
+                            if (Trim(mHighscores["NAME"][1]))
+                                hi_name := Trim(mHighscores["NAME"][1])
+
+                        if (mHighscores.Has("STAGE"))
+                            if (Trim(mHighscores["STAGE"][1]))
+                                hi_stage := Trim(mHighscores["STAGE"][1])
+
+                        formatted_hi_score := HighScore.FormatHighScore("High Score", hi_score, hi_name, hi_stage)
+
+                        ;convert to UTF-8
+                        ChangeEncoding(&formatted_hi_score, "CP0", "UTF-8")
+
+                        this._formatted_high_score := formatted_hi_score
+                        this._high_score := IsNumber(hi_score) ? Number(hi_score) : -1 ;-1 indicates no valid score recorded
+                        this._high_initials := hi_name
+                        this._high_stage := hi_stage
+
+                        LogEntry("INFO: Successfully read high score using hi2txt: " formatted_hi_score "`n")
+                    }
+                }
+            }
+        }
+        catch as e
+        {		
+            LogEntry("WARNING: Processing high scores: " . FormatErrorMessage(e) . "`n")
+        }
+
+        DllCall("FreeConsole")
+        ProcessClose com_pid 
+
+        return
+    }
+}

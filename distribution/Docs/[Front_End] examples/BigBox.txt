@@ -10,11 +10,15 @@ Here are the steps to integrate:
 fe_key=bigbox
 proper_name=BigBox
 asset_name=BigBox
+window_name=LaunchBox Big Box
 exe_full_path=D:\LaunchBox\BigBox.exe
 start_screen=1
 exit_screen=1
 hide_cursor=1
+hide_taskbar=0
 run_apps=ultramap,winipac  <-- see note
+show_on_pause=
+kiosk_mode=0
 
 * Note: This example includes a run_apps= line that specifies that ultramap and 
   winipac (two control panel configuration tools), that should be called on each 
@@ -31,5 +35,15 @@ run_apps=ultramap,winipac  <-- see note
    
    This will ensure the options in your [Front_End_bigbox] section are active.
 
+Compatibility Notes
+===================
+A. The arcadeEIP game menu may not operate correctly when used when BigBox's Loading Game
+message option is turned on. Since arcadeEIP already implements bookend screens, it is
+recommended that you turn off the BigBox option and use arcadeEIP's loading screens 
+instead. This can be done by going into BigBox's Option menu, and then in the Game 
+Startup option, uncheck Show "Loading Game..." , Message
 
+B. If BigBox does not regain focus after returning from a game, check that the window_name
+option in the [Front_End_bigbox] section of arcadeEIP.ini is set to "LaunchBox Big Box" as
+shown above in the sample.
 

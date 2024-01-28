@@ -1,0 +1,123 @@
+#Requires AutoHotkey v2.0
+
+; arcadeEIP Marquee Manager (marquee_manager.exe)
+; © 2024 David G. Dahlstrom
+; File: eipMarqueeManager.ahk2
+
+;This file implements the arcadeEIP marquee manager (complile as marquee_manager.exe).
+;This executable is not used directly by arcadeEIP, but provides the ability to use
+;marquee.exe with command lines for external use by other applications, batch files, etc.
+
+;Compiler directives
+;***********************************************************
+global CodeVersion := "0.4.1.0"
+;@Ahk2Exe-Let version = %A_PriorLine~U)^(.+"){1}(.+)".*$~$2%
+;@Ahk2Exe-SetCopyright (c) 2024 David G. Dahlstrom
+;@Ahk2Exe-SetProductName arcadeEIP Marquee Manager
+;@Ahk2Exe-SetDescription arcadeEIP Marquee Manager
+;@Ahk2Exe-SetProductVersion %U_version% beta
+;@Ahk2Exe-SetFileVersion %U_version%
+;***********************************************************
+
+#Requires AutoHotkey v2.0
+SetWorkingDir A_ScriptDir
+
+#include eipFunctions_Attributed.ahk2 ;needed for ObjRegisterActive
+
+global marquee_pid := 0
+global marquee_key := "ON" ;the value here isn't meaningful...just needs to not be "NULL" or empty
+global marquee_full_path := ""
+global scorecard := ""
+global bTest := false
+
+global cProductName := "arcadeEIP"
+global cConfigFileName := cProductName . ".ini"
+global config_file := A_ScriptDir "\" cConfigFileName
+
+;Register an object to communicate with the marquee application.
+global oMarqueeMsg := Map()
+oMarqueeMsg["Key"] := ""
+oMarqueeMsg["Path"] := ""
+oMarqueeMsg["Highscore"] := ""
+ObjRegisterActive(oMarqueeMsg, "{92011753-7482-478d-87f1-83d1b67ebf4f}") ;guid for marquee_manager (not same as the one eip uses)
+
+;Read [Marquee] entries in arcadeEIP.ini
+marquee_active := Integer(IniRead(config_file, "Marquee", "active", 0))
+marquee_autostart := 1 ;Integer(IniRead(config_file, "Marquee", "autostart", 0))
+marquee_autoexit := Integer(IniRead(config_file, "Marquee", "autoexit", 0))
+marquee_show_high_scores := Integer(IniRead(config_file, "Marquee", "show_high_scores", 1))
+
+;Display instructions if run with no parameters
+if (A_Args.Length == 0)
+{
+    MsgBox("Usage Examples:`n`nNormal:`n-image `"C:\myimagepath\myimage.png`" (required)`n-scorecard `"Highscore: 12,345 by DGD`" (optional)`n`nSpecial:`n-exit (exit the marquee application)`n-test (show test dialogs on startup)", "arcadeEIP Marquee Manager - Usage", 64)
+    ExitApp
+}
+
+;Process the command line
+for i, sArg in A_Args
+{
+    if (sArg == "-exit")
+    {
+        marquee_key := "NULL"
+        marquee_full_path := "NULL"
+        marquee_autoexit := 1
+    }
+
+    if (sArg == "-image")
+        try marquee_full_path := A_Args[i+1]
+
+    if (sArg == "-scorecard")
+        try scorecard := A_Args[i+1]
+
+    if (sArg == "-test")
+        bTest := true
+}
+
+if (!marquee_full_path && marquee_key != "NULL" && !bTest) ;if we're not exiting or testing, an image file must be supplied
+    MsgBox("Error: An image file was not specified.`n`nUsage Examples:`n`nNormal:`n-image `"C:\myimagepath\myimage.png`" (required)`n-scorecard `"Highscore: 12,345 by DGD`" (optional)`n`nSpecial:`n-exit (exit the marquee application)`n-test (show test dialogs on startup)", "arcadeEIP Marquee Manager - Error", 16)
+
+;Start marquee.exe if marquee mode and autostart is enabled
+if (marquee_active && marquee_autostart)
+{
+    If (!ProcessExist("marquee.exe"))
+    {
+        try {
+            if (bTest)
+                Run "marquee.exe", A_ScriptDir, marquee_pid
+            else
+                Run "marquee.exe -quiet", A_ScriptDir, marquee_pid
+        }
+        catch as e {
+
+            MsgBox("Error:`n`nCould not start marquee.exe.`nMake sure marquee.exe is in the same folder as marquee_launcher.exe.", "arcadeEIP Marquee Manager - Error", 16)
+        }
+
+        ProcessWait(marquee_pid, 5)
+    }
+}
+
+;If marquee mode is configured and active and marquee.exe is running...
+if (marquee_full_path && marquee_active && (ProcessExist(marquee_pid) || ProcessExist("marquee.exe")))
+{
+    try
+    {	
+        oMarqueeMsg["Key"] := marquee_key        
+        oMarqueeMsg["Path"] := marquee_full_path
+        oMarqueeMsg["Autoexit"] := marquee_autoexit
+
+        if (scorecard)
+            oMarqueeMsg["Highscore"] := scorecard
+        else
+            oMarqueeMsg["Highscore"] := "NULL"
+
+    }
+    catch as e
+    {		
+        MsgBox("Error updating marquee.", "arcadeEIP Marquee Manager - Error", 16)
+        ExitApp
+    }
+}
+
+Sleep(1500) ;required
+ExitApp

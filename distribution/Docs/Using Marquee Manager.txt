@@ -1,0 +1,41 @@
+Using Marquee Manager (marquee_manager.exe)
+=============================================
+
+If you would like to use arcadeEIP's dynamic marquee software independent of arcadeEIP with another front end, or otherwise control it manually (even while arcadeEIP is using it), you may use the Marquee Manager tool (marquee_manager.exe).
+
+You may use Marquee Manager from within the arcadeEIP folder or optionally move it somewhere else. If you move it you will minimally need to have marquee.exe, marquee_launcher.exe and arcadeEIP.ini in the same folder. If you don't use arcadeEIP, you can reduce the contents of arcadeEIP.ini to just the [Marquee] section if you wish. Configure this by making sure active=1 and monitor is set to the index of your marquee monitor. By default, you can exit the marquee software at anytime using Ctrl-Alt-x.
+
+[Marquee]
+active=1
+monitor=2
+exit_key=^!x
+autostart=1
+autoexit=0
+show_high_scores=1
+interpolation=7
+window_left=0
+window_top=0
+window_height=0
+window_width=0
+
+Note that the 'autostart', 'autoexit', and 'show_high_scores' options have no function in stand-alone mode. Basically, autostart is always on, and both exiting and showing high scores are things you must do manually via the command line. See the Configuration Reference Guide.pdf for explanation of other settings, but the defaults should be fine. 
+
+Once the [Marquee] section of arcadeEIP.ini is configured, double-click on marquee.exe as an initial test (or run marquee_manager.exe -test). This should put up a couple diagnostic dialogs on your marquee monitor which you can read and click through. If they don't appear on the correct monitor, then change the monitor= setting and try again. 
+
+You should now be ready to try displaying a marquee image. If you double-click marquee_manager.exe with no arguments it will give you some usage instructions; but in summary, all you have to do is provide it with a command line of -image followed by a space then the full path to a marquee image file. Make sure the path is inside double-quotes. For example:
+
+>marquee_manager.exe -image "D:\arcadeEIP\Assets\MAME\Marquee\Rom\galaga.png"
+
+If marquee.exe is already running, it will be instructed to update the image. If marquee.exe is not running, it will be started and instructed to show the image. Note that marquee images are always displayed in their original aspect ratio but will be optimized to fill the screen as best as possible. To change the image, just send the launcher a path to another image.
+
+>marquee_manager.exe -image "D:\arcadeEIP\Assets\MAME\Marquee\Rom\asteroid.png"
+
+You may also optionally post high score information (or anything you want) under the marquee image by adding -scorecard to the command line followed by some quoted text.
+
+>marquee_manager.exe -image "D:\arcadeEIP\Assets\MAME\Marquee\Rom\galaga.png" -scorecard "Highscore 12,234 by DGD"
+
+When this is done, the marquee image will be rendered a bit smaller to make room, but will maintain its native aspect ratio.
+
+Finally, if you want to exit the marquee application via the command line (rather than pressing Ctrl-Alt-x), simply use the argument -exit
+
+>marquee_manager.exe -exit

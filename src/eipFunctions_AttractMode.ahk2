@@ -1,5 +1,5 @@
 ; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
-; © 2023 David G. Dahlstrom
+; © 2024 David G. Dahlstrom
 ; File: eipFunctions_AttractMode.ahk2
 
 ;This file contains functions needed for implementation of arcadeEIP's game
@@ -14,9 +14,12 @@ DirectSwitch(vector, caller:="")
 {
     global g_directswitch_args
 
+    sk := SplitVector(vector)["sys_key"]
+    rv := SplitVector(vector)["rom_value"]
+    GetRoms(sk, rv, &rl)
+    
     ;return if the currently playing game is chosen
-    current_vector := gCfg.sys_key " " gCfg.rom_file
-    if (vector == current_vector)
+    if (rl[1].fullPath == gCfg.rom_full_path)
         return
  
     if (gCfg.map_exit)
@@ -108,8 +111,7 @@ AttractSwitch(update:=false, add_vector:="")
     static attractList := Array(), idx := 0  ;the current full attract list and index
     static originalList := Array()           ;the original attract list when we started
     static originalSize
-    static last_vector
-
+    
     size := attractList.Length
 
     ;This forces a re-read/rebuild of originalList so that any games added/removed
@@ -307,10 +309,6 @@ AttractSwitch(update:=false, add_vector:="")
             }
         }
     } 
-    
-    ;we use sys_key and rom_name here instead of index since the last game 
-    ;might not be in the list if we had started with a game not in the list
-    ;last_vector := sys_key . " " . rom_name
     
     ;Note that play_previous is no longer currently used in favor of logic
     ;that moves backward through the play_list.  The logic is left here for

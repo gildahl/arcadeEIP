@@ -1,20 +1,19 @@
 ; arcadeEIP Marquee (marquee.exe)
-; © 2023 David G. Dahlstrom
+; © 2024 David G. Dahlstrom
 ; File: eipMarquee.ahk2
 
 ;This file implements the arcadeEIP marquee (complile as marquee.exe).
 ;This is intended to put a marquee image on an independent marquee monitor. 
 ;The marquee image should automatically scale and display at its native aspect 
 ;ratio.  The image filename and some metadata, including current high score,
-;are delivered to the marquee via a pseudo pipe file. Whenever this file is
-;updated the image will change. Any high score data will be displayed at the 
-;bottom of the marquee monitor.
+;are delivered to the marquee via shared COM object. Any high score data will 
+;be displayed at the bottom of the marquee monitor.
 
 ;Compiler directives
 ;***********************************************************
-global CodeVersion := "0.4.0.2"
+global CodeVersion := "0.4.1.0"
 ;@Ahk2Exe-Let version = %A_PriorLine~U)^(.+"){1}(.+)".*$~$2%
-;@Ahk2Exe-SetCopyright (c) 2023 David G. Dahlstrom
+;@Ahk2Exe-SetCopyright (c) 2024 David G. Dahlstrom
 ;@Ahk2Exe-SetProductName arcadeEIP Marquee Player
 ;@Ahk2Exe-SetDescription arcadeEIP Marquee Player
 ;@Ahk2Exe-SetProductVersion %U_version% beta
@@ -35,16 +34,14 @@ SetWorkingDir A_ScriptDir
 
 OnExit(ExitFunction)
 
-global debug := false ;set to true to prevent deletion of marquee.txt pipe file
-
 ;global g_current_game := "galaga" ;just for testing
-global g_last_image, gui_id, hwnd := ""
-global g_pipe_filename := A_ScriptDir . "\marquee.txt"
-global nScreenHeight, nScreenWidth, bounds
+global gui_id, hwnd := ""
+global nScreenHeight, nScreenWidth
 global marquee_monitor, marquee_exit_key, marquee_interpolation
 global window_W, window_H, window_L, window_T
 global image_W, image_H, image_L, image_T ;these are currently kept undocumented
 global gGui := {}
+global standalone := ""
 
 cProductName := "arcadeEIP"
 cConfigFileName := cProductName . ".ini"
@@ -71,17 +68,6 @@ image_T := Integer(IniRead(config_file, "Marquee", "image_top", 0))
 
 fExit := ExitApplication.Bind()
 Hotkey marquee_exit_key, fExit
-
-pipeFile := {}
-
-if (FileExist(g_pipe_filename))
-{
-    if (!debug)
-    {
-        if (FileExist(g_pipe_filename))
-            FileDelete(g_pipe_filename)  
-    }  
-}
 
 ;Get the relative bounds of the monitor we will be using for the marquee
 try
@@ -287,8 +273,7 @@ ExitApplication(theHotkey := "")
 ;destructor
 ExitFunction(ExitReason, ExitCode)
 {
-    if (FileExist(g_pipe_filename) && !debug)
-        FileDelete(g_pipe_filename)
+
 }
 
 ;method adapted from https://www.autohotkey.com/boards/viewtopic.php?p=73307#p73307
@@ -324,79 +309,108 @@ MsgBox_XY(Opt, Message, X, Y, W, H, L, T)
     return mbResult
 }
 
+;This function is called every second by the CheckSwitchTimer, and changes
+;the marquee as needed.
 CheckSwitchTimer()
 {
     global
 
-    syskey := ""
-    romfile := ""
+    static standby_status := false, autoexit := 0
+    static syskey := marqueeFullPath := topscore := ""
+    static standalone := false
 
-    ;file created by arcadeEIP
-    if (!FileExist(g_pipe_filename))
-        return
-    
-    try
+    connect_status := true
+
+    oRemoteMarqueeMsg := source_eip := source_mcl := ""
+    try source_eip := ComObjActive("{cf63540b-c460-489a-9310-62fe83e6e748}")
+    try source_mcl := ComObjActive("{92011753-7482-478d-87f1-83d1b67ebf4f}")
+
+    if (source_mcl)
     {
-        pipeFile := FileOpen(g_pipe_filename, "r")
-        syskey := Trim(pipeFile.ReadLine(), OmitChars := " `n`r")	
+        oRemoteMarqueeMsg := source_mcl
+        standalone := true
+    }
+    if (source_eip)
+    {
+        oRemoteMarqueeMsg := source_eip
+        standalone := false
+    }
 
-        if (syskey == "!Clear!") ;eip.exe exited, clear screen or show default.png
+    if (standalone) ;received message from marquee launcher
+    {
+        if (autoexit)
+            ExitApplication
+
+        connect_status := true
+    }
+    else if (!source_eip) ;received message from arcadeEIP
+    {
+        connect_status := false
+    }
+
+    ;Disconnected behaviors
+    if (!connect_status && autoexit) 
+    {
+        ExitApplication
+    }
+    else if (!connect_status && !standby_status && !autoexit)
+    {
+        image_file := A_ScriptDir ".\Assets\Default\Marquee\default.png"
+        if (FileExist(image_file))
         {
-            pipeFile.Close
-            Sleep 100
-            if (!debug)
+            HideMarquee()
+            ShowMarquee(image_file, "default", "NULL")
+        }
+        else
+            HideMarquee()
+
+        standby_status := true
+    }
+    
+    ;Connected behaviors
+    if (connect_status == true)
+    {
+        standby_status := false
+        try 
+        {
+            syskey := oRemoteMarqueeMsg["Key"]
+            if (oRemoteMarqueeMsg["Key"] == "") ;nothing to switch to this time, so return
             {
-                if (FileExist(g_pipe_filename))
-                    FileDelete(g_pipe_filename)
+                ;...but just check to see if score was updated before we do
+                topscore := oRemoteMarqueeMsg["Highscore"]
+                if (topscore != "")
+                {
+                    oRemoteMarqueeMsg["Highscore"] := ""
+
+                    ;Re-display the marquee
+                    HideMarquee()
+                    ShowMarquee(marqueeFullPath, syskey, topscore)
+                }
+
+                return
             }
 
-            image_file := A_ScriptDir ".\Assets\Default\Marquee\default.png"
-            if (FileExist(image_file))
-            {
-                HideMarquee()
-                ShowMarquee(image_file, "default", "NULL")
-            }
-            else
-                HideMarquee()
+            ;Get marquee info from arcadeEIP
+            marqueeFullPath := oRemoteMarqueeMsg["Path"]
+            topscore := oRemoteMarqueeMsg["Highscore"]
+            autoexit := oRemoteMarqueeMsg["Autoexit"]
+
+            ;Clear the message object
+            oRemoteMarqueeMsg["Key"] := ""
+            oRemoteMarqueeMsg["Path"] := ""
+            oRemoteMarqueeMsg["Highscore"] := ""
+
+            ;Display the new marquee
+            HideMarquee()
+            ShowMarquee(marqueeFullPath, syskey, topscore)
+
             return
         }
-        else if (syskey == "!Exit!") ;eip.exe exited in autoexit mode, so exitapp
+        catch
         {
-            pipeFile.Close
-            Sleep 100
-            if (!debug)
-            {
-                if (FileExist(g_pipe_filename))
-                    FileDelete(g_pipe_filename)
-            }
-            Sleep 500
-
-            ExitApplication()
-        }
-
-        marqueeFullPath := Trim(pipeFile.ReadLine(), OmitChars := " `n`r")
-        topscore := Trim(pipeFile.ReadLine(), OmitChars := " `n`r")
-
-        pipeFile.Close	
-
-        Sleep 100
-
-        if (!debug)
-        {
-            if (FileExist(g_pipe_filename))
-                FileDelete(g_pipe_filename)
+            ;arcadeEIP must have exited
+            connect_status := false
+            return
         }
     }
-    catch as e
-	{		
-		errorText := FormatErrorMessage(e)		
-        MsgBox("ERROR: in: " errorText, "arcadeEIP Marquee Player - Error", 16)	
-		ExitApp
-	}
-
-    HideMarquee()
-
-    ShowMarquee(marqueeFullPath, syskey, topscore)
-
-    return
 }
