@@ -20,6 +20,8 @@ global CodeVersion := "0.4.1.0"
 ;***********************************************************
 
 #Requires AutoHotkey v2.0
+#SingleInstance 
+
 SetWorkingDir A_ScriptDir
 
 #include eipFunctions_Attributed.ahk2 ;needed for ObjRegisterActive
