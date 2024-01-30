@@ -48,6 +48,10 @@ marquee_active := Integer(IniRead(config_file, "Marquee", "active", 0))
 marquee_autostart := 1 ;Integer(IniRead(config_file, "Marquee", "autostart", 0))
 marquee_autoexit := Integer(IniRead(config_file, "Marquee", "autoexit", 0))
 marquee_show_high_scores := Integer(IniRead(config_file, "Marquee", "show_high_scores", 1))
+marquee_fade_effect := Integer(IniRead(config_file, "Marquee", "fade_effect", 1))
+marquee_poll_freq := Integer(IniRead(config_file, "Marquee", "poll_frequency", 80))
+
+marquee_wait_freq := marquee_fade_effect ? 1500 : marquee_poll_freq + 20
 
 ;Display instructions if run with no parameters
 if (A_Args.Length == 0)
@@ -121,5 +125,5 @@ if (marquee_full_path && marquee_active && (ProcessExist(marquee_pid) || Process
     }
 }
 
-Sleep(1500) ;required
+Sleep(marquee_wait_freq) ;required
 ExitApp

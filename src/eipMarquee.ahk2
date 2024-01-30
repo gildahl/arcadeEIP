@@ -37,7 +37,7 @@ OnExit(ExitFunction)
 ;global g_current_game := "galaga" ;just for testing
 global gui_id, hwnd := ""
 global nScreenHeight, nScreenWidth
-global marquee_monitor, marquee_exit_key, marquee_interpolation
+global marquee_monitor, marquee_exit_key, marquee_interpolation, marquee_poll_freq, marquee_fade_effect
 global window_W, window_H, window_L, window_T
 global image_W, image_H, image_L, image_T ;these are currently kept undocumented
 global gGui := {}
@@ -48,15 +48,15 @@ cConfigFileName := cProductName . ".ini"
 config_file := A_ScriptDir "\" cConfigFileName
 
 ;read configuration
-;[General]
-alpha_effect := Integer(IniRead(config_file, "General", "alpha_effect", 1))
-
 ;[Marquee]
 marquee_active := Integer(IniRead(config_file, "Marquee", "active", 0))
-alpha_effect := Integer(IniRead(config_file, "Marquee", "alpha_effect", alpha_effect)) ;override of alpha_effect in [General]
 marquee_monitor := Integer(IniRead(config_file, "Marquee", "monitor", 2))
 marquee_exit_key := IniRead(config_file, "Marquee", "exit_key", "^!x")
 marquee_interpolation := Integer(IniRead(config_file, "Marquee", "interpolation", 2))
+
+marquee_fade_effect := Integer(IniRead(config_file, "Marquee", "fade_effect", 1))
+marquee_poll_freq := Integer(IniRead(config_file, "Marquee", "poll_frequency", 80))
+
 win_W := Integer(IniRead(config_file, "Marquee", "window_width", 0))
 win_H := Integer(IniRead(config_file, "Marquee", "window_height", 0))
 win_L := Integer(IniRead(config_file, "Marquee", "window_left", 0))
@@ -124,7 +124,10 @@ WinSetTransparent 0, "ahk_id " HwndMarqueeAlpha
 oFadeMarqueeAlpha := fade_window_class(HwndMarqueeAlpha)
 
 ;Start timer that checks for a game switch every second
-SetTimer CheckSwitchTimer, 1000
+if (marquee_fade_effect)
+    SetTimer CheckSwitchTimer, 1000 ;set to 1 second to permit time for fade effect
+else
+    SetTimer CheckSwitchTimer, marquee_poll_freq
 
 ScreenCreate()
 {
@@ -171,7 +174,8 @@ HideMarquee()
 {
     global
 
-    oFadeMarqueeAlpha.Start(0,255,20,16)
+    if (marquee_fade_effect)
+        oFadeMarqueeAlpha.Start(0,255,20,16)
 
     if (WinExist("ahk_id " . hwnd))
     {
@@ -202,14 +206,14 @@ ShowMarquee(image_file, system, top_score)
     gGui.%gui_id%.Show("NA") 
     
     ;start the fade-in
-    if (alpha_effect)
+    if (marquee_fade_effect)
     {
         ;oFadeMarqueeAlpha.Start(0,0)
         guiMarqueeAlpha.Opt("+AlwaysOnTop")
         oFadeMarqueeAlpha.Start(255,0,20,16)
     }
 
-    ;Get a handle to the window we have created in order to update it later
+    ;Get a handle to the window we have created in order to update it laterx
     hwnd := gGui.%gui_id%.Hwnd
 
     pBitmap := Gdip_CreateBitmapFromFile(image_file)

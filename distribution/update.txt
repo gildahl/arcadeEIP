@@ -5,6 +5,15 @@ Arcade Emulator Integration Player
 Update Log
 ========================================
 
+0.4.1.1 (pending release)
+* Added support for half-star ratings.
+* Provided an independent fade_effect setting in the [Marquee] section of 
+  arcadeEIP.ini. When set to 1, a the normal fade effect will be used when
+  changing marquees. When set to 0, the change will be instant. Setting to 0
+  will use new new poll_frequency and wait_frequency settings, which permit
+  much faster marquee switching when using marquee_manager.exe. These are 
+  further documented in the Configuration Reference Guide.pdf.
+
 0.4.1.0 Major feature and bug fix release 
 Note that this version contains fairly major changes including changes to default
 key assignments and new arcadeEIP.ini keys. It is therefore highly recommended that
