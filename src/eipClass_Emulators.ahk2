@@ -239,6 +239,8 @@ class emulators_class
 				{ 
 					if (sProperty == "highscores")
 						return IniRead(propertyFile, StrTitle(sProperty), sRom, A_Space)
+					else if (sProperty == "ratings")
+						return Float(IniRead(propertyFile, StrTitle(sProperty), sRom, 0.0))
 					else
 						return Integer(IniRead(propertyFile, StrTitle(sProperty), sRom, 0))
 				}

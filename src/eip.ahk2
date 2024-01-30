@@ -473,7 +473,8 @@ cSoundFolder := "Resources\Sound"
 cFavoritesFolder := "Picks"
 cFavoriteOnIconFileName := "fav.png"
 cFavoriteOffIconFileName := "fav_off.png"
-cRatingIconFileName := "rating.png"
+cRatingFullStarFileName := "rating.png"
+cRatingHalfStarFileName := "rating_half.png"
 cRatingOffIconFileName := "rating_off.png"
 global favorites_listname := "picks"
 
@@ -487,7 +488,8 @@ global cInactivityTest_Period := 1000
 ;Define/set global folders
 global favorite_on_icon_file := A_ScriptDir "\Resources\Icons\" cFavoriteOnIconFileName
 global favorite_off_icon_file := A_ScriptDir "\Resources\Icons\" cFavoriteOffIconFileName
-global rating_icon_file := A_ScriptDir "\Resources\Icons\" cRatingIconFileName
+global rating_fullstar_file := A_ScriptDir "\Resources\Icons\" cRatingFullStarFileName
+global rating_halfstar_file := A_ScriptDir "\Resources\Icons\" cRatingHalfStarFileName
 global rating_off_icon_file := A_ScriptDir "\Resources\Icons\" cRatingOffIconFileName
 global log_file := A_ScriptDir "\" cLogFileName
 global batch_file := A_ScriptDir "\" cBatchFileName
