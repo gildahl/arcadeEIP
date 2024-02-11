@@ -547,7 +547,7 @@ class HighScoreDialog
             Sleep(750) ;wait till fade is complete
             guiAlpha.Hide ;prevents screen artifacts/flashing
             guiAlpha.Opt("-Border")
-            WinMove 0, 0, nScreenWidth, nScreenHeight, guiAlpha ;return to fullscreen
+            WinMove 0, 0, A_ScreenWidth, A_ScreenHeight, guiAlpha ;return to fullscreen
             guiAlpha.Show("NA") ;re-show without activation so its ready for next time
 
             oDetectInactivity.Resume() ;turn the timer back on
