@@ -473,11 +473,13 @@ class HighScoreDialog
             guiAlpha.Opt("+AlwaysOnTop")
             guiDialog.Opt("+AlwaysOnTop")
 
-            nW := CreateGUI.DialogScreenWidth
-            nH := CreateGUI.DialogScreenHeight
-            nX := CreateGUI.DialogScreenX
-            nY := CreateGUI.DialogScreenY
-            
+            ;Get the dialog dimensions. Convert these units to non-dpi
+            ;adjusted pixels since WinMove requires this.
+            nX := DPIToPixels(CreateGUI.DialogScreenX)
+            nY := DPIToPixels(CreateGUI.DialogScreenY)
+            nW := DPIToPixels(CreateGUI.DialogScreenWidth)
+            nH := DPIToPixels(CreateGUI.DialogScreenHeight)
+ 
             WinMove nX, nY, nW, nH, guiAlpha
             guiAlpha.Opt("+Border")
 
