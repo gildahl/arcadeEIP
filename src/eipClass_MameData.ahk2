@@ -16,14 +16,14 @@ class mame_data_class
 		this._mamehistory_file := ""
 		this._mamehistory_version := ""
 		this._mamehistory_date := ""
-		this._mamelistxml_file := ""
+		;this._mamelistxml_file := ""
 		this._mamelistxml_build := ""
 		this._oDom := ""		
 		this._mame_info := ""
 
-		mameinfo_file := mameInfoFolder "\mameinfo.dat"
-		mamehistory_file := mameInfoFolder "\history.xml"
-		mamelistxml_file := mameInfoFolder "\listxml.xml"
+		mameinfo_file := GetFullPathFromRelativePath(mameInfoFolder, "mameinfo.dat")
+		mamehistory_file := GetFullPathFromRelativePath(mameInfoFolder, "history.xml")
+		;mamelistxml_file := mameInfoFolder "\listxml.xml"
 
 		if (FileExist(mamehistory_file))
 		{
@@ -45,7 +45,7 @@ class mame_data_class
 					}
 					catch as e
 					{
-						LogEntry("ERROR: XML Processing Error (MSXML2.DOMDocument.3.0): " FormatErrorMessage(e) "`n")
+						Throw("ERROR: XML Processing Error (MSXML2.DOMDocument.3.0): " FormatErrorMessage(e) "`n", -1)
 					}				
 				}
 
@@ -204,3 +204,530 @@ class mame_data_class
 		}
 	}
 }
+
+;Class to read the MAME catver.ini file much more quickly than using IniRead() calls.
+;added v.0.4.2.0
+class ReadCatver
+{
+	static _cached := false
+	static _mCatver := Map()
+
+	static GetCategory(catver_file, romSpec)
+	{
+		;cache the catver.ini file into a Map() so that
+		;subsequent reads are fast.
+		if (!this._cached)
+		{
+			bCategorySection := false
+			sSectionName := ""
+
+			fCatver := FileRead(catver_file)
+			Loop Parse, fCatver, "`n", "`r"
+			{
+				;Get the current section name
+				if (SubStr(A_LoopField,1,1) == "[" && SubStr(A_LoopField, StrLen(A_LoopField),1) == "]")
+					sSectionName := A_LoopField
+
+				;read until we get to the [Category] section
+				if (sSectionName == "[Category]" && !bCategorySection)
+				{
+					bCategorySection := true
+					continue
+				}
+
+				;Populate the map with the category for this rom
+				if (bCategorySection)
+				{
+					;once we've passed the [Category] section we're done, so break
+					if (sSectionName != "[Category]")
+						break
+
+					;read the key/value pair and write to the map
+					aValues := StrSplit(A_LoopField, "=")
+					if (aValues.Has(1) && aValues.Has(2))
+						this._mCatver[aValues[1]] := aValues[2]
+				}
+			}
+
+			;no need to read the file again
+			this._cached := true 
+		}
+
+		;return the category of the requested rom
+		if (this._mCatVer.Has(romSpec))
+			return this._mCatver[romSpec]
+		else
+			return ""
+	}
+}
+
+;Class to read the MAME catlist.ini file much more quickly than using IniRead() calls.
+;added v.0.4.2.0
+class ReadCatlist
+{
+	static _cached := false
+	static _mCatlist := Map()
+	static _aEmptyList := Map()
+
+	static __New()
+	{
+		this._aEmptyList["arcade"] := ""
+		this._aEmptyList["genre"]  := ""
+		this._aEmptyList["mature"] := ""
+	}
+
+	static GetListInfo(catlist_file, romSpec)
+	{
+		;cache the catlist.ini file into a Map() so that
+		;subsequent reads are fast.
+		if (!this._cached)
+		{
+			bCatListSection := false
+			sSectionName := ""
+			sPrevSectionName := ""
+			aInfo := Array()
+
+			fCatlist := FileRead(catlist_file)
+			Loop Parse, fCatlist, "`n", "`r"
+			{
+				if (!A_LoopField)
+					continue
+
+				;Get the current section name
+				if (SubStr(A_LoopField,1,1) == "[" && SubStr(A_LoopField, StrLen(A_LoopField),1) == "]")
+				{
+					sSectionName := SubStr(A_LoopField,2,StrLen(A_LoopField)-2)
+				}
+
+				;read until we get to the [ROOT_FOLDER] section
+				if (sSectionName == "ROOT_FOLDER" && !bCatListSection)
+				{
+					bCatListSection := true
+					continue
+				}
+
+				;Populate the map with the category for this rom
+				if (bCatListSection && sSectionName != "ROOT_FOLDER")
+				{
+					if (sSectionName != sPrevSectionName)
+					{
+						if (InStr(sSectionName,":"))
+							aInfo := StrSplit(sSectionName,":")
+						else
+						{
+							aInfo := Array()
+							aInfo.Push("") ;No genre
+							aInfo.Push(sSectionName) ;just a category
+						}
+
+						if (InStr(aInfo[2], "* Mature *" ))
+						{
+							aInfo.Push("Y")
+							aInfo[2] := SubStr(aInfo[2], 1, InStr(aInfo[2], "*"))
+						}
+						else
+							aInfo.Push("N")
+
+						sPrevSectionName := sSectionName
+						continue
+					}
+
+					sMRating := aInfo[3] == "Y" ? "(M)" : ""
+
+					this._mCatlist[A_LoopField] := Map()
+					this._mCatlist[A_LoopField]["arcade"] := Trim(aInfo[1]) == "Arcade" ? "Y" : "N"
+					this._mCatlist[A_LoopField]["genre"] := Trim(aInfo[2]) " " sMRating
+					this._mCatlist[A_LoopField]["mature"] := aInfo[3]
+				}
+			}
+
+			;no need to read the file again
+			this._cached := true 
+		}
+
+		;return the category of the requested rom
+		if (this._mCatlist.Has(romSpec))
+			return this._mCatlist[romSpec]
+		else
+			return this._aEmptyList
+	}
+}
+
+class ReadNPlayers
+{
+	static _cached := false
+	static _mNPlayers := Map()
+
+	static GetPlayers(nplayers_file, romSpec)
+	{
+		;cache the catver.ini file into a Map() so that
+		;subsequent reads are fast.
+		if (!this._cached)
+		{
+			bCategorySection := false
+			sSectionName := ""
+
+			fNPlayers := FileRead(nplayers_file)
+			Loop Parse, fNPlayers, "`n", "`r"
+			{
+				;Get the current section name
+				if (SubStr(A_LoopField,1,1) == "[" && SubStr(A_LoopField, StrLen(A_LoopField),1) == "]")
+					sSectionName := A_LoopField
+
+				;read until we get to the [NPlayers] section
+				if (sSectionName == "[NPlayers]" && !bCategorySection)
+				{
+					bCategorySection := true
+					continue
+				}
+
+				;Populate the map with the category for this rom
+				if (bCategorySection)
+				{
+					;once we've passed the [Category] section we're done, so break
+					if (sSectionName != "[NPlayers]")
+						break
+
+					;read the key/value pair and write to the map
+					aValues := StrSplit(A_LoopField, "=")
+					if (aValues.Has(1) && aValues.Has(2))
+					{
+						sVal := ""
+
+						Switch aValues[2]
+						{
+							Case "2P alt":
+								sVal := "2 Player, alternating"
+							Case "2P sim":
+								sVal := "2 Player, simultaneous"
+							Case "1P":
+							   sVal := "1 Player"
+							Case "2P":
+								sVal := "2 Players"
+							Case "3P":
+								sVal := "3 Players"
+							Case "3P sim":
+								sVal := "3 Players, simultaneous"
+							Case "3P alt":
+								sVal := "3 Players, alternating"
+							Case "4P alt / 2P sim":
+								sVal := "4 Players, alternating / 2 Players, simultaneous"
+							Case "4P":
+								sVal := "4 Players"
+							Case "4P sim":
+								sVal := "4 Players, simultaneous"
+							Case "4P alt":
+								sVal := "4 Players, alternating"
+							Case "5P":
+								sVal := "5 Players"
+							Case "5P sim":
+							    sVal := "5 Players, simultaneous"
+							Case "5P alt":
+								sVal := "5 Players, alternating"
+							Case "6P":
+								sVal := "6 Players"
+							Case "6P sim":
+								sVal := "6 Players, simultaneous"
+							Case "6P alt":
+								sVal := "6 Players, alternating"
+							Default:
+								sVal := ""
+						}
+						this._mNPlayers[aValues[1]] := sVal
+					}
+				}
+			}
+
+			;no need to read the file again
+			this._cached := true 
+		}
+
+		;return the category of the requested rom
+		if (this._mNPlayers.Has(romSpec))
+			return this._mNPlayers[romSpec]
+		else
+			return ""
+	}
+}
+
+;This class can both listxml.xml and games.xml (a stripped-down
+;version of the file).
+class ReadListXML
+{
+	static _mListXML := Map()
+	static _oDom := ""
+
+	static _cached := false
+	static _mXMLInfo := Map()
+
+	static GetXMLMetaInfo(listxml_file, romSpec)
+	{
+		;cache the catver.ini file into a Map() so that
+		;subsequent reads are fast.
+		if (!this._cached)
+		{
+			game_count := 0
+
+			if (FileExist(listxml_file))
+			{
+				this._listxml_file := listxml_file
+
+				;DOM documentation found here
+				;https://docs.microsoft.com/en-us/previous-versions/windows/desktop/ms757828(v=vs.85)?redirectedfrom=MSDN
+				if (!IsObject(this._oDOM))
+				{
+					try
+					{
+						this._oDOM := ComObject("MSXML2.DOMDocument.6.0")
+					}
+					catch as e
+					{
+						try
+						{
+							this._oDOM := ComObject("MSXML2.DOMDocument.3.0")
+						}
+						catch as e
+						{
+							Throw("ERROR: XML Processing Error (MSXML2.DOMDocument.3.0): " FormatErrorMessage(e) "`n", -1)
+						}				
+					}
+
+					this._oDOM.async := false
+					xml_data := FileRead(listxml_file)
+										
+					/*
+					;Determine if xml_data contains a DOCTYPE section.
+					bDocTypeFound := false
+					Loop parse, xml_data, "`n", "`r"
+					{
+						if (InStr(A_LoopField, "<!DOCTYPE"))
+						{
+							bDocTypeFound := true
+							break
+						}
+
+						;only test first 5 lines
+						if (A_Index > 5)
+							break
+					}
+
+					;if it does contain a DOCTYPE section, remove it, and remove any other
+					;tags we don't need while we're at it.
+					if (bDocTypeFound)
+					{
+						;These are the only tags we're interested in.
+						aIncludedTags := ["<mame", "<machine", "<description", "<year", "<manufacturer",
+					                      "/mame", "/machine"]		                      
+
+						fNewListXML := FileOpen(listxml_file ".temp", "w")
+						nPhase := 1
+						Loop parse, xml_data, "`r", "`n"
+						{
+							;in nPhase 1 we copy the file untl we get to the DOCTYPE section.
+							;Should be immediately after the xml header.
+							if (nPhase == 1 && InStr(A_LoopField, "<!DOCTYPE"))
+								nPhase := 2 ;found DOCTYPE Section
+							else if (nPhase == 1)
+								fNewListXML.write(A_LoopField "`r`n")
+
+							;in nPhase 2 we skip through until reaching ""]>""
+							if (nPhase == 2 && InStr(A_LoopField, "]>"))
+							{
+								nPhase := 3
+								continue
+							}
+					
+							;in nPhase 3 we write the rest of the file out to the new one
+							if (nPhase == 3)
+							{
+								if (IsValueInArray(aIncludedTags, A_LoopField))
+									fNewListXML.write(A_LoopField "`r`n")
+							}
+						}
+
+						fNewListXML.Close()
+					}
+					*/
+
+
+					this._oDOM.loadXML(xml_data)			
+					
+					objNodeList := this._oDOM.getElementsByTagName("machine")
+					game_count := objNodeList.length
+
+					rootNode := this._oDOM.selectSingleNode("//mame")
+					nodeId := rootNode.getAttributeNode("build")
+					this._build_version := nodeId.value			
+			
+					Loop game_count
+					{ 
+						idx := A_index - 1
+						element := ""
+
+						try 	
+						{
+							sRomName := objNodeList.item(idx).getAttributeNode("name").Value
+
+							this._mXMLInfo[sRomName] := Map()
+							this._mXMLInfo[sRomName]["description"] := ""
+							this._mXMLInfo[sRomName]["year"] := ""
+							this._mXMLInfo[sRomName]["manufacturer"] := ""
+							this._mXMLInfo[sRomName]["clone_of"] := ""
+							this._mXMLInfo[sRomName]["rom_of"] := ""
+							this._mXMLInfo[sRomName]["status"] := ""
+							this._mXMLInfo[sRomName]["emulation"] := ""
+							this._mXMLInfo[sRomName]["savestate"] := ""
+		
+							try this._mXMLInfo[sRomName]["clone_of"] := objNodeList.item(idx).getAttributeNode("cloneof").Value
+							try this._mXMLInfo[sRomName]["rom_of"] := objNodeList.item(idx).getAttributeNode("romof").Value
+
+							element := objNodeList.item(idx).getElementsByTagName("description")							
+							try this._mXMLInfo[sRomName]["description"] := element.item(0).text						
+
+							element := objNodeList.item(idx).getElementsByTagName("year")
+							try this._mXMLInfo[sRomName]["year"] := element.item(0).text
+
+							element := objNodeList.item(idx).getElementsByTagName("manufacturer")
+							try this._mXMLInfo[sRomName]["manufacturer"] := element.item(0).text
+
+							try 
+							{
+								element := objNodeList.item(idx).getElementsByTagName("driver")
+							    this._mXMLInfo[sRomName]["status"] := element.item(0).getAttributeNode("status").Value
+							    this._mXMLInfo[sRomName]["emulation"] := element.item(0).getAttributeNode("emulation").Value
+							    this._mXMLInfo[sRomName]["savestate"] := element.item(0).getAttributeNode("savestate").Value
+							}							
+						}
+						catch as e {
+							;LogEntry("WARNING: Unexpected XML read error: " FormatErrorMessage(e) "`n")
+							break
+						}
+					}
+
+				}
+			}
+
+			;no need to read the file again
+			this._cached := true
+		}
+		
+		;return the category of the requested rom
+		if (this._mXMLInfo.Has(romSpec))
+			return this._mXMLInfo[romSpec]
+		else
+			return ""
+	}
+}
+
+/*
+; Thie is currently a WIP, however, it probably won't be needed.
+;
+class ReadMameInfo
+{
+	static _cached := false
+	static _mMameInfo := Map()
+	static _oInfoIndexes := Map()
+	static _mameinfo_file := ""
+	static _oMameInfo := Array()
+	static _mame_info := ""
+
+	;Create a simple index of all $info= entries.  The cost to create this is
+	;low enough and speed benefit high enough for subsequent roms, that we shouldn't
+	;need to do anything fancier than this to keep performance reasonable.
+	static CreateInfoIndexes()
+	{
+		mameInfo := this._mame_info
+		oMameInfo := StrSplit(mameInfo, "`r`n")
+		this._oMameInfo := oMameInfo
+		oIndexes := Map()
+
+		szMameInfo := oMameInfo.Length
+
+		Loop szMameInfo
+		{
+			if (SubStr(oMameInfo[A_Index],1,6)) == "$info="
+				oIndexes["" . StrReplace(oMameInfo[A_Index], "$info=", "") . ""] := A_Index
+		}
+
+		this._oInfoIndexes := oIndexes
+		return oIndexes
+	}
+
+	static GetMameInfo(mameinfo_file, romSpec)
+	{
+		;cache the catver.ini file into a Map() so that
+		;subsequent reads are fast.
+		if (!this._cached)
+		{
+			bCategorySection := false
+			sSectionName := ""
+
+			;fMameInfo := FileRead(mameinfo_file)
+			if (FileExist(mameinfo_file))
+				{
+					this._mameinfo_file := mameinfo_file
+		
+					mameinfo := FileRead(mameinfo_file)
+					this._mame_info := mameinfo
+				}
+			;Loop Parse, fMameInfo, "`n", "`r"
+			;{
+				infoText := ""
+				foundMame := false
+		
+				oInfoIndexes := this._oInfoIndexes
+				szIndex := oInfoIndexes.Count ;are indexes cached?
+		
+				if (szIndex == 0) ;if not, create them
+					oInfoIndexes := this.CreateInfoIndexes()	
+				
+				oMameInfo := this._oMameInfo ;array form of the mameinfo.dat file
+				szMameInfo := oMameInfo.Length
+		
+				index := oInfoIndexes.Get("" . romSpec . "", 0)
+		
+				;if an index for this rom exists, get the text.
+				if (index)
+				{
+					Loop ;retrieve each line of the text
+					{
+						line := ++index
+		
+						if (line > szMameInfo) ;we've reached the end
+							break
+		
+						if (SubStr(oMameInfo[line],1,1)) == "#" ;skip comment lines
+							continue
+		
+						if (foundMame) ;only bother with $mame entries
+						{
+							if ((SubStr(oMameInfo[line],1,4)) != "$end") 
+								infoText := infoText . oMameInfo[line] . "`n`r" ;read the text
+							else
+								break
+						}
+						else if (!infoText) ;only bother with $mame entries
+						{
+							if (SubStr(oMameInfo[line],1,5)) == "$mame"
+								foundMame := true
+						}			
+					}
+				}
+		
+				this._mameinfo_file := infoText
+		
+				;return infoText
+			;}
+
+			;no need to read the file again
+			this._cached := true 
+		}
+
+		;return the category of the requested rom
+		if (this._mMameInfo.Has(romSpec))
+			return this._mMameInfo[romSpec]
+		else
+			return ""
+	}
+}
+*/

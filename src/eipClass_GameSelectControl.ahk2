@@ -1,6 +1,10 @@
-; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
-; © 2024 David G. Dahlstrom
-; File: eipClass_SelectListControl.ahk2
+/************************************************************************
+ * @description Game list selection screen
+ * @file eipClass_GameSelectControl.ahk2
+ * @author © 2024 David G. Dahlstrom
+ * @date 2024/03/17
+ * @version 0.4.2.0
+ ***********************************************************************/
 
 ;Some general notes:
 ;1. Three windows listView controls are used. Two for the verticaly scrolling game list
@@ -8,10 +12,11 @@
 ;   scrolling systems list (one row only). Both of the game list ListView controls hold
 ;   the entire list of games, but are dynamically adjusted to make it appear that they
 ;   act as a single contiguous list.  Importantly, the bottom of these two lists also
-;   contains a pointer (stored in column 3 of the list) to the playlist object for each
-;   game which holds the game's metadata. This pointer is the same no matter what list
-;   the game is copied into (such as favorites, master favorites, or custom lists) so that
-;   the metadata is always consistent across lists.
+;   contains a pointer stored in column 3 of the list to the playlist object for each
+;   game which holds the game's metadata (column 2 is reserved for group-sorting the list,
+;   which is not yet implemented). This pointer is the same no matter what list the game
+;   is copied into (such as favorites, master favorites, or custom lists) so that the
+;   metadata is always consistent across lists.
 ;
 ;2. The selection screen never takes the focus (ensuring emulators maintain the focus), 
 ;   therefore, all interaction is achieved via system level hotkeys that are turned on
@@ -38,20 +43,20 @@
 ;   as the user navigates around. Important fields in these structures are identified below.
 
 ;---------------------------------------------------------------------------------
-; ;Important state, LV, and playlist fields
+; ;Important state, LV (ie. ListView), and playlist fields
 ;---------------------------------------------------------------------------------
 ;this._state                       ;a Map() containing realtime state info about the control
 ;this._state[base_pl]["sublist"]   ;which sublist is currently selected (0=base or 1=picks)
-;this._state[pl]["selectedItem"]   ;== this._current_game == column 2 in LV list -- deprecated
+;this._state[pl]["selectedItem"]   ;deprecated
 ;this._state[pl]["selectedObject"] ;== this._current_object == column 3 in LV list
 
-;this._state[pl]["selectedRow"]    ;== this._current_row)
-;this._state[pl]["count"]          ;== this._current_count)		
+;this._state[pl]["selectedRow"]    ;== this._current_row
+;this._state[pl]["count"]          ;== this._current_count		
 
-;this._state[pl]["maxRows"]
-;this._state[pl]["maxRowsB"]
+;this._state[pl]["maxRows"]        ;max rows in top list
+;this._state[pl]["maxRowsB"]       ;max rows in bottom list
 
-;this._current_playlist ;current playlist selected (could be base or pick)
+;this._current_playlist ;current playlist view selected (either base or picks)
 
 ;LV_GetText(selectedText, selectedRow, 1)    ;proper name of the item
 ;LV_GetText(selectedItem, selectedRow, 2)    ;not currently used
@@ -59,13 +64,13 @@
 
 ;Fields in this._current_object[] and this._playlists[pl]["playlist"][gm][]:
 
-;["parent"], ["vector"], ["rom_category"], ["rom_release"], ["rom_players"]
+;["parent"], ["vector"], ["rom_category"], ["rom_release"], ["rom_players"], ["rom_description"]
 ;["rom_year"], ["rom_publisher"], ["rom_developer"], ["rom_favorite"], ["favorite_icon_file"]
 ;["sys_key"], ["rom_spec"], ["proper_name"], ["logo_file"], ["system_logo_file"], ["parent"]
 ;---------------------------------------------------------------------------------	
 
-;Class implementing the game selection screen in arcadeEIP.
-class select_list_control_class
+;Class implementing the game select control screen in arcadeEIP.
+class game_select_control_class
 {	
 	_current_object := Map()
 	_current_playlist := ""
@@ -89,7 +94,7 @@ class select_list_control_class
 			ExitApp
 		}
 
-		this._oGraphicsOverlay := select_list_control_class.graphics_overlay_class()
+		this._oGraphicsOverlay := game_select_control_class.graphics_overlay_class()
 		this._initializing := false
 		this._font := lstFontType
 		this._listMargin := lstListMargin
@@ -388,8 +393,9 @@ class select_list_control_class
 		v := this._current_object.Get("vector", "")
 		vec := SplitVector(v)
 		romFile := vec.Get("rom_value","")
+		sysName := vec.Get("sys_key", "")
 
-		gGui.guiSelect_RomNameLabel.Text := romFile
+		gGui.guiSelect_RomNameLabel.Text := sysName " : " romFile
 
 		romCategory := this._current_object.Get("rom_category","")
 		gGui.guiSelect_MetaLabelRight.Text := romCategory
@@ -399,6 +405,9 @@ class select_list_control_class
 
 		romPlayMode := this._current_object.Get("rom_players","")
 		gGui.guiSelect_MetaLabelTopRight.Text := romPlayMode
+
+		romDescription := this._current_object.Get("rom_description","")
+		gGui.guiSelect_MetaDesc1.Text := romDescription
 
 		romIndexCount := this._state[this._current_playlist].Get("selectedRow", 0) . " (of " . this._state[this._current_playlist]["count"] . ")"
 		if (this._state[this._current_playlist]["count"] == 0)
@@ -415,6 +424,7 @@ class select_list_control_class
 		if (this._state[pl]["count"] == 0)
 		{
 			gGui.guiSelect_RomNameLabel.Text := ""
+			gGui.guiSelect_MetaDesc1.Text := ""
 			gGui.guiSelect_MetaLabelRight.Text := ""
 			gGui.guiSelect_MetaLabelLeft.Text := ""
 			gGui.guiSelect_MetaLabelTopRight.Text := ""
@@ -503,6 +513,7 @@ class select_list_control_class
 			gGui.guiSelect_ListViewPlaylist.Visible := true
 			gGui.guiSelect_BottomBarBorder.Visible := true
 			gGui.guiSelect_RomNameLabel.Visible := true
+			gGui.guiSelect_MetaDesc1.Visible := true
 			gGui.guiSelect_MetaLabelRight.Visible := true
 			gGui.guiSelect_MetaLabelLeft.Visible := true
 			gGui.guiSelect_MetaLabelTopRight.Visible := true
@@ -544,6 +555,7 @@ class select_list_control_class
 		gGui.guiSelect_ListViewPlaylist.Visible := false
 		gGui.guiSelect_BottomBarBorder.Visible := false
 		gGui.guiSelect_RomNameLabel.Visible := false
+		gGui.guiSelect_MetaDesc1.Visible := false
 		gGui.guiSelect_MetaLabelRight.Visible := false
 		gGui.guiSelect_MetaLabelLeft.Visible := false
 		gGui.guiSelect_MetaLabelTopRight.Visible := false
@@ -567,6 +579,7 @@ class select_list_control_class
 		global gGui
 
 		gGui.guiSelect_RomNameLabel.Visible := true
+		gGui.guiSelect_MetaDesc1.Visible := true
 		gGui.guiSelect_MetaLabelRight.Visible := true
 		gGui.guiSelect_MetaLabelLeft.Visible := true
 		gGui.guiSelect_MetaLabelTopRight.Visible := true
@@ -580,6 +593,7 @@ class select_list_control_class
 		global gGui
 
 		gGui.guiSelect_RomNameLabel.Visible := false
+		gGui.guiSelect_MetaDesc1.Visible := false
 		gGui.guiSelect_MetaLabelRight.Visible := false
 		gGui.guiSelect_MetaLabelLeft.Visible := false
 		gGui.guiSelect_MetaLabelTopRight.Visible := false
@@ -727,8 +741,8 @@ class select_list_control_class
 		;Create the playlist in alpha order by proper name
 		Loop Parse orderedEmulatorList, "`n"
 		{
-			if (InStr(A_LoopField, "Vectrex"))
-				a:=1
+			;if (InStr(A_LoopField, "Vectrex"))
+			;	a:=1
 			;update progress bar
 			prog_val := Floor(A_index / progEmuCount * 50)
 			gGui.guiSelect_InitProgress.Value := prog_val
@@ -770,19 +784,6 @@ class select_list_control_class
 
 			initSysText := emulator.sys_key
 			initSysText2 := this._playlists[pl_idx]["proper_name"]
-
-			;check if there is a catver.ini file for this system
-			catver_file := ""
-
-			if (oEmulators.Emulators[emulator.sys_key].use_catver == "1")
-			{
-				catver_file := oEmulators.Emulators[emulator.sys_key].mameinfo_folder "\catver.ini"
-
-				if (SubStr(catver_file, 1, 1) == ".")
-					catver_file := A_ScriptDir . SubStr(catver_file, 2)
-				if (!FileExist(catver_file))
-					catver_file := ""
-			}
 			
 			for n, searchPath in aSearchPaths
 			{							
@@ -791,8 +792,9 @@ class select_list_control_class
 				
 				for n, romExt in romExt_decomp
 				{	
+					Sleep(-1)
 					searchPath := romPath . "\" . searchRomName . "." . romExt					
-					sep := RepeatValue("=", StrLen(searchPath))
+					sep := RepeatChar("=", StrLen(searchPath))
 
 					gGui.guiSelect_ProgText.Text := "Reading games for system: " initSysText " (" initSysText2 ") from [" searchPath "]"
 					
@@ -841,45 +843,53 @@ class select_list_control_class
 							rom_category := oEmulators.Emulators[emulator.sys_key].meta_names.GetGenre(romFile)
 							if (rom_category)
 								this._playlists[pl_idx]["playlist"][gm_idx]["rom_category"] := rom_category
-							
-							if (!rom_category)
+									
+							sFavorite := "false"
+							if (gCfg.import_favorites) ;if we are supporting the import of favorites from launchbox...
 							{
-								;lf there is a catver.ini file available for this system, use that if no category info was in 
-								;the cache.  Note that we only put genre (i.e. category) info in the meta cache if it is a virtual
-								;cache. So the following code to read a catver.ini file for the genre information will be used
-								;in both the case where there is an actual meta file/cache or no meta file/cache.
-								if (oEmulators.Emulators[emulator.sys_key].use_catver == "1")
-								{
-									if (catver_file)
-									{
-										;OutputDebug "catver_file: " . catver_file . " romSpec: " . romSpec . "`n"
-										rom_category := IniRead(catver_file, "Category", romSpec, "")
-									}	
-									if (rom_category)
-										this._playlists[pl_idx]["playlist"][gm_idx]["rom_category"] := rom_category						
-								}
-							}							
+								;Get the imported favorites value. Value will be either "true" or "false"
+								sFavorite := oEmulators.Emulators[emulator.sys_key].meta_names.GetFavorite(romFile)
+							}	
 							
+							;bFavorite will either be 0, 1, or -1 (-1 indicates no locally saved value)
 							bFavorite := oEmulators.Emulators[emulator.sys_key].GetRomProperty("favorites", romFile)
-							this._playlists[pl_idx]["playlist"][gm_idx]["rom_favorite"] := bFavorite == 1 ? "true" : "false"
-							this._playlists[pl_idx]["playlist"][gm_idx]["favorite_icon"] := bFavorite == 1 ? favorite_on_icon_file : favorite_off_icon_file
+							if (bFavorite != -1) ;only set sFavorite if bFavorite has a locally set value (0 or 1)
+								sFavorite := bFavorite == 1 ? "true" : "false"
+							
+							this._playlists[pl_idx]["playlist"][gm_idx]["rom_favorite"] := sFavorite
+							this._playlists[pl_idx]["playlist"][gm_idx]["favorite_icon"] := SFavorite == "true" ? favorite_on_icon_file : favorite_off_icon_file
+
+							fUserRating := 0.0 ;an imported user rating
+							fLocalRating := 0.0 ; native arcadeEIP rating
+							fRating := 0.0 ;final rating
+
+							;import community ratings if present
+							if (gCfg.import_community_ratings) 
+							{
+								;Get the imported rating
+								fRating := oEmulators.Emulators[emulator.sys_key].meta_names.GetCommunityRating(romFile)
+							}
+
+							;override community rating with imported user rating if present
+							if (gCfg.import_user_ratings) ;if we are supporting the import of favorites from launchbox...
+							{
+								;Get the imported rating
+								fUserRating := oEmulators.Emulators[emulator.sys_key].meta_names.GetStarRating(romFile)
+								fRating := fUserRating > 0 ? fUserRating : fRating
+							}
+
+							;Override imported rating with local rating if present.
+							fLocalRating := oEmulators.Emulators[emulator.sys_key].GetRomProperty("ratings", romFile)
+							fRating := fLocalRating > 0 ? fLocalRating : fRating
 
 							;Ratings are stored as 0 to 5 floats, but must be converted to 0 to 10 integer for internal use.
-							nRating := oEmulators.Emulators[emulator.sys_key].GetRomProperty("ratings", romFile)
-							this._playlists[pl_idx]["playlist"][gm_idx]["rom_rating"] := Rating5To10(nRating)
+							this._playlists[pl_idx]["playlist"][gm_idx]["rom_rating"] := Rating5To10(fRating)
 
 							sHighscore := oEmulators.Emulators[emulator.sys_key].GetRomProperty("highscores", romFile)
-							this._playlists[pl_idx]["playlist"][gm_idx]["rom_highscore"] := sHighscore
+							this._playlists[pl_idx]["playlist"][gm_idx]["rom_highscore"] := sHighscore	
 							
-							/*
-							;possibly make this an option
-							else
-							{
-								;Use LaunchBox value if avalilable and there is no favorites.ini
-								rom_favorite := oEmulators.Emulators[emulator.sys_key]._meta_array["meta_names"].GetFavorite(romFile)
-								this._playlists[pl_idx]["playlist"][gm_idx]["rom_favorite"] := rom_favorite
-							}	
-							*/												
+							rom_description := oEmulators.Emulators[emulator.sys_key].meta_names.GetDescription(romFile)
+							this._playlists[pl_idx]["playlist"][gm_idx]["rom_description"] := rom_description
 
 							rom_publisher := oEmulators.Emulators[emulator.sys_key].meta_names.GetPublisher(romFile)
 							this._playlists[pl_idx]["playlist"][gm_idx]["rom_publisher"] := rom_publisher
@@ -998,6 +1008,8 @@ class select_list_control_class
 			o_temp := 0
 			for o, s_item in pl_item["playlist"]
 			{
+				Sleep(-1)
+				
 				properName := s_item["proper_name"]
 				vector := s_item["vector"]
 				systemKey := s_item["sys_key"]
@@ -1084,6 +1096,14 @@ class select_list_control_class
 
 		this._maxSystems := this._playlists.Count
 
+		/*
+		gGui.guiSelect_ListViewTop%20%.ModifyCol(2,"Sort")
+		gGui.guiSelect_ListViewBottom%20%.ModifyCol(2,"Sort")
+
+		gGui.guiSelect_ListViewTop%20%.Redraw()
+		gGui.guiSelect_ListViewBottom%20%.Redraw()
+		*/
+
 		;init to first playlist 
 		this._deserializeState()
 
@@ -1134,7 +1154,7 @@ class select_list_control_class
 		;loading completed
 		g_guiselect_loaded := true
 		picker_load_timer := (A_TickCount - picker_load_timer)//1000
-		LogEntry("INFO: Completed loading picker menu (" picker_load_timer " seconds).`n")
+		LogEntry("INFO: Completed loading game menu (" picker_load_timer " seconds).`n")
 
 		;if guiSelect is visible then switch from progress bar to main interactive screen
 		if (g_guiselect_visible)
@@ -1142,11 +1162,15 @@ class select_list_control_class
 			this.Show() 
 			ControlActivationState.EnableSelectControls()
 		}
+		else
+			this.Hide()
 
 		return
 	}
 
-	;called by _AddPlaylistItems
+	/**
+	 * called by _AddEmulatorItems (the main initialization function)
+	 */
 	_AddSystemItems()
 	{
 		global gGui
@@ -1173,9 +1197,22 @@ class select_list_control_class
 		;Color the "Picks" column yellow
 		oLVC := LV_Colors(gGui.guiSelect_ListViewPlaylist)
 		if (IsObject(oLVC))
-			oLVC.Cell(1, mLists.Length + 1, , color_dark_yellow)
+			oLVC.Cell(1, mLists.Length + 1, , color_bright_yellow)
 		else
 			LogEntry("WARNING: Could not create LV_Colors object.`n")
+
+		;Color the custom lists blue
+		if (IsObject(oLVC))
+		{
+			Loop mLists.Length-1
+			{
+				oLVC.Cell(1, A_Index+1, , color_electric_blue)
+			}
+		}
+
+		;Color the Auto-Switch list green
+		if (IsObject(oLVC))
+			oLVC.Cell(1, 1, , color_neon_green)
 
 		;add stars to favorites menu		
 		ImageListID := IL_Create(3)  ; Create an ImageList to hold 1 icon (for now)
@@ -1428,9 +1465,11 @@ class select_list_control_class
 		;*****************************************************************************************
 		;  test output
 		;*****************************************************************************************
-		test_y := bottombar_ypos + barHeight + barHeight / 2 + 5
+		test_y := bottombar_ypos + barHeight + 5 ;+ barHeight / 2 + 5
 		guiSelect.SetFont("s11")
-		gGui.guiSelect_TestMsg := guiSelect.AddText("BackgroundTrans x0 y" . test_y . " w" . nScreenWidth . " cWhite Center +0x200 vTestMsg")
+		gGui.guiSelect_TestMsg :=  guiSelect.AddText("BackgroundTrans x0 y" . test_y . " w" . nScreenWidth . " cWhite Center +0x200 vTestMsg")
+		gGui.guiSelect_TestMsg.GetPos(, , , &nTestMsgH)
+		gGui.guiSelect_TestMsg2 := guiSelect.AddText("BackgroundTrans x0 y" . test_y+nTestMsgH . " w" . nScreenWidth . " cWhite Center +0x200 vTestMsg2")
 		;*****************************************************************************************
 
 		prog_h := 40
@@ -1524,9 +1563,9 @@ class select_list_control_class
 		ho:=h/2
 		pw := systemLabelWidth
 
-		gGui.guiSelect_FavoritesProgress := guiSelect.AddProgress("Hidden x" . systemLabelWidth . " y" . y . " w" . pw . " h" . ho . " cBlue BackgroundBlack vFavoritesProgress", 0)
+		gGui.guiSelect_FavoritesProgress := guiSelect.AddProgress("Hidden x" . systemLabelWidth . " y" . y . " w" . pw . " h" . Round(barHeight / 2) . " BackgroundBlack vFavoritesProgress", 0)
 		gGui.guiSelect_ModeStatus := guiSelect.AddPicture("Hidden x" . systemLabelWidth . " y" . y . " w" . pw . " h" . h . " vModeStatus", "HBITMAP:" . CreateDIB(color_gray))
-		gGui.guiSelect_ActionProgress := guiSelect.AddProgress("Hidden x" . systemLabelWidth . " y" . yo . " w" . pw . " h" . ho . " cBlue BackgroundBlack vActionProgress", 0)
+		gGui.guiSelect_ActionProgress := guiSelect.AddProgress("Hidden x" . systemLabelWidth . " y" . yo . " w" . pw . " h" . Round(barHeight / 2) . " BackgroundBlack vActionProgress", 0)
 		gGui.guiSelect_ModeName := guiSelect.AddText("Hidden BackgroundTrans x" . systemLabelWidth . " y" . y . " w" pw . " h" . h . " cWhite Center +0x200 vModeName")
 		h := 1
 		gGui.guiSelect_ModeSeparator := guiSelect.AddPicture("Hidden x" . systemLabelWidth . " y" . y . " w" . pw . " h" . h . " vModeSeparator", "HBITMAP:" . CreateDIB(color_dark_gray))
@@ -1545,14 +1584,26 @@ class select_list_control_class
 		gGui.guiSelect_MetaLabelTopLeft := guiSelect.AddText("Hidden BackgroundTrans x10 y" . y . " w" . metaLabelWidth . " cWhite Left +0x200 vMetaLabelTopLeft")
 		gGui.guiSelect_MetaLabelTopRight := guiSelect.AddText("Hidden BackgroundTrans x10 y" . y . " w" . metaLabelWidth . " cWhite Right +0x200 vMetaLabelTopRight")
 
+		;*****************************************************************************************
+		;  description text
+		;*****************************************************************************************
+		test_y := bottombar_ypos + barHeight + barHeight / 2 + 5
+		guiSelect.SetFont("s11")
+		gGui.guiSelect_MetaDesc1 := guiSelect.AddText("Hidden BackgroundTrans x0 y" . y . " w" . nScreenWidth . " cWhite Center +0x200 vMetaDesc1")
+		gGui.guiSelect_MetaDesc1.GetPos(, &nMetaDesc1MsgY, , &nMetaDesc1MsgH)
+		;gGui.guiSelect_MetaDesc2 := guiSelect.AddText("BackgroundTrans x0 y" . test_y+nMetaDesc1MsgH . " w" . nScreenWidth . " cWhite Center +0x200 vMetaDesc2")
+		;*****************************************************************************************
+
 		;License banner
-		if (sLicenseType == "public" || gCfg.show_license == 1)
+		/*
+		if (gCfg.show_license == 1)
 		{
     		y := nScreenHeight - label_posH * 3
 
-			gGui.guiSelect_PickerLicenseBanner := guiSelect.AddText("Hidden BackgroundTrans x0 y" . y . " w" . nScreenWidth . " h" . label_posH . " cWhite Center +0x200 vPickerLicenseBanner")
+			gGui.guiSelect_PickerLicenseBanner := guiSelect.AddText("Hidden BackgroundTrans x0 y" . nMetaDesc1MsgY-nMetaDesc1MsgH . " w" . nScreenWidth . " h" . label_posH . " cWhite Center +0x200 vPickerLicenseBanner")
 			gGui.guiSelect_PickerLicenseBanner.Text := license_Text
 		}
+		*/
 			
 		;Create bottom bar playlist scroller
 		guiSelect.SetFont("s" . systemname_font_size)
@@ -1791,6 +1842,7 @@ class select_list_control_class
 		gGui.guiSelect_GameName%ct%.SetFont()
 		gGui.guiSelect_GameName%ct%.Text := lbl
 		gGui.guiSelect_RomNameLabel.Text := ""
+		gGui.guiSelect_MetaDesc1.Text := ""
 		gGui.guiSelect_MetaLabelRight.Text := ""
 		gGui.guiSelect_MetaLabelLeft.Text := ""
 		gGui.guiSelect_MetaLabelTopRight.Text := ""
@@ -2041,7 +2093,7 @@ class select_list_control_class
 					return
 				}
 
-				;Delete from favorites
+				;Delete from favorites (i.e pick list)
 				else if (pl > this._maxSystems)
 				{
 					ControlActivationState.DisableSelectControls()
@@ -2353,14 +2405,10 @@ class select_list_control_class
 				if (!v)  ;if empty 
 					return
 
-				romspec := SplitVector(v)["rom_value"]
-				sysspec := SplitVector(v)["sys_key"]
+				sFavorite := this._current_object["rom_favorite"] ;will be "true" or "false"
+				bFavorite := sFavorite == "true" ? 0 : 1 ;flip to opposite value
 
-				bFavorite := oEmulators.Emulators[sysspec].GetRomProperty("favorites", romspec)
-
-				newValue := bFavorite == 0 ? 1 : 0
-
-				if (newValue == 1)
+				if (bFavorite == 1)
 				{
 					this._current_object["favorite_icon"] := favorite_on_icon_file
 					this._current_object["rom_favorite"] := "true"
@@ -2372,11 +2420,14 @@ class select_list_control_class
 					this._current_object["rom_favorite"] := "false"
 					oBASS.Play("unfav")
 				}
-				
-				;IniWrite(newValue, favoritesFile, "Favorites", romspec)	
-				oEmulators.Emulators[sysspec].SetRomProperty("favorites", romspec, newValue)
 
-				this.ShowGraphics()	
+				romspec := SplitVector(v)["rom_value"]
+				sysspec := SplitVector(v)["sys_key"]
+					
+				;write new state to the appropriate favorites.ini file
+				oEmulators.Emulators[sysspec].SetRomProperty("favorites", romspec, bFavorite)
+
+				this.ShowGraphics()	;updates the favorites icon on screen
 
 				/*
 				;Sample test code for logos in horizontal list
@@ -2655,6 +2706,8 @@ class select_list_control_class
 					sourceValue := oObject.Get("rom_category", "")
 				case "year":
 					sourceValue := oObject.Get("rom_year", "")
+				case "description":
+					sourceValue := oObject.Get("rom_description")
 				case "publisher":
 					sourceValue := oObject.Get("rom_publisher")
 				case "developer":
@@ -2827,7 +2880,7 @@ class select_list_control_class
 	{
 		global gGui
 
-		static absPos := 1
+		static absPos := 1, bPlayed := false
 
 		;these two values control the scroll speed of the 
 		;horizontal menu
@@ -2844,10 +2897,20 @@ class select_list_control_class
 		}
 		if (direction == "l")
 		{
-			;don't swtch if choosing left on first item in list (or its favorites)
+			;don't switch if choosing left on first item in list (or its favorites)
 			if (this._current_playlist == 1 || this._current_playlist == this._maxSystems + 1)
-				return 
+			{
+				if (!bPlayed)
+				{
+					oBASS.Play("error")
+					SetTimer SelectBump, -1
+				}
 
+				bPlayed := true
+				return 
+			}
+
+			bPlayed := false
 			oBASS.Play("page")
 
 			absPos++
@@ -2876,8 +2939,18 @@ class select_list_control_class
 		if (direction == "r")
 		{
 			if (this._current_playlist == this._maxSystems || this._current_playlist == this._maxSystems*2)
-				return
+			{
+				if (!bPlayed)
+				{
+					oBASS.Play("error")
+					SetTimer SelectBump, -1
+				}
 
+				bPlayed := true
+				return
+			}
+
+			bPlayed := false
 			oBASS.Play("page")
 
 			absPos--
@@ -2954,6 +3027,7 @@ class select_list_control_class
 	ScrollVertical(direction,idx:=0)
 	{
 		global gGui
+		static lastIdx := -1, bPlayed := false
 
 		pl := this._current_playlist
 
@@ -2981,6 +3055,17 @@ class select_list_control_class
 		;jump to a specified row
 		if (direction == "index")
         {		
+			if (idx == lastIdx && bPlayed == false && g_guiselect_loaded)
+			{
+				oBASS.Play("error")
+				SetTimer SelectBump, -1
+				bPlayed := true
+			}
+			else if (idx != lastIdx)
+				bPlayed := false
+			
+			lastIdx := idx
+
             ;Set top listview
             rowsT := idx <= maxRows ? idx-1 : maxRows
             new_h := rowsT * this._rowHeight - (this._listMargin)
@@ -3051,8 +3136,8 @@ class select_list_control_class
             return
 		}
 
-		;Page up to next leading character group
-		if (direction == "lu")
+		;Page up to next sort group
+		if (direction == "sgu")
 		{
 			selectedLetterVal := GetOrdValOfString(gGui.guiSelect_ListViewBottom%pl%.GetText(selectedRow, 1))
 
@@ -3063,6 +3148,9 @@ class select_list_control_class
 					row := selectedRow - A_Index
 					if (row < 1)
 						row := 1
+				    else
+						oBASS.Play("browse")
+
 					this.ScrollVertical("index", row)
 					break
 				}
@@ -3071,8 +3159,8 @@ class select_list_control_class
 			return
 		}
 
-		;Page down to next leading character group
-		if (direction == "ld")
+		;Page down to next sort group
+		if (direction == "sgd")
 		{
 			selectedLetterVal := GetOrdValOfString(gGui.guiSelect_ListViewBottom%pl%.GetText(selectedRow, 1))
 
@@ -3083,6 +3171,9 @@ class select_list_control_class
 					row := selectedRow + A_Index
 					if (row > gGui.guiSelect_ListViewTop%pl%.GetCount())
 						row := gGui.guiSelect_ListViewTop%pl%.GetCount()
+					else
+						oBASS.Play("browse")
+					
 					this.ScrollVertical("index", row)
 					break
 				}
@@ -3328,20 +3419,10 @@ class select_list_control_class
 			;create a unique gui_id for this image window
 			gui_id := playlist "_" selection "_" image_type 
 
-			;only create a new image window if it doesn't already exist
-			try
-				gExist := IsObject(gGui.%gui_id%)
-			catch
-				gExist := false
-
-			;create the window if it doesn't already exist
-			if (!gExist)
-			{
-				;Create a new layered window (+E0x80000 : must be used for UpdateLayeredWindow to work!) 
-				;that is always on top (+AlwaysOnTop), and has no taskbar or caption
-				gGui.%gui_id% := Gui(, "eipGui - " gui_id)
-			    gGui.%gui_id%.Opt("-Caption +E0x80000 +LastFound +AlwaysOnTop +ToolWindow +OwnDialogs") ;+OwnerGuiOverlay")
-			}
+			;Create a new layered window (+E0x80000 : must be used for UpdateLayeredWindow to work!) 
+			;that is always on top (+AlwaysOnTop), and has no taskbar or caption
+			gGui.%gui_id% := Gui(, "eipGui - " gui_id)
+			gGui.%gui_id%.Opt("-Caption +E0x80000 +LastFound +AlwaysOnTop +ToolWindow +OwnDialogs") ;+OwnerGuiOverlay")
 
 			if (show_now)
 				gGui.%gui_id%.Show("NA") ;show the window	
@@ -3351,111 +3432,111 @@ class select_list_control_class
 			if (OddEven(subtype) == "Odd")
 				image_file := rating_halfstar_file
 
-			;create image for the window if it doesn't already exist
-			;or if it is an icon (since icon state may have changed)
-			if (!gExist || image_type == 4 || image_type == 3) 
+			if (FileExist(image_file))
 			{
-				if (FileExist(image_file))
-				{
-					pBitmap := Gdip_CreateBitmapFromFile(image_file)
-				}
-				else 
-				{
-					LogEntry("ERROR: image file, " image_file " could not be found. Assert condition. Exiting.`n")
-					ExitApp
-				}
-
-				Width := Gdip_GetImageWidth(pBitmap)
-				Height := Gdip_GetImageHeight(pBitmap)
-
-				;Note that all screen coordinates here are native 
-				;(i.e. not adjusted for screen scaling)
-				barHeightFactor := 1/10
-				centerLabelWidthFactor := gCfg.lst_game_name_ratio
-				topBarPosFactor := 1/3
-
-				t_barHeight := Floor(A_ScreenHeight * barHeightFactor)
-				t_systemLabelWidth := A_ScreenWidth / 3
-				t_centerLabelWidth := A_ScreenWidth * centerLabelWidthFactor
-				t_sideLabelWidth := (A_ScreenWidth - t_centerLabelWidth) / 2
-				t_graphicMargin := 16 ;number of pixels to shrink graphic inside box
-				
-				;calculate image size/scale while keeping correct aspect ratio
-				Switch image_type
-				{
-					Case 1, 2: ;system and rom logos	
-						ar := Width/Height
-						pic_h := t_barHeight - t_graphicMargin
-						pic_w := pic_h * ar - t_graphicMargin
-						
-						if (pic_w > t_sideLabelWidth)
-						{
-							ar := Height/Width
-							pic_w := t_sideLabelWidth - t_graphicMargin
-							pic_h := pic_w * ar - t_graphicMargin
-						}
-
-						pic_sw := Width
-						pic_sh := Height
-				
-					Case 3:	;favorite and no star (unrated) icons		
-						ar := Width/Height
-						pic_h := t_barHeight // 5
-						pic_w := pic_h * ar
-
-						pic_sw := Width
-						pic_sh := Height				
-				
-					Case 4:	 ;5 through 1 star
-						ar := Width/(Height/5)
-						pic_h := t_barHeight // 5
-						pic_w := pic_h * ar
-
-						pic_sw := Width
-						pic_sh := 264	
-
-						if (subtype == 0)	
-							pic_sh := 1	
-				}
-
-				;on-screen position
-				pic_sx := pic_sy := 0
-				pic_y := A_ScreenHeight * topBarPosFactor - pic_h/2
-
-				Switch image_type
-				{
-					Case 1: ;rom logo
-						pic_x := (t_sideLabelWidth + t_centerLabelWidth) + t_sideLabelWidth / 2 - pic_w/2
-				
-					Case 2: ;system logo
-						pic_x := t_sideLabelWidth / 2 - pic_w/2
-				
-					Case 3:	;favorite icon
-						pic_y := A_ScreenHeight * topBarPosFactor - t_barHeight // 2 + 2
-						pic_x := t_sideLabelWidth + 2
-				
-					Case 4:	;5 stars and no stars (unrated) icons
-						pic_y := A_ScreenHeight * topBarPosFactor - t_barHeight // 2 + 2
-						pic_x := t_sideLabelWidth + t_centerLabelWidth - pic_w - 2
-						pic_sy := 1320 - 264 * Ceil(subtype / 2) ;Ceil ensures same offset for each pair of full/half star steps			
-				}
-
-				; Create image using Gdip library
-				hbm := CreateDIBSection(pic_w, pic_h)
-				hdc := CreateCompatibleDC()
-				obm := SelectObject(hdc, hbm)
-				G := Gdip_GraphicsFromHDC(hdc)
-
-				;Use high quality Bicubic (7) to resize here since it is probably the best quality
-				Gdip_SetInterpolationMode(G, 7)
-				Gdip_DrawImage(G, pBitmap, 0, 0, pic_w, pic_h, pic_sx, pic_sy, pic_sw, pic_sh)
-				Gdip_DeleteGraphics(G)
-				UpdateLayeredWindow(gGui.%gui_id%.Hwnd, hdc, pic_x, pic_y, pic_w, pic_h)
-				SelectObject(hdc, obm)
-				DeleteObject(hbm)
-				DeleteDC(hdc)
-				Gdip_DisposeImage(pBitmap)
+				pBitmap := Gdip_CreateBitmapFromFile(image_file)
 			}
+			else 
+			{
+				LogEntry("ERROR: image file, " image_file " could not be found. Assert condition. Exiting.`n")
+				ExitApp
+			}
+
+			Width := Gdip_GetImageWidth(pBitmap)
+			Height := Gdip_GetImageHeight(pBitmap)
+
+			;Note that all screen coordinates here are native 
+			;(i.e. not adjusted for screen scaling)
+			barHeightFactor := 1/10
+			centerLabelWidthFactor := gCfg.lst_game_name_ratio
+			topBarPosFactor := 1/3
+
+			t_barHeight := Floor(A_ScreenHeight * barHeightFactor)
+			t_systemLabelWidth := A_ScreenWidth / 3
+			t_centerLabelWidth := A_ScreenWidth * centerLabelWidthFactor
+			t_sideLabelWidth := (A_ScreenWidth - t_centerLabelWidth) / 2
+			t_graphicMargin := 16 ;number of pixels to shrink graphic inside box
+			
+			;calculate image size/scale while keeping correct aspect ratio
+			Switch image_type
+			{
+				Case 1, 2: ;system and rom logos	
+					ar := Width/Height
+					pic_h := t_barHeight - t_graphicMargin
+					pic_w := pic_h * ar - t_graphicMargin
+					
+					if (pic_w > t_sideLabelWidth)
+					{
+						ar := Height/Width
+						pic_w := t_sideLabelWidth - t_graphicMargin
+						pic_h := pic_w * ar - t_graphicMargin
+					}
+
+					pic_sw := Width
+					pic_sh := Height
+			
+				Case 3:	;favorite and no star (unrated) icons		
+					ar := Width/Height
+					pic_h := t_barHeight // 5
+					pic_w := pic_h * ar
+
+					pic_sw := Width
+					pic_sh := Height				
+			
+				Case 4:	 ;5 through 1 star
+					ar := Width/(Height/5)
+					pic_h := t_barHeight // 5
+					pic_w := pic_h * ar
+
+					pic_sw := Width
+					pic_sh := 264	
+
+					if (subtype == 0)	
+						pic_sh := 1	
+			}
+
+			;on-screen position
+			pic_sx := pic_sy := 0
+			pic_y := A_ScreenHeight * topBarPosFactor - pic_h/2
+
+			Switch image_type
+			{
+				Case 1: ;rom logo
+					pic_x := (t_sideLabelWidth + t_centerLabelWidth) + t_sideLabelWidth / 2 - pic_w/2
+			
+				Case 2: ;system logo
+					pic_x := t_sideLabelWidth / 2 - pic_w/2
+			
+				Case 3:	;favorite icon
+					pic_y := A_ScreenHeight * topBarPosFactor - t_barHeight // 2 + 2
+					pic_x := t_sideLabelWidth + 2
+			
+				Case 4:	;5 stars and no stars (unrated) icons
+					pic_y := A_ScreenHeight * topBarPosFactor - t_barHeight // 2 + 2
+					pic_x := t_sideLabelWidth + t_centerLabelWidth - pic_w - 2
+					pic_sy := 1320 - 264 * Ceil(subtype / 2) ;Ceil ensures same offset for each pair of full/half star steps			
+			}
+
+			;For context, already did these functions above
+			;pBitmap := Gdip_CreateBitmapFromFile(image_file)
+			;Width := Gdip_GetImageWidth(pBitmap)
+			;Height := Gdip_GetImageHeight(pBitmap)
+
+			; Create image using Gdip library
+			hbm := CreateDIBSection(pic_w, pic_h)
+			hdc := CreateCompatibleDC() 
+			obm := SelectObject(hdc, hbm)
+			G := Gdip_GraphicsFromHDC(hdc)
+
+			;Use high quality Bicubic (7) to resize here since it is probably the best quality
+			Gdip_SetInterpolationMode(G, 7)
+			Gdip_DrawImage(G, pBitmap, 0, 0, pic_w, pic_h, pic_sx, pic_sy, pic_sw, pic_sh)
+			Gdip_DeleteGraphics(G)
+			UpdateLayeredWindow(gGui.%gui_id%.Hwnd, hdc, pic_x, pic_y, pic_w, pic_h)
+			SelectObject(hdc, obm)
+			DeleteObject(hbm)
+			DeleteDC(hdc)
+			Gdip_DisposeImage(pBitmap)
 
 			;update the last image window with this gui_id
 			if (image_type == 1)

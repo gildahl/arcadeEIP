@@ -41,7 +41,7 @@ ValidateLicense()
 		{
 			startupMsg := "STARTUP: " . cProductName . ", Rev. " . CodeVersion . ". License: No valid license found.`n"
 			LogEntry(startupMsg)
-			LogEntry(RepeatValue("=", StrLen(startupMsg)-1) . "`n")
+			LogEntry(RepeatChar("=", StrLen(startupMsg)-1) . "`n")
 			LogEntry("ERROR: No license file found. Make sure a valid " . cLicenseFileName . " file is present in the working folder, " . A_scriptdir . "`n")
 			ExitApp
 		}

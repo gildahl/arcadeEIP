@@ -29,9 +29,16 @@ class fade_window_class
 			this._callback := callback
 	}
 	
-	;start and stop are 0-255 (transparent to opaque). speed is in ms
-	;For instant transition make start=stop with speed=0 (or blank)
-	;Start() returns 0 if it can't be called due to a still operating fade effect.
+	/**
+	 * Do an alpha fade or instant transition between transparency levels.
+	 * Omit speed and step for an instant transition.
+	 * 
+	 * @param start - 0-255 (transparent to opaque)
+	 * @param stop - 0-255 (transparent to opaque)
+	 * @param {number} speed - how long the fade should last in milliseconds
+	 * @param {number} step - how many fade steps during the transition
+	 * @returns {void|number} - return 0 if can't be called due to a still operating fade effect.
+	 */
 	Start(start, stop, speed:=0, step:=1)
 	{
 		hwnd := this._hwnd

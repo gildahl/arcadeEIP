@@ -36,37 +36,26 @@ the system. The file should be named as [asset_name].png, such as MAME.png
 * The [asset_name]\Marquee\Rom and [asset_name]\Marquee\System folders should be used to store
 game and system marquee png files in the same manner.
 
-* The [asset_name]\Meta\Names folder should be used to store a game name map file in which each
-line has the format:  rom "name".  This file should be called .meta (with no
-extension). A compatible file may be generated from mame using the command: 
+* The [asset_name]\Meta\Names and the [asset_name]\MAME\Meta\Info folders are used to store
+metadata catalogs for the system. See the readme.txt file in the \MAME\Meta folder for more
+information about the files in these folders.
 
-                           mame.exe -listfull > .meta
+* The [asset_name]\Settings folder stores *.ini files created by arcadeEIP, which are used to
+save various game settings.  The following files are currently supported:
 
-Note that *.map files from the GameEx front-end are also compatible. Name mappings may also
-be specified in individual files named as [rom_name].txt and containing the desired
-name. If combined with a .meta file, the individual files will override the game
-name in the .meta file.
-
-* The [asset_name]\MAME\Meta\Info folder should be used to store the history.xml and/or mameinfo.dat
-files (MAME only).  If present, MAME game info can be displayed on pause when the show_on_pause=
-and mameinfo_folder= settings in arcadeEIP.ini are configured according to the documentation (which
-it should be by default).
-
-* The [asset_name]\Settings folder stores *.ini files that contain individual game settings.
-The following files are currently supported:
-
-  favorites.ini  : Where arcadeEIP stores a game's favorite status (0 or 1)
-  ratings.ini    : Where arcadeEIP stores a game's star rating (0 though 5)
-  highscores.ini : Where arcadeEIP stores a game's high score information. This file is independent
+  favorites.ini  : Where arcadeEIP saves game favorite status (0 or 1)
+  ratings.ini    : Where arcadeEIP saves game star ratings (0 though 5)
+  highscores.ini : Where arcadeEIP saves high score information. This file is independent
                    of hi2txt. If hi2txt is being used, any scores in this file will override those
                    provided by hi2txt.
 
-                   Format of each highscore is: [score]|<initials>|<stage>
+                   Format of each highscore is: [score]|<initials>|<stage>|<datetime>
                    Score should have no separators (digits only). Score is mandatory, but all pipe
-                   separated values following are optional.
+                   separated values following are optional. The date/time field (if present) must 
+                   be in YYYYMMDDHHMMSS format.
 
 		   [Highscores]
-                   robotron.zip=123456|DGD|10
+                   robotron.zip=123456|DGD|10|20240311170635
                    galaga.zip=123456
 
                    High scores may be viewed and updated by using the scorecard dialog in arcadeEIP.
@@ -74,9 +63,9 @@ The following files are currently supported:
                    with show_high_scores=1 in the [Marquee] section of arcadeEIP.ini. 
 
   volume.ini     : Game-specific volume adjustments (-100 through 100)
-                   Currently, to use this feature, the user must manually create the file.
+                   Currently, to use this feature, the user must manually edit the file.
                    For example, to have Galaga play with -10 lower volume than the default
-                   and Zaxxon at +20 higher volume than the default, create a volume.ini 
+                   and Zaxxon at +20 higher volume than the default, edit the volume.ini 
                    file in a text editor and add these lines
 
                    [Volume]

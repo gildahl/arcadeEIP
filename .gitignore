@@ -1,5 +1,15 @@
 runlast_eip.bat
 runlast_native.bat
 todo.txt
+mame.xml
 ~*
 **/_releases/
+**/graphics
+/distribution/Resources/Extra
+/distribution/Assets/MAME/Logo/Rom/*.png
+/distribution/Assets/MAME/Logo/Rom/*.jpg
+!/distribution/Assets/MAME/Logo/Rom/galaga.png
+/distribution/Assets/MAME/Marquee/Rom/*.png
+/distribution/Assets/MAME/Marquee/Rom/*.jpg
+!/distribution/Assets/MAME/Marquee/Rom/galaga.png
+

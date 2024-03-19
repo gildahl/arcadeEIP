@@ -234,16 +234,15 @@ class emulators_class
 			{
 				propertyPath := A_ScriptDir "\Assets\" assetspec "\Settings"
 				propertyFile := propertyPath "\" sProperty ".ini"
-
-				if (FileExist(propertyFile))
-				{ 
-					if (sProperty == "highscores")
-						return IniRead(propertyFile, StrTitle(sProperty), sRom, A_Space)
-					else if (sProperty == "ratings")
-						return Float(IniRead(propertyFile, StrTitle(sProperty), sRom, 0.0))
-					else
-						return Integer(IniRead(propertyFile, StrTitle(sProperty), sRom, 0))
-				}
+ 
+				if (sProperty == "highscores")
+					return IniRead(propertyFile, StrTitle(sProperty), sRom, A_Space)
+				else if (sProperty == "ratings")
+					return Float(IniRead(propertyFile, StrTitle(sProperty), sRom, 0.0))
+				else if (sProperty == "volume")
+					return Integer(IniRead(propertyFile, StrTitle(sProperty), sRom, 0))
+				else if (sProperty == "favorites")
+					return Integer(IniRead(propertyFile, StrTitle(sProperty), sRom, -1))
 			}
 
 			return 0
@@ -379,11 +378,13 @@ class emulators_class
 			set => this._settings["mameinfo_folder"] := value
 		}
 
+		/*
 		use_catver
 		{
 			get => this._settings.Get("use_catver", "")
 			set => this._settings["use_catver"] := value
 		}
+		*/
 
 		meta_names
 		{
@@ -476,6 +477,8 @@ class emulators_class
 						game_rom := ""
 						element := ""
 
+						Sleep(-1)
+
 						try {
 							element := objNodeList.item(idx).getElementsByTagName("ApplicationPath")
 							game_rom := element.item(0).text
@@ -497,6 +500,7 @@ class emulators_class
 						element := objNodeList.item(idx).getElementsByTagName("Title")
 						try elementVal := element.item(0).text
 						this._cache[shortFileName].title := elementVal
+						this._cache[shortFileName].description := elementVal
 
 						elementVal := ""
 						element := objNodeList.item(idx).getElementsByTagName("ID")
@@ -532,26 +536,17 @@ class emulators_class
 						element := objNodeList.item(idx).getElementsByTagName("Favorite")
 						try elementVal := element.item(0).text
 						this._cache[shortFileName].favorite := elementVal
-/*
-						;use favorites.ini to overwrite any of the above favorites settings.
-						assetspec := oEmulators.Emulators[this._sys_key]._settings["asset_name"]
 
-						favoritesPath := A_ScriptDir . "\Assets\" . assetspec . "\Meta\Info"
-						favoritesFile := favoritesPath . "\favorites.ini"
-				
-						if (FileExist(favoritesFile))
-						{
-							IniRead, bFavorite, %favoritesFile%, Favorites, %fullFileName%, 0
+						elementVal := ""
+						element := objNodeList.item(idx).getElementsByTagName("StarRatingFloat")
+						try elementVal := element.item(0).text
+						this._cache[shortFileName].star_rating_float := elementVal
 
-							if (bFavorite == 1)
-								this._cache[shortFileName]["favorite"] := "true"
-							;else
-							;	this._cache[shortFileName]["favorite"] := "true"
-						}
-*/
+						elementVal := ""
+						element := objNodeList.item(idx).getElementsByTagName("CommunityStarRating")
+						try elementVal := element.item(0).text
+						this._cache[shortFileName].community_star_rating := elementVal
 					}											
-					
-					;FileCreateDir, %favoritesPath%
 					
 					this._cache_exists := true
 					this._cache_is_virtual := true
@@ -560,6 +555,9 @@ class emulators_class
 					return
 				}
 
+				;*************************************************************************
+				;* Get MAME data from .meta for name (title) info and other metadata
+				;* catalog files (standalone mode)
 				;*************************************************************************
 
 				metaFile := this._location
@@ -579,42 +577,215 @@ class emulators_class
 				if FileExist(metaFile)
 					this._metafile_exists := true
 
-				;cache .meta text file if it exists
+				;cache .meta names (for "title") text file if it exists
+				;also cache catver.ini (genre) 
 				try
 				{
+					/*
+					bFileWriteExclusions := 0
+					bIncludeReasons := 1
+					bArcadeOnly := 1
+					bShowMature := 0
+					bBaseRomsOnly := 1
+					bShowClones := 0
+					aCategoryExclusions := Array()
+					aNameExclusions := Array()
+					aRomExceptions := Array()
+					aDriverStatusExclusions := Array()
+					aDriverEmulationExclusions := Array()
+
+					fFilters_file := GetFullPathFromRelativePath(this._emulator.mameinfo_folder, "gamelist_filters.ini")
+
+					if (fFilters_file)
+					{
+						bArcadeOnly := Integer(IniRead(fFilters_file, "General", "ArcadeRomsOnly", 1))
+						bShowMature := Integer(IniRead(fFilters_file, "General", "ShowMature", 0))
+						bParentRomsOnly := Integer(IniRead(fFilters_file, "General", "ParentRomsOnly", 1))
+						bShowClones := Integer(IniRead(fFilters_file, "General", "ShowClones", 0))
+						bFileWriteExclusions := Integer(IniRead(fFilters_file, "Audit", "CreateFilteredAuditFile", 0))
+						bIncludeReasons := Integer(IniRead(fFilters_file, "Audit", "IncludeReasons", 1))
+
+						sCategoryExclusions := IniRead(fFilters_file, "Category_Filters", "Keywords", 0)
+						if (sCategoryExclusions)
+							aCategoryExclusions := TrimArray(StrSplit(sCategoryExclusions,","))
+
+						sNameExclusions := IniRead(fFilters_file, "Name_Filters", "Keywords", 0)
+						if (sNameExclusions)
+							aNameExclusions := TrimArray(StrSplit(sNameExclusions,","))
+
+						sRomExceptions := IniRead(fFilters_file, "Exceptions", "Roms", 0)
+						if (sRomExceptions)
+							aRomExceptions := TrimArray(StrSplit(sRomExceptions,","))
+
+						sDriverStatusExclusions := IniRead(fFilters_file, "Driver_Filters", "Status", 0)
+						if (sDriverStatusExclusions)
+							aDriverStatusExclusions := TrimArray(StrSplit(sDriverStatusExclusions,","))
+
+						sDriverEmulationExclusions := IniRead(fFilters_file, "Driver_Filters", "Emulation", 0)
+						if (sDriverEmulationExclusions)
+							aDriverEmulationExclusions := TrimArray(StrSplit(sDriverEmulationExclusions,","))
+
+						if (bFileWriteExclusions)
+							LogEntry("WARNING: CreateFilteredAuditFile is turned on in " fFilters_file ".`n" RepeatChar(A_Space,18) "Turn off when not actively using as this can incur a startup performance penalty.`n")
+					}
+
+					;When true, this setting will create a exclusions audit file 
+					if (bFileWriteExclusions)
+					{
+						exclusion_file := gCfg.mameinfo_folder "\filtered_audit.txt"
+						fExclusions := FileOpen(exclusion_file, "w")
+					}
+					*/
+
 					;Read through each game in the meta file
 					Loop Read metaFile
 					{
+						Sleep(-1)
+
 						quote1Pos := InStr(A_LoopReadLine, "`"")
 						quote2Pos := InStr(A_LoopReadLine, "`"",,,2)
 						thisRom := Trim(SubStr(A_LoopReadLine, 1, quote1Pos - 1))
 
+						;Get the rom title
 						this._cache[thisRom] := Map()
 						this._cache[thisRom].title := SubStr(A_LoopReadLine, quote1Pos + 1, quote2Pos - quote1Pos - 1)	
 
-/*
-						;use favorites.ini to overwrite any of the above favorites settings.
-						assetspec := oEmulators.Emulators[this._sys_key]._settings["asset_name"]
+						;remove the title if there were any exclusions on its name
+						/*
+						if (IsValueInArray(aNameExclusions, A_LoopReadLine, &sFoundValue))
+							if (HandleExclusion(thisRom, "Name exclusion: " sFoundValue))
+								continue
+						*/
 
-						favoritesPath := A_ScriptDir . "\Assets\" . assetspec . "\Meta\Info"
-						favoritesFile := favoritesPath . "\favorites.ini"
-				
-						if (FileExist(favoritesFile))
+						;Check for presence of various metadata files we can use
+						catlist_file := GetFullPathFromRelativePath(this._emulator.mameinfo_folder, "catlist.ini")
+						catver_file := GetFullPathFromRelativePath(this._emulator.mameinfo_folder, "catver.ini")
+						nplayers_file := GetFullPathFromRelativePath(this._emulator.mameinfo_folder, "nplayers.ini")
+						mameinfo_file := GetFullPathFromRelativePath(this._emulator.mameinfo_folder, "mameinfo.dat")
+						gamesxml_file := GetFullPathFromRelativePath(this._emulator.mameinfo_folder, "games.xml")
+						;listxml_file := GetFullPathFromRelativePath(this._emulator.mameinfo_folder, "listxml.xml")
+						
+						;prefer catlist.ini since it contains a bit more data than catver.ini
+						if (catlist_file) 
 						{
-							IniRead, bFavorite, %favoritesFile%, Favorites, %fullFileName%, 0
+							aListInfo := ReadCatlist.GetListInfo(catlist_file, thisRom)
+					
+							if (aListInfo)
+							{
+								this._cache[thisRom].arcade := aListInfo["arcade"]
+								this._cache[thisRom].genre := aListInfo["genre"]
+								this._cache[thisRom].mature := aListInfo["mature"]
 
-							if (bFavorite == 1)
-								this._cache[shortFileName]["favorite"] := "true"
-							else
-								this._cache[shortFileName]["favorite"] := "false"
+								/*
+								;To exclude a rom from being shown in the game list, clear its title
+								if (this._cache[thisRom].title && aListInfo["arcade"] == "N" && bArcadeOnly) {
+									if (HandleExclusion(thisRom, "Not an Arcade title"))
+										continue
+								}
+
+								if (this._cache[thisRom].title && aListInfo["mature"] == "Y" && !bShowMature) {
+									if (HandleExclusion(thisRom, "Mature title"))
+										continue
+								}
+
+								if (this._cache[thisRom].title && IsValueInArray(aCategoryExclusions, aListInfo["genre"], &sFoundValue)) {
+									if (HandleExclusion(thisRom, "Category exclusion: " sFoundValue))
+										continue
+								}
+								*/
+							}
 						}
-						else
-							this._cache[shortFileName]["favorite"] := "false"	
-*/			
+						else if (catver_file) ;otherwise use the catver.ini file
+						{
+							rom_category := ReadCatver.GetCategory(catver_file, thisRom)
+						
+							if (rom_category)
+								this._cache[thisRom].genre := rom_category	
+						}		
+						
+						if (nplayers_file)
+						{
+							n_players := ReadNPlayers.GetPlayers(nplayers_file, thisRom)
+						
+							if (n_players)
+								this._cache[thisRom].play_mode := n_players
+						}
+
+						if (gamesxml_file)
+						{
+							aXMLInfo := ReadListXML.GetXMLMetaInfo(gamesxml_file, thisRom)
+					
+							if (aXMLInfo)
+							{
+								this._cache[thisRom].description := aXMLInfo["description"]
+								this._cache[thisRom].release_date := aXMLInfo["year"]
+								this._cache[thisRom].publisher := aXMLInfo["manufacturer"]
+								this._cache[thisRom].clone_of := aXMLInfo["clone_of"]
+								this._cache[thisRom].rom_of := aXMLInfo["rom_of"]
+								this._cache[thisRom].status := aXMLInfo["status"]
+								this._cache[thisRom].emulation := aXMLInfo["emulation"]
+								this._cache[thisRom].savestate := aXMLInfo["savestate"]
+
+								/*
+								if (this._cache[thisRom].title && aXMLInfo["rom_of"] && bParentRomsOnly) {
+									if (HandleExclusion(thisRom, "Not a parent rom"))
+										continue
+								}
+
+								if (this._cache[thisRom].title && aXMLInfo["clone_of"] && !bShowClones) {
+									if (HandleExclusion(thisRom, "Clone"))
+										continue
+								}
+
+								if (this._cache[thisRom].status && IsValueInArray(aDriverStatusExclusions, aXMLInfo["status"], &sFoundValue)) {
+									if (HandleExclusion(thisRom, "Status exclusion: " sFoundValue))
+										continue
+								}
+
+								if (this._cache[thisRom].emulation && IsValueInArray(aDriverEmulationExclusions, aXMLInfo["emulation"], &sFoundValue)) {
+									if (HandleExclusion(thisRom, "Emulation exclusion: " sFoundValue))
+										continue
+								}
+								*/
+							}
+						}						
 					}
 
+					/**
+					 * Blank the title (to flag list initialization not to include it). Also write the
+					 * exclusion to the filtered_audit.txt file if turned on.
+					 * @param thisRom - The rom name
+					 * @param sReason - The reason this rom was excluded
+					 */
+					/*
+					HandleExclusion(thisRom, sReason) ;Closure function (thank you AHK 2.0!)
+					{
+						Sleep(0) ;helps to keep UI responsive
+
+						;Override this exclusion (i.e. force to be included) if rom is in the exception list
+						if (IsExactValueInArray(aRomExceptions, thisRom, &sFoundValue))
+							return false ;exclusion was rejected
+
+						if (bFileWriteExclusions)
+						{
+							sSpaces := RepeatChar(A_Space, 20 - StrLen(thisRom))
+							if (bIncludeReasons)
+								fExclusions.write(thisRom . sSpaces . "`"" this._cache[thisRom].title "`" -- [" sReason "]`n")
+							else
+								fExclusions.write(thisRom . sSpaces . "`"" this._cache[thisRom].title "`"`n")
+						}
+						
+						this._cache[thisRom].title := ""
+
+						return true ;exclusion was accepted
+					}
+
+					if (bFileWriteExclusions)
+						fExclusions.Close()
+					*/
+
 					;cache from individual meta files
-					;overrides any data from .meta.txt
+					;overrides title data from .meta.txt
 					Loop Files metaPattern
 					{
 						thisMetaFile := metaDir "\" A_LoopFileName
@@ -626,12 +797,12 @@ class emulators_class
 						thisContent := Trim(thisContent)
 						SplitPath A_LoopFileName,,,, &shortFileName
 
-						this._cache[shortFileName] := Map()
+						;this._cache[shortFileName] := Map()
 						this._cache[shortFileName].title := thisContent
 					}
 
 					;cache from individual meta files in the global directory
-					;overrides any data from .meta.txt
+					;overrides title data from .meta.txt
 					Loop Files metaPatternGlobal
 					{
 						thisMetaFile := metaGlobalDir "\" A_LoopFileName
@@ -676,6 +847,63 @@ class emulators_class
 				data1 := data2 := ""
 				try data1 := this._cache[romNoExt].favorite
 				try data2 := this._cache[romName].favorite
+
+				data := !data1 ? data2 : data1
+
+				return data
+			}
+
+			GetStarRating(romName, option:="")
+			{
+				if (!this._cache_exists)
+					this._cache_meta_file()
+
+				SplitPath romName ,,,, &romNoExt
+
+				romNoExt := "" . romNoExt . "" ;Need to quote since may have spaces
+				romName := "" . romName . ""
+
+				data1 := data2 := 0.0
+				try data1 := this._cache[romNoExt].star_rating_float
+				try data2 := this._cache[romName].star_rating_float
+
+				data := !data1 ? data2 : data1
+
+				return Float(data)
+			}
+
+			GetCommunityRating(romName, option:="")
+			{
+				if (!this._cache_exists)
+					this._cache_meta_file()
+
+				SplitPath romName ,,,, &romNoExt
+
+				romNoExt := "" . romNoExt . "" ;Need to quote since may have spaces
+				romName := "" . romName . ""
+
+				data1 := data2 := 0.0
+				try data1 := this._cache[romNoExt].community_star_rating
+				try data2 := this._cache[romName].community_star_rating
+
+				data := !data1 ? data2 : data1
+
+				return Float(data)
+			}
+
+			GetDescription(romName, option:="")
+			{
+				if (!this._cache_exists)
+					this._cache_meta_file()
+
+				SplitPath romName ,,,, &romNoExt
+
+				romNoExt := "" . romNoExt . "" ;Need to quote since may have spaces
+				romName := "" . romName . ""
+
+				data1 := data2 := ""
+				try data1 := this._cache[romNoExt].description
+				try data2 := this._cache[romName].description
 
 				data := !data1 ? data2 : data1
 

@@ -14,11 +14,11 @@ run_apps=ultramap,winipac
 ;rule_3=<remove_param> -autosave <if_rom_in_list> paperboy,eyes,blitz,pong
 map_pause={toggle}p
 map_exit={Event}{Esc}
-;map_pause={PauseProc}
 ;map_exit={CloseActive}
 meta_names=C:\GameEx\DATA\MAME.map
 ;logo_folder=D:\Assets\MAME\Logos
 ;system_logo=D:\Assets\MAME\System_Logo\system_logo.png
+;clean_lists=1
 
 
 Note: Commented lines are examples of optional variations. For example, the first search_path is one that supports
@@ -37,7 +37,8 @@ Note: This example assumes [Application] sections for ultramap and winipac exist
 
 Note: This example shows a meta_names link to the GameEx MAME.map file to get proper names of roms.
 
-      >mame.exe -listfull > .meta
+      If you want to update this to a newer version of MAME, follow the instructions outline in the readme.txt
+      file found in \Assets\MAME\Meta\
 
       Keep in mind that if you integrate with LaunchBox or GameEx, you can synchronize with their MAME (or other system)
       game name lists without need for this names meta file.
@@ -45,7 +46,13 @@ Note: This example shows a meta_names link to the GameEx MAME.map file to get pr
 Note: This example shows two optional paths to logos. These would override any settings in [Global_Assets]. To integrate
       with LaunchBox, specify the LaunchBox clear logo and marquee folders instead of the default locations.
 
+Note: The clean_lists=1 option (which can also be set globally in the [Picker_Preferences] section, will remove
+      text in parenthesis in the picks list view. For other options, see the Configuration Reference Guide.
+      This setting is not applicable when integrating with LaunchBox.
+
 Note: Test first, before uncommenting window_name for enhanced focus control.
 
 Note: Versions of MAME prior to .172 will require use of alternate map_exit and map_pause settings due to lack of 
-      support for the -keyboardprovider dinput parameter. Try {PauseProc} for pause and {CloseActive} or {EndProc} to exit.
+      support for the -keyboardprovider dinput parameter. Use {CloseActive} or {EndProc} to exit. You may also attempt 
+      to use {PauseProc} to pause (by freezing the emulator process), but be aware that this can cause MAME to crash
+      so test carefully before using.

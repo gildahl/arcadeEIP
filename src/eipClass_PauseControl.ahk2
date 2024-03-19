@@ -10,21 +10,36 @@ class pause_control_class
 		this._currentPage := 1
 		this._totalPages := 0
 		this._pages := Map()
+		this._hideNavTriangles := false
+		this._stopFlash := false
+
+		this.CreateNavTriangles()
 	}
 
-	;Types are "image" and "info"
-	;"image" requires one reference to the Picture control
-	;"info" requires one or two references to Edit controls 
-	AddPage(pageType, control1, control2:="")
+	/**
+	 * Add a pause page. The "info" type is two-column text data; the "native" type is a
+	 * transparent screen that lets one see through to the native emulator in its paused state.
+	 * All other types are images (such as "highscore" screens, control panel "controls", etc.).
+	 * Additional image types of any kind can be added by adding new types to the [Global_Assets]
+	 * section of arcadeEIP.ini (for example, adding a new key called titles_folder= would 
+	 * add a new "titles" image type.)
+	 * 
+	 * @param pageType - "info", "native" or an image type ("controls", "highscore", etc.)
+	 * @param bVisible - whether this page is currently displayable
+	 * @param control1 - image and "native" types require one control
+	 * @param {string} control2 - "info" requires a second control since it has two columns
+	 */
+	AddPage(pageType, bVisible, control1, control2:="")
 	{
 		pages := this._pages
 
 		this._totalPages++
 
-		if (pageType == "image") ;adds an image type page (like a control panel map)
+		if (pageType != "info") ;adds an image type page (like a control panel map)
 		{
 			page := Map()
-			page["type"] := "image"
+			page["type"] := pageType
+			page["visible"] := bVisible
 			page["control1"] := control1 ;the image control
 
 			idx := this._totalPages
@@ -34,6 +49,7 @@ class pause_control_class
 		{
 			page := Map()
 			page["type"] := "info"
+			page["visible"] := bVisible
 			page["control1"] := control1 ;the left column edit control
 			page["control2"] := control2 ;the right column edit control
 
@@ -44,12 +60,39 @@ class pause_control_class
 		this._pages := pages
 	}
 
+	/**
+	 * Gets the logical start page by skipping over any invisible
+	 * pages until a visible one is found.
+	 * 
+	 * @returns {number} 
+	 */
+	GetPageStart()
+    {
+		pageStart := this._currentPage := 1
+
+		if (this._pages[pageStart]["visible"] == false)
+			pageStart := this.GetPageNext()
+
+		return pageStart
+	}
+
 	;Get the next logical page number
 	GetPageNext()
 	{
-		pageNext := ++this._currentPage
-		if (pageNext > this._totalPages)
-			pageNext := 1
+		loop
+		{
+			pageNext := ++this._currentPage
+
+			if (pageNext > this._totalPages)
+			{
+				pageNext := 1
+				this._currentPage := 1
+			}
+
+			;skip any pages that are not presently visible
+			if (this._pages[pageNext]["visible"] == true || A_Index > this._totalPages)
+				break
+		}
 
 		return pageNext
 	}
@@ -57,46 +100,61 @@ class pause_control_class
 	;Get the previous logical page number
 	GetPagePrevious()
 	{
-		pagePrev := --this._currentPage
-		if (pagePrev < 1)
-			pagePrev := this._totalPages
+		loop
+		{
+			pagePrev := --this._currentPage
+			if (pagePrev < 1)
+			{
+				pagePrev := this._totalPages
+				this._currentPage := pagePrev
+			}
+
+			;skip any pages that are not presently visible
+			if (this._pages[pagePrev]["visible"] == true || A_Index > this._totalPages)
+				break
+		}
 
 		return pagePrev
 	}
 
-	;directives here may be 
-	;"start" - Go to page 1 (for the first time - skips hide operation)
-	;"r"     - go one page to the right
-	;"l"     - go one page to the left
-	;"hide"  - hide the currently displayed page
+	/**
+	 * Page Navigation
+	 * 
+	 * "start" - Go to page 1 (for the first time - skips hide operation);
+	 * "r"     - go one page to the right;
+	 * "l"     - go one page to the left;
+	 * "hide"  - hide the currently displayed page
+	 * 
+	 * @param directive - "start", "r", "l", or "hide"
+	 * @returns {void} 
+	 */
 	GoPage(directive)
 	{
 		pages := this._pages ;the page collection
 
-		;don't need to flip pages if one page (or no pages)
-		if ((directive == "r" || directive == "l") && pages.Count < 2)
+		;don't need to flip pages if there is 0 or 1 page in the collection
+		if ((directive == "r" || directive == "l") && pages.Count <= 1)
 			return
 
 		;Hide the current page
 		if (directive != "start") ;page is already blank for "start" so skip
 		{
+			this._stopFlash := true ;stop flashing nav triangle 
 			thisPage := this._currentPage			
 			pageType := pages[thisPage]["type"]
 
-			if (pageType == "image")
+			if (pageType != "info") ;if image type
 			{
 				guiAlpha.BackColor := "Black"
 			
-				try
-					(gGui.%pages[thisPage]["control1"]%).Visible := false
+				try	(gGui.%pages[thisPage]["control1"]%).Visible := false
 			}
 			else if (pageType == "info")
 			{
-				guiAlpha.BackColor := "White"
+				guiAlpha.BackColor := color_edit_bg
 				
 				(gGui.%pages[thisPage]["control1"]%).Visible := true
-				(gGui.%pages[thisPage]["control2"]%).Visible := true
-	
+				(gGui.%pages[thisPage]["control2"]%).Visible := true	
 			}
 		}
 
@@ -109,7 +167,7 @@ class pause_control_class
 				try (gGui.%pages[thisPage]["control2"]%).Visible := false
 				return
 			case "start":
-				newPage := 1
+				newPage := this.GetPageStart()
 			case "r":
 				try (gGui.%pages[thisPage]["control1"]%).Visible := false
 				try (gGui.%pages[thisPage]["control2"]%).Visible := false
@@ -123,17 +181,28 @@ class pause_control_class
 		pageType := pages[newPage]["type"]
 
 		;Show the new page
-		if (pageType == "image")
+		if (pageType != "info") ;if an image type
 		{
-			guiAlpha.BackColor := "Black"
+			;OutputDebug "newPageValue: " (gGui.%pages[newPage]["control1"]%).Value "`n"
+			guiAlpha.BackColor := "Black" ;0x1F1F1F			
 			(gGui.%pages[newPage]["control1"]%).Visible := true
+
+			;Special handling if this is a "native" (i.e. transparent) page
+			if (pageType == "native")
+				oFadeAlphaWindow.Start(0,0,1,1) ;turn on transparency
+			else 
+				oFadeAlphaWindow.Start(255,255,1,1) ;turn off transparency
 		}
 		else if (pageType == "info")
 		{
-			guiAlpha.BackColor := "White"	
-		
+			guiAlpha.BackColor := color_edit_bg
+			
 			(gGui.%pages[newPage]["control1"]%).Visible := true			
 			(gGui.%pages[newPage]["control2"]%).Visible := true
+
+			;This turns off transparency, and is technically only necessary if there is a "native"
+			;(i.e. transparent window) pageType in the collection
+			oFadeAlphaWindow.Start(255,255,1,1)
 		}
 
 		this._currentPage := newPage
@@ -155,6 +224,7 @@ class pause_control_class
 		global oMameData
 
 		info_text := ""
+		bPageVisible := true
 
 		if (assetType == "info")
 		{
@@ -162,13 +232,14 @@ class pause_control_class
 			; Info display
 			;*********************************
 
-			edit_width := nScreenWidth // 2
+			edit_margin := 45 ;this is 5 greater than the width of the navigation triangles
+			edit_width := nScreenWidth // 2 - edit_margin
 			edit_height := nScreenHeight			
 
 			;These two "test" controls are used to discover the height of a single row in the edit control
 			;-E0x200 hides border (corresponds to WS_EX_CLIENTEDGE)
 			;-Hdr removes column header
-			guiAlpha.SetFont("s12", "Tahoma")
+			guiAlpha.SetFont("s13", "Tahoma")
 			gGui.guiAlpha_PauseTest1 := guiAlpha.AddEdit("x0 y0 -VScroll -HScroll -E0x200 vPauseTest1 R1")
 			Tst1 := gGui.guiAlpha_PauseTest1.Hwnd
 
@@ -197,8 +268,13 @@ class pause_control_class
 
 				info_text := mame_history_text . mame_info_text
 
+				ChangeEncoding(&info_text, "CP0", "UTF-8")
+
 				;Replace "En Dash" characters with "Hyphen-Minus" to avoid display issues.
 				info_text := StrReplace(info_text, "–", "-")
+
+				;Replace linefeeds with carriage return/linefeed
+				info_text := StrReplace(info_text, "`n", "`r`n")
 			}
 
 			if (info_text)
@@ -212,13 +288,13 @@ class pause_control_class
 				;	LogEntry("WARNING: Could not save clipboard in CreatePausePage().`n")
 
 				;Add the first control
-				gGui.guiAlpha_PauseInfo1 := guiAlpha.AddEdit("x0 y0 h" . edit_height . " w" . edit_width . " -VScroll -HScroll -E0x200 vPauseInfo1")
+				gGui.guiAlpha_PauseInfo1 := guiAlpha.AddEdit("x" edit_margin " y0 h" . edit_height . " w" . edit_width . " c0xCCCCCC Background0x1F1F1F -VScroll -HScroll -E0x200 vPauseInfo1")
 				hwndInfo1 := gGui.guiAlpha_PauseInfo1.Hwnd
 				
 				gGui.guiAlpha_PauseInfo1.Visible := false
 
 				;These pages are just strings that will be double-deref'ed when called. 
-				this.AddPage("info", "guiAlpha_PauseInfo1", "guiAlpha_PauseInfo2")
+				this.AddPage("info", true, "guiAlpha_PauseInfo1", "guiAlpha_PauseInfo2")
 
 				;add history to first edit control. The number of lines can't be determined until
 				;after this text is added due to word wrapping.
@@ -235,14 +311,14 @@ class pause_control_class
 
 					;This is an odd/even check
 					;if odd, margin is 0; if even, margin is at the middle (edit_width)
-					x_pos := ((A_Index & 1) != 0) ? edit_width : 0
+					x_pos := ((A_Index & 1) != 0) ? edit_width + edit_margin : edit_margin
 
 					;Add page to oPauseControl manager every time we create a new odd (left) edit control
-					if (x_pos == 0)
-						this.AddPage("info", "guiAlpha_PauseInfo" . destIdx, "guiAlpha_PauseInfo" . destIdx+1)
+					if (x_pos == edit_margin)
+						this.AddPage("info", true, "guiAlpha_PauseInfo" . destIdx, "guiAlpha_PauseInfo" . destIdx+1)
 
 					;Create new dest control to accept the overflow
-					gGui.guiAlpha_PauseInfo%destIdx% := guiAlpha.AddEdit("x" . x_pos . " y0 h" . edit_height . " w" edit_width . " -VScroll -HScroll -E0x200 vPauseInfo%" . destIdx . "%")
+					gGui.guiAlpha_PauseInfo%destIdx% := guiAlpha.AddEdit("x" . x_pos . " y0 h" . edit_height . " w" edit_width . " c0xCCCCCC Background0x1F1F1F -VScroll -HScroll -E0x200 vPauseInfo%" . destIdx . "%")
 					gGui.hwndInfo%destIdx% := gGui.guiAlpha_PauseInfo%destIdx%.Hwnd
 					gGui.guiAlpha_PauseInfo%destIdx%.Visible := false
 
@@ -311,17 +387,16 @@ class pause_control_class
 						total_lines := ErrorLevel  ;This is the total line count (including any new overflow)
 
 						delta := total_lines - screen_lines ;this is the number of lines of overflow text
-
 						;if there's no more overflow text left, then we're done.
 						;otherwise, we continue the loop to create more edit controls.
 						if (delta <= 0)
 						{
 							;make sure there are two edit controls on the screen
-							if (x_pos == 0) ;last control created was on the left side, so create empty one on the right.
+							if (x_pos == edit_margin) ;last control created was on the left side, so create empty one on the right.
 							{
 								destIdx++
 
-								gGui.guiAlpha_PauseInfo%destIdx% := guiAlpha.AddEdit("x" . edit_width . " y0 h" . edit_height . " w" . edit_width . " -VScroll -HScroll -E0x200 vPauseInfo%" . destIdx . "%")
+								gGui.guiAlpha_PauseInfo%destIdx% := guiAlpha.AddEdit("x" . edit_width . " y0 h" . edit_height . " w" . edit_width . " c0xCCCCCC Background0x1F1F1F -VScroll -HScroll -E0x200 vPauseInfo%" . destIdx . "%")
 								gGui.hwndInfo%destIdx% := gGui.guiAlpha_PauseInfo%destIdx%.Hwnd
 								gGui.guiAlpha_PauseInfo%destIdx%.Visible := false
 							}
@@ -337,39 +412,50 @@ class pause_control_class
 				Sleep 100
 			}
 		}
-		else ;must be an "image" type
+		else ;assetType not "info", so must be an image type
 		{
 			assetFolder := systemAsset := ""
 			try assetFolder := gCfg.%assetType "_folder"%
 			try systemAsset := gCfg.%"system_" assetType% 
-		
-			asset_full_path := SetAssetFullPath(assetType, gCfg.rom_name, assetFolder, systemAsset, gCfg.global_asset_name)
-		
-			if (FileExist(asset_full_path))
+
+			if (assetType == "native")
+				asset_full_path := void_file
+			else
+				asset_full_path := SetAssetFullPath(assetType, gCfg.rom_name, assetFolder, systemAsset, gCfg.global_asset_name)
+
+			if (!FileExist(asset_full_path))
 			{
-				gGui.guiAlpha_PauseImage%assetType% := guiAlpha.AddPicture("BackgroundTrans vPauseImage%" . assetType . "%", asset_full_path)
-				gGui.guiAlpha_PauseImage%assetType%.GetPos(&pause_image_posX, &pause_image_posY, &pause_image_posW, &pause_image_posH)
-		
-				;Resize the image to fit on the screen while preserving aspect ratio
-				image_width := nScreenWidth
-				image_height := image_width * pause_image_posH / pause_image_posW
-		
-				if (image_height > nScreenHeight)
+				if (assetType == "highscore")
 				{
-					image_height := nScreenHeight
-					image_width := image_height * pause_image_posW / pause_image_posH
+					asset_full_path := void_file ;placeholder if no highscore picture at the moment
+					bPageVisible := false
 				}
-				
-				;center image
-				image_x := Floor(nScreenWidth / 2 - image_width / 2)
-				image_y := Floor(nScreenHeight / 2 - image_height / 2)
-		
-				gGui.guiAlpha_PauseImage%assetType%.Move(image_x, image_y, image_width, image_height)
-				gGui.guiAlpha_PauseImage%assetType%.Visible := false ;hide this for now (PauseKey function will show/hide)
-		
-				;Add this control to the oPauseControl collection manager
-				this.AddPage("image", "guiAlpha_PauseImage" . assetType)
+				else
+					return
 			}
+
+			gGui.guiAlpha_PauseImage%assetType% := guiAlpha.AddPicture("BackgroundTrans vPauseImage%" . assetType . "%", asset_full_path)		
+			gGui.guiAlpha_PauseImage%assetType%.GetPos(&pause_image_posX, &pause_image_posY, &pause_image_posW, &pause_image_posH)
+	
+			;Resize the image to fit on the screen while preserving aspect ratio
+			image_width := nScreenWidth
+			image_height := image_width * pause_image_posH / pause_image_posW
+	
+			if (image_height > nScreenHeight)
+			{
+				image_height := nScreenHeight
+				image_width := image_height * pause_image_posW / pause_image_posH
+			}
+			
+			;center image
+			image_x := Floor(nScreenWidth / 2 - image_width / 2)
+			image_y := Floor(nScreenHeight / 2 - image_height / 2)
+	
+			gGui.guiAlpha_PauseImage%assetType%.Move(image_x, image_y, image_width, image_height)
+			gGui.guiAlpha_PauseImage%assetType%.Visible := false ;hide this for now (PauseKey function will show/hide)
+	
+			;Add this control to the oPauseControl collection manager
+			this.AddPage(assetType, bPageVisible, "guiAlpha_PauseImage" . assetType)
 		}
 	}
 
@@ -380,5 +466,161 @@ class pause_control_class
 			return true
 		
 		return false
+	}
+
+	/**
+	 * Dynamically update the image associated with a particular image type
+	 * 
+	 * @param sType - the type of image ("highscore", "controls", etc.)
+	 * @param hBitmap - bitmap of the image
+	 */
+	SetHighscorePauseImage(hBitmap)
+	{
+		static sType := "highscore"
+
+		gGui.guiAlpha_PauseImage%sType%.Value := hBitmap
+	    gGui.guiAlpha_PauseImage%sType%.Move(0, 0, nScreenWidth, nScreenHeight)
+
+		for i, page in this._pages
+		{
+			if (page["type"] == sType)
+				this._pages[i]["visible"] :=  true
+		}  
+	}
+
+	/**
+	 * Set visibility of any highscore images to false
+	 */
+	DisableHighscorePauseImage()
+	{
+		static sType := "highscore"
+
+		for i, page in this._pages
+		{
+			if (page["type"] == sType)
+			{
+				this._pages[i]["visible"] :=  false
+				gGui.guiAlpha_PauseImage%sType%.Value := void_file
+			}
+		}  
+	}
+
+	CreateNavTriangles()
+	{		
+		global gGui
+
+		dpi:=96/A_ScreenDPI
+
+		verticalCenter := Round(nScreenHeight / 2)
+		topExtent := Round(nScreenHeight * 0.45)
+		bottomExtent := Round(nScreenHeight - (topExtent))
+
+		;**********************************************************************
+		; Draw left triangle
+		;**********************************************************************
+
+		gGui.guiNavLeft := Gui(, "eipGui - guiNavLeft")
+		gGui.guiNavLeft.Opt("-Caption +ToolWindow +LastFound +AlwaysOnTop")
+		gGui.guiNavLeft.BackColor := color_edit_text
+
+		x1 := 40
+		y1 := topExtent
+
+		x2 := 0
+		y2 := verticalCenter
+
+		x3 := 40
+		y3 := bottomExtent
+
+		navRegion := x1/dpi . "-" . y1/dpi . " " . x2/dpi . "-" . y2/dpi . " " . x3/dpi . "-" y3/dpi
+	
+		WinSetRegion navRegion
+
+		;**********************************************************************
+		; Draw right triangle
+		;**********************************************************************
+
+		gGui.guiNavRight := Gui(, "eipGui - guiNavRight")
+		gGui.guiNavRight.Opt("-Caption +ToolWindow +LastFound +AlwaysOnTop")
+		gGui.guiNavRight.BackColor := color_edit_text
+
+		x1 := nScreenWidth - 40
+		y1 := topExtent
+
+		x2 := nScreenWidth
+		y2 := verticalCenter
+
+		x3 := x1
+		y3 := bottomExtent
+		
+		navRegion := x1/dpi . "-" . y1/dpi . " " . x2/dpi . "-" . y2/dpi . " " . x3/dpi . "-" y3/dpi
+		
+		WinSetRegion navRegion
+	}
+
+	ShowNavTriangles()
+	{
+		;gGui.guiNavLeft.Show("NA w" . nScreenWidth . " h" nScreenHeight)
+		;gGui.guiNavRight.Show("NA w" . nScreenWidth . " h" nScreenHeight)
+		
+		SetTimer ShowNow, -1
+
+		ShowNow()
+		{		
+			this._hideNavTriangles := false
+			this._stopFlash := false
+
+			try 
+			{
+				if (this._totalPages > 1)
+				{					
+					gGui.guiNavLeft.Show("NA w" . nScreenWidth . " h" nScreenHeight)
+					gGui.guiNavRight.Show("NA w" . nScreenWidth . " h" nScreenHeight)
+
+					WinSetTransparent 200, "ahk_id " gGui.guiNavLeft.Hwnd
+					WinSetTransparent 200, "ahk_id " gGui.guiNavRight.Hwnd
+
+					loop 3
+					{
+						;use transparency to flash since Show() and Hide() mess with the window order
+						Sleep(700)
+						WinSetTransparent 0, "ahk_id " gGui.guiNavRight.Hwnd
+						Sleep(-1)
+
+						if (this._hideNavTriangles)
+							break
+
+						Sleep(400)
+						WinSetTransparent 200, "ahk_id " gGui.guiNavRight.Hwnd
+						Sleep(-1)
+
+						;Used when changing pages
+						if (this._stopFlash)
+							break
+					}
+				}
+			}
+		}
+	}
+
+	HideNavTriangles()
+	{
+		this._hideNavTriangles := true
+		
+		if (this._totalPages > 1)
+		{
+			gGui.guiNavLeft.Hide()
+			gGui.guiNavRight.Hide()
+		}
+	}
+	
+	CurrentPage
+	{
+		get => this._currentPage
+	}
+
+	CurrentPageType
+	{
+		get => this._pages[this._currentPage]["type"]
 	}
 }

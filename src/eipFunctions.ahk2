@@ -14,8 +14,8 @@ ExitFunction(ExitReason, ExitCode)
     try ObjRegisterActive(oActiveMsg, "")
 
     ;Destroy Guis
-    if (start_show_time > -1 || exit_show_time > -1)
-    {
+    ;if (start_show_time > -1 || exit_show_time > -1)
+    ;{
         try guiBackground.Destroy()
         try guiSelect.Destroy()
         try oSelectListControl := {}
@@ -23,7 +23,7 @@ ExitFunction(ExitReason, ExitCode)
         try guiStart.Destroy()
         try guiExit.Destroy()
         try guiDialog.Destroy()
-    }
+    ;}
     
     SystemCursor("On")
 
@@ -727,11 +727,15 @@ GetFuzzyRom(sysKey, romFileName, &oRoms)
             currentSearchFolder := searchFolder . "\" . searchRomName . "." . romExt
             Loop Files currentSearchFolder
             {
+                Sleep(-1)
                 strongMatch := false
                 weakMatch := false
 
-                if (!gCfg.fast_load)
-                    rom_title := oEmulators.Emulators[sysKey].meta_names.GetTitle(A_LoopFileName)                  
+                if (gCfg.fast_load)
+                    rom_title := ""
+                else
+                    rom_title := oEmulators.Emulators[sysKey].meta_names.GetTitle(A_LoopFileName) 
+                                 
                 if (A_LoopFileName == romFileName || rom_title == romFileName)
                     oRoms.Push(rom_class(sysKey,A_LoopFileFullPath,"exactMatch"))
                 else
@@ -1080,6 +1084,24 @@ FrontEndStartup()
     return g_ran_fe
 }
 
+IsEmulatorActive()
+{    
+    ;if (WinExist("ahk_pid " pid_emulator))
+    if (WinActive("ahk_pid " pid_emulator))
+        return true
+    else
+        return false
+}
+
+GetSystemRomTag()
+{
+    sys_tag := search_tag ? gCfg.proper_name . "[" . search_tag . "]" : gCfg.proper_name
+    rom_tag := gCfg.rom_name ? sys_tag . " : " . gCfg.rom_name : sys_tag
+    rom_tag := gCfg.rom_file ? sys_tag . " : " . gCfg.rom_file : rom_tag
+
+    return rom_tag
+}
+
 ;Replace any commas past the last \ character with the currently
 ;set gCfg.path_delimiter. This makes it easier for the parser to 
 ;deal with paths that contain commas.
@@ -1107,15 +1129,6 @@ IdleLogEntry(logString)
     FileAppend logString . "`n", idle_log_file
 }
 
-IsEmulatorActive()
-{    
-    ;if (WinExist("ahk_pid " pid_emulator))
-    if (WinActive("ahk_pid " pid_emulator))
-        return true
-    else
-        return false
-}
-
 ;Create a directory and log the activity
 CreateDirAndLog(d)
 {
@@ -1140,9 +1153,12 @@ CreateDirAndLog(d)
     return true
 }
 
-;Delete a file or folder and log the activity
-;@t is "D" (directory) or "F" (file)
-;@f is full name and path of the file or folder/directory. 
+/**
+ * Delete a file or folder and log the activity
+ * @param t - is "D" (directory) or "F" (file)
+ * @param f - is full name and path of the file or folder/directory. 
+ * @returns {Integer} - 0 is success, 1 is failure, -1 means file doesn't exist
+ */
 DeleteAndLog(t, f)
 {
     if (t == "F")
@@ -1154,9 +1170,11 @@ DeleteAndLog(t, f)
             }
             catch as e {
                 LogEntry("INFO: File could not be deleted: " f ". Error was: " FormatErrorMessage(e) "`n")
+                return 1
             }
             else {
                 LogEntry("INFO: Deleted file: " f ".`n")
+                return 0
             }
         }
     }
@@ -1169,14 +1187,16 @@ DeleteAndLog(t, f)
             }
             catch as e {
                 LogEntry("INFO: Folder could not be deleted: " f ". Error was: " FormatErrorMessage(e) "`n")
+                return 1
             }
             else {
                 LogEntry("INFO: Deleted folder: " f ".`n")
+                return 0
             }
         }
     }
 
-    return
+    return -1
 }
 
 LogEntry(logString, continueLine:=false)
@@ -1312,4 +1332,16 @@ type in this folder or arcadeEIP will fail with an error.
         else     
             LogEntry("INFO: Created file, " directswitch_folder "\@!@mame_zaxxon.txt.`n")            
     }
+}
+
+;Use this function before a breatkpoint that needs the GUI suppressed
+;in order to debug.
+GUIDebug()
+{
+    try guiDialog.Opt("-AlwaysOnTop")
+    try guiBackground.Opt("-AlwaysOnTop")
+    try guiSelect.Opt("-AlwaysOnTop")
+    try guiAlpha.Opt("-AlwaysOnTop")
+    try guiExit.Opt("-AlwaysOnTop")
+    try guiStart.Opt("-AlwaysOnTop")
 }

@@ -18,7 +18,7 @@ window_top=0
 window_height=0
 window_width=0
 
-Note that the 'autostart', 'autoexit', and 'show_high_scores' options have no function in stand-alone mode. Basically, autostart is always on, and both exiting and showing high scores are things you must do manually via the command line. See the Configuration Reference Guide.pdf for explanation of other settings, but the defaults should be fine. 
+Note that the 'autostart', 'autoexit', and 'show_high_scores' options have no function when using marque_manager.exe. In these cases, autostart is always on, and both exiting and showing high scores are things you must do manually via the command line. See the Configuration Reference Guide.pdf for explanation of other settings, but the defaults should be fine. 
 
 Once the [Marquee] section of arcadeEIP.ini is configured, double-click on marquee.exe as an initial test (or run marquee_manager.exe -test). This should put up a couple diagnostic dialogs on your marquee monitor which you can read and click through. If they don't appear on the correct monitor, then change the monitor= setting and try again. 
 

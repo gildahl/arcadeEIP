@@ -6,6 +6,8 @@ marquee.txt
 *.log
 *.exe
 *.bak
+test.ahk2
+bass.dll
 extra/
 license-generator/
 Assets/

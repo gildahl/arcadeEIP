@@ -1,8 +1,12 @@
-; arcadeEIP Marquee (marquee.exe)
-; © 2024 David G. Dahlstrom
-; File: eipMarquee.ahk2
+/************************************************************************
+ * @description This file implements the arcadeEIP marquee (marquee.exe).
+ * @file eipMarquee.ahk2
+ * @author © 2024 David G. Dahlstrom
+ * @date 2024/03/11
+ * @version 0.4.2.0
+ ***********************************************************************/
 
-;This file implements the arcadeEIP marquee (complile as marquee.exe).
+;This file implements the arcadeEIP dynamic marquee (marquee.exe).
 ;This is intended to put a marquee image on an independent marquee monitor. 
 ;The marquee image should automatically scale and display at its native aspect 
 ;ratio.  The image filename and some metadata, including current high score,
@@ -11,7 +15,7 @@
 
 ;Compiler directives
 ;***********************************************************
-global CodeVersion := "0.4.1.0"
+global CodeVersion := "0.4.2.0"
 ;@Ahk2Exe-Let version = %A_PriorLine~U)^(.+"){1}(.+)".*$~$2%
 ;@Ahk2Exe-SetCopyright (c) 2024 David G. Dahlstrom
 ;@Ahk2Exe-SetProductName arcadeEIP Marquee Player

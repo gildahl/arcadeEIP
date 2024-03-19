@@ -5,14 +5,117 @@ Arcade Emulator Integration Player
 Update Log
 ========================================
 
-0.4.1.1 (pending release)
-* Added support for half-star ratings.
+0.4.2.0 Stability, XInput, Scorecard enhancements, Favorites/Star Ratings import,
+and standalone MAME game list pre-filtering. Note that this version contains
+major changes to default key assignments and other arcadeEIP.ini settings. It
+is therefore essential to do a full reinstall of arcadeEIP to fully sync with
+the new and updated feature set.
+
+* Changed multiple keyboard mappings in the [Key_Map] section of arcadeEIP.ini to 
+  improve control name semantics, eliminate conflicts with MAME player 2 default keys,
+  and fix some compatibility issues with with the Elgato Stream Deck and certain emulators.
+  - removed use of q and w for previous_key and next_key. Now use [ and ] instead.
+  - lock_game_key is now assigned to the plus key ('+')
+  - removed Space from the launch_key (now just LCtrl)
+  - Changed lcup and lcdn keys (leading character up/down) to sgup and sgdn (sort 
+    group up/down) for future feature name-proofing.
+  - changed "highscore_key" to "scorecard_key" and its value to ; (semi-colon)
+  - changed "list_mode_key" to "list_view_key" and its value from i to v
+  - changed edit_mode_key value from k to e
+  - changed add/remove key from j to Enter
+  - changed publisher_key from u to p
+* Changed start_screen=1 in [Front_End] sections, and added clean_lists=1 to the
+  [System_mame] section to remove text in parenthesis from "picKs" lists and custom
+  lists by default (set to 2 if you want them removed from the base lists as well).
+* Added default MAME game list filtering, and added a new utility to customize such
+  filtering when operating in standalone mode (i.e. not integrating with LaunchBox).
+  Run the new "mame_list_tool.exe" for instructions. For more information, also see
+  the readme.txt file in the \Assets\MAME\Meta folder.
+* Added XInput controller support for core functions and menu browsing/navigation.
+  This makes arcadeEIP more viable for those using controllers such as gamepads 
+  or fight sticks in Barcades or ad hoc setups like pedestal arcades that don't
+  necessarily have conventional, fully programmable arcade control panels. Mappings
+  have been added to the readme.txt and docs. See, in particular, the [XInput] section 
+  of the Configuration Reference Guide for more detailed information. Note that you
+  will still need a keyboard or programmable control panel for configuration and
+  advanced functions. 
+* Improvements to conventional controller handling, including a fix for a bug that
+  could cause could cause arcadeEIP to hang during initialization under certain
+  circumstances. Also now disqualify any controller that has a deflected X/Y axis
+  during initialization to prevent "ghost" operation.
+* Added support to import Favorites from LaunchBox for those integrating with
+  LaunchBox (see LaunchBox.txt in ..\Docs\[Front_End] Examples). To turn on
+  Favorites import, set import_favorites=1 in the new [Integration] section
+  of arcadeEIP.ini. Note that Favorites set in arcadeEIP will always will always
+  override those from LaunchBox.
+* Added support for half-star rating increments to improve compatibility with
+  LaunchBox sourced ratings.
+* Added support to import Star Ratings from LaunchBox when integrating with LaunchBox.
+  To turn on Star Rating import, set import_user_ratings=1 and/or 
+  import_community_ratings=1 in the new [Integration] section of arcadeEIP.ini. 
+  Note that ratings set locally in arcadeEIP will always override those from LaunchBox,
+  and local user ratings in LaunchBox will always override community ratings.
+* Added support for a "native" pause page type to allow the native emulator's
+  pause screen to display while still allowing the user to page right or left to see
+  other images and/or data.
+* The scorecard snapshot feature is now turned on by default. Also changed the name of
+  this setting to "take_screenshots" and moved it to the [Scorecard] section.
+* Added a "High Score" watermark to high score screenshots to make it more clear what
+  they are when browsing to them in the pause screens. This text can be removed using
+  the "use_watermark" setting in the [Scorecard] section.
+* Added a thumbnails of the previous high score and current screenshot to the Scorecard
+  dialog for better context when updating a high score.
+* Fixed/improved instructional text in the Scorecard dialog.
+* The "highscore" pause page is now updated dynamically when a new high score is entered
+  via the Scorecard dialog. Previously, you had to reload the running game for
+  this to be updated. The marquee is updated dynamically too, though this is not new.
+* Fixed a bug in which the Scorecard dialog was not being centered on the screen
+  when the display DPI was not set to 100%.
+* Fixed a bug that could cause sound (and possibly other) side-effects in the game
+  selection menu due to the new Scorecard dialog feature. 
+* High scores in the Scorecard dialog will now initialize to zero (instead of blank).
+* Enabled keyboard (default up/down keys) to control the selection of initials
+  and score digits in highscore entry dialog (i.e. in addition to the joystick). 
+* Fixed a long-standing regression that was causing incorrect logos to sometimes be
+  displayed in mixed system game lists.
 * Provided an independent fade_effect setting in the [Marquee] section of 
   arcadeEIP.ini. When set to 1, a the normal fade effect will be used when
   changing marquees. When set to 0, the change will be instant. Setting to 0
-  will use new new poll_frequency and wait_frequency settings, which permit
-  much faster marquee switching when using marquee_manager.exe. These are 
-  further documented in the Configuration Reference Guide.pdf.
+  will also use new new poll_frequency and wait_frequency settings, which permit
+  much faster marquee switching when using marquee_manager.exe (for example, fast
+  enough to update marquees while scrolling through a 3rd party front-end game list)
+  These features are further documented in the Configuration Reference Guide.pdf.
+* Dramatically improved the speed of reading metadata files during initialization
+  when in standalone mode (by about 10x).
+* Fixed a sound_device validation check that was producing an incorrect message.
+* Changed default game list from always being the "Picks" menu to being the most
+  recent one used (you can change this behavior in the arcadeEIP.ini file).
+* Turned off MPRESS compression in the make file to lower the probability of false
+  positive virus detections by Windows Defender.
+* Reverted "Picks" view star icon back to yellow to match text color of the master
+  "Picks" list. Also color-coded lists by type to better distinguish them:
+  -Red:    Auto-Switch list
+  -Blue:   Custom lists
+  -Yellow: Picks
+  -White:  Systems
+* Removed license banner from game selection screen to reduce clutter (you can also 
+  remove it from the start screen by setting show_license=0 in arcadeEIP.ini).
+* Fixed an initialization regression that caused the -find and -findall commands to
+  crash in util.exe.
+* When viewing images on pause repeatedly, the order of the first image shown could
+  be inconsistent. This should now be fixed. Also fixed an issue that could prevent
+  Mame info from being displayed on pause under certain conditions.
+* Fixed some issues that could cause a crash if setting start_screen or exit_screen
+  to -1 in a [Front_End] section to turn them off.
+* Added more MAME logo and marquee images for an improved initial experiences. Also
+  added some graphics resources that may be helpful in creating custom Stream Deck
+  profiles in the \Resources\Extra\Stream Deck folder.
+* Running eip.exe -help (or eip.exe -?) will now provide some brief usage 
+  instructions (similar to that available from util.exe).
+* Added new tips.txt file to list helpful tips. This is expected to grow over time.
+* Added link to new Discord server (https://discord.gg/ZqZWRcSa) to readme.txt,
+  along with a few other useful links.
+* Lots of documentation updates.
 
 0.4.1.0 Major feature and bug fix release 
 Note that this version contains fairly major changes including changes to default

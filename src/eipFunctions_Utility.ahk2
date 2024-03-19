@@ -80,7 +80,7 @@ ArgArrayToParamString(oArgs)
 	return sParams
 }
 
-RepeatValue(val, length)
+RepeatChar(val, length)
 {
 	result := ""
 	Loop length
@@ -111,11 +111,59 @@ ReindexArray(&a)
 	a := b
 }
 
+TrimArray(a)
+{
+	b := Array()
+	for i, j in a
+		b.Push(Trim(j))
+
+	return b
+}
+
 GetArrayIndex(oArray, val)
 {
 	for i, j in oArray
 		if (j == val)
 			return i
+	return 0
+}
+
+/**
+ * Is a particular value from an array in a string?
+ * This includes InStr() matches, not just exact matches.
+ * @param aNeedles - The array of values to look for
+ * @param sHaystack - The string to look for the values in
+ * @param {String} sFoundValue - The value found (by ref)
+ * @returns {Boolean} - Bool whether value was found
+ */
+IsValueInArray(aNeedles, sHaystack, &sFoundValue:="")
+{
+	for i, j in aNeedles
+		if (InStr(sHaystack, j))
+		{
+			sFoundValue := j
+			return 1
+		}
+	return 0
+}
+
+/**
+ * Does a particular value from an array match a string?
+ * This is an exact match test (though not case sensitive).
+ * @param aNeedles - The array of values to look for
+ * @param sHaystack - The string to look for the values in
+ * @param {String} sFoundValue - The value found (by ref)
+ * @returns {Boolean} - Bool whether value was found
+ */
+IsExactValueInArray(aNeedles, sHaystack, &sFoundValue:="")
+{
+	for i, j in aNeedles
+		if (sHaystack == j)
+		{
+			sFoundValue := j
+			return 1
+		}
+	return 0
 }
 
 GetMaxLen(a, b)
@@ -133,7 +181,7 @@ PadString(a, b)
 		return SubStr(a, 1, a.length()-padLen)
 	else
 	{
-		padding := RepeatValue(%A_Space%, padLen)
+		padding := RepeatChar(%A_Space%, padLen)
 		result := a . padding
 	}
 	return result
@@ -153,12 +201,12 @@ GetColValue(valueIdx, values, colSep, &rowSep:="")
         if (len > longest)
           longest := StrLen(thisValue)
     }
-    rowSep := RepeatValue("=", longest)
-    rowPad := RepeatValue(A_Space, colSep)
+    rowSep := RepeatChar("=", longest)
+    rowPad := RepeatChar(A_Space, colSep)
     rowSep := rowSep . rowPad
     
     padLen := longest + colSep - StrLen(value)
-    padding := RepeatValue(A_Space, padLen)
+    padding := RepeatChar(A_Space, padLen)
     result := value . padding
     return result
 }
@@ -336,4 +384,23 @@ ChangeEncoding(&sStr, sFrom, sTo)
 	buf := Buffer(StrPut(sStr, sFrom))
     StrPut(sStr, buf, sFrom)
     sStr := StrGet(buf, sTo)
+}
+
+
+/**
+ * Turn a relative path starting with a single . into a full path based in the script folder.
+ * If the provided filename does not exist in that folder, an empty string is returned.
+ * @param {String} sPath - A relative filepath starting with a single . (ex. .\Assets\MAME\Meta\Info)
+ * @param {String} sFile - An optional file name (ex. catver.ini).
+ * @returns {String} - Blank if file does not exist or full path if it does.
+ */
+GetFullPathFromRelativePath(sPath, sFile)
+{
+    sFullPath := sPath . "\" . sFile
+    if (SubStr(sFullPath, 1, 1) == ".")
+        sFullPath := A_ScriptDir . SubStr(sFullPath, 2)
+    if (!FileExist(sFullPath))
+        sFullPath := ""
+
+	return sFullPath
 }

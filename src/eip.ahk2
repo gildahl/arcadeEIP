@@ -1,10 +1,29 @@
-﻿; arcadeEIP (eip.exe) - Arcade Emulator Integration Player
-; © 2024 David G. Dahlstrom
-; File: eip.ahk2
+﻿/************************************************************************
+ * @description arcadeEIP (eip.exe) - Arcade Emulator Integration Player
+ * @file eip.ahk2
+ * @author © 2024 David G. Dahlstrom
+ * @date 2024/03/08
+ * @version 0.4.2.0
+ ***********************************************************************/
+
+/***********************************************************************
+*Compiler directives
+************************************************************************/
+global CodeVersion := "0.4.2.0"
+;@Ahk2Exe-Let version = %A_PriorLine~U)^(.+"){1}(.+)".*$~$2%
+;@Ahk2Exe-SetCopyright © 2024 David G. Dahlstrom
+;@Ahk2Exe-SetProductName arcadeEIP
+;@Ahk2Exe-SetDescription arcadeEIP
+;@Ahk2Exe-SetProductVersion %U_version% beta
+;@Ahk2Exe-SetFileVersion %U_version%
+; ;@Ahk2Exe-ConsoleApp
+;***********************************************************************
+
+;Set to false to compile as eip.exe (the main app).  Set to true to compile as util.exe
+;(the console app). When compiling as util.exe, also uncomment @Ahk2Exe-ConsoleApp above
+global console_mode := false  
 
 ;arcadeEIP main thread
-;
-;Compile as eip.exe or util.exe
 ;
 ;eip.exe  - Compile with no changes to the source code to create main arcadeEIP executable.
 ;util.exe - Compile with the following two changes to create the command line executable
@@ -38,7 +57,7 @@
 #SingleInstance Off ;multiple instance not allowed (to prevent front-ends like BigBox from launching multiple copies)
 InstallKeybdHook 1
 InstallMouseHook 1
-A_MaxHotkeysPerInterval := 200 ;prevents hotkey warnning after 71 keystrokes in a short period
+A_MaxHotkeysPerInterval := 200 ;prevents hotkey warning after 71 keystrokes in a short period
 
 ;Allow only 1 thread per hotkey and make all threads always-interruptible
 ;Improves behavior of RunWaitTimer, which can otherwise have issues if a hotkey is pressed
@@ -49,17 +68,10 @@ Thread "Interrupt", 0
 SendMode "Input"          
 SetWorkingDir A_ScriptDir
 
-;Compiler directives
-;***********************************************************
-global CodeVersion := "0.4.1.0"
-;@Ahk2Exe-Let version = %A_PriorLine~U)^(.+"){1}(.+)".*$~$2%
-;@Ahk2Exe-SetCopyright © 2024 David G. Dahlstrom
-;@Ahk2Exe-SetProductName arcadeEIP
-;@Ahk2Exe-SetDescription arcadeEIP
-;@Ahk2Exe-SetProductVersion %U_version% beta
-;@Ahk2Exe-SetFileVersion %U_version%
-; ;@Ahk2Exe-ConsoleApp
-;***********************************************************
+;Support DPI scaling
+global nScreenWidth := A_ScreenWidth * 96 // A_ScreenDPI
+global nScreenHeight := A_ScreenHeight * 96 // A_ScreenDPI
+
 ;---------------------------------------------------------------------------------
 ;Set test_mode=true for development testing. It's main purpose is to suppress
 ;AlwaysOnTop and keeps the mouse cursor turned on to allow IDE debugging to work.
@@ -70,9 +82,11 @@ global CodeVersion := "0.4.1.0"
 ;diag_mode adds some diagnostic info to the logs. Since this is pretty 
 ;lightweight, it is currently left on all the time.
 
-global test_mode := false     ;set to true to suppress AlwaysOnTop and keep the mouse cursor on.                         
+global test_mode := false     ;set to true to suppress AlwaysOnTop and keep the mouse cursor on.   
+                              ;Can also be helpful to use function GUIDebug() prior to a breakpoint
+                              ;to completely suppress the GUI when debugging into graphical screens.
+
 global diag_mode := true      ;do diagnostic tests (normally true)
-global console_mode := false  ;to compile console app, set to true and uncomment @Ahk2Exe-ConsoleApp above
 ;---------------------------------------------------------------------------------
 
 ;Start global timers
@@ -119,7 +133,7 @@ if (IsSet(oRemoteActiveMsg))
             }
         }
 
-        ;Exit. The other instance will now take care of running the game.
+        ;Done injecting. The other instance will now take care of running the game.
         ExitApp
     }
 }
@@ -177,12 +191,13 @@ else
         ExitApp
     }
 }
+
 ;---------------------------------------------------------------------------------
 ; File Includes
 ;---------------------------------------------------------------------------------
 #include eipClass_BASS.ahk2                     ;Support for the BASS sound library
 #include eipClass_CreateGui.ahk2                ;Create the main gui screens
-#include eipClass_HighScoreDialog.ahk2          ;High score dialog support class
+#include eipClass_ScorecardDialog.ahk2          ;Scorecard dialog class
 #include eipClass_DetectInactivity.ahk2         ;Supports auto game switching after a period of inactivity
 #include eipClass_Emulators.ahk2                ;Emulator management and information class
 #include eipClass_FadeWindow.ahk2               ;Fades a window in and out
@@ -195,7 +210,7 @@ else
 #include eipClass_MouseDelta.ahk2               ;Mouse raw input processing
 #include eipClass_PauseControl.ahk2             ;Support for pause screens
 #include eipClass_Schedule.ahk2                 ;Support for attract mode scheduling
-#include eipClass_SelectListControl.ahk2        ;Game select screen
+#include eipClass_GameSelectControl.ahk2        ;Game list and selection screen
 #include eipClasses.ahk2                        ;Miscellaneous classes
 #include eipFunction_CheckLicense.ahk2          ;checkLicense & Hash functions
 #include eipFunction_ConfigCreate.ahk2          ;Creates default arcadeEIP.ini files
@@ -210,23 +225,24 @@ else
 #include eipFunctions_TimerThreads.ahk2         ;Major thread functions launched by timers
 #include eipFunctions_Utility.ahk2		        ;Library of general utility functions
 #include eipFunctions.ahk2                      ;Miscellaneous support functions
+#include eipLibrary_XInput.ahk2                 ;XInput library by Lexikos
 
 ;---------------------------------------------------------------------------------
 ; Global Flags
 ;---------------------------------------------------------------------------------
 
-;Note that some particularly important state global state flags are:
+;Note that some particularly important global state flags are:
 ;  1. g_guiselect_visible     : whether the game selection screen is displayed.
 ;  2. g_guiselect_loaded      : whether the game selection screen has completed initialization
 ;  3. g_pause_state           : whether we are currently paused
 ;  4. g_guipause_visible      : whether the pause screen is currently displayed
 ;  5. g_exit_code             : tells how an exit command was issued (see ExitKey() function)
-;  6. g_guihighscore          : Whether the high score entry screen is visible
+;  6. g_guiscorecard          : Whether the scorecard dialog is visible
 ;  7. g_directswitch_args     : if this contains a game vector, arcadeEIP will switch to that game on next exit
 ;  8. g_cycle                 : tracks the number of games launched in this session
 ;  9. g_ran_fe                : this instance ran in front-end launch mode
 
-global g_guiselect_visible := g_guiselect_loaded := g_pause_state := g_guipause_visible := g_ran_fe := g_guihighscore := false
+global g_guiselect_visible := g_guiselect_loaded := g_pause_state := g_guipause_visible := g_ran_fe := g_guiscorecard := false
 global g_exit_code := "", g_directswitch_args := "", g_cycle := g_lockedState := g_abort_now := 0
 
 ;Miscellaneous global state flags and handles
@@ -249,9 +265,8 @@ gCfg.fast_load := 0
 gCfg.status_beeps := false
 gCfg.alpha_effect := 1
 gCfg.sound_device := "1" ;internal value is "1", while .ini default is "Default"
-gCfg.sync_volume := 0
+gCfg.sync_volume := 0    ;may only be set to 1 if sound_device is not Default/1
 gCfg.show_license := 1
-gCfg.highscore_screenshots := 1
 gCfg.hotstring_prefix:="@!@"
 gCfg.seed_rom := "mame galaga.zip"
 
@@ -271,25 +286,26 @@ gCfg.menu_hide_key := "-"
 gCfg.quit_key := "~"
 gCfg.exit_key := "."
 gCfg.magic_key := "."
-gCfg.previous_key := "q,["
-gCfg.next_key := "w,]"
-gCfg.lock_game_key := "^!l"
-gCfg.highscore_key := ">^>!d"
+gCfg.previous_key := "["
+gCfg.next_key := "]"
+gCfg.lock_game_key := "+"
+gCfg.scorecard_key := ";"
 gCfg.launch_key := "LCtrl"
-gCfg.list_mode_key := "i"
-gCfg.add_remove_key := "j"
-gCfg.edit_mode_key := "k"
+gCfg.list_view_key := "v"
+gCfg.add_remove_key := "Enter"
+gCfg.edit_mode_key := "e"
 gCfg.left_key := "Left"
 gCfg.right_key := "Right"
 gCfg.up_key := "Up"
 gCfg.down_key := "Down"
-gCfg.pgup_key := "PgUp,1"
-gCfg.pgdn_key := "PgDn,2"
-gCfg.lcup_key := "z"
-gCfg.lcdn_key := "x"
+gCfg.pgup_key := "PgUp,LAlt"
+gCfg.pgdn_key := "PgDn,Space"
+gCfg.sgup_key := "1"
+gCfg.sgdn_key := "2"
 gCfg.home_key := "Home,5"
 gCfg.end_key := "End,6"
 gCfg.favorite_key := "m"
+gCfg.sort_key := "t"
 gCfg.star_key := "s"
 gCfg.star0_key := ""
 gCfg.star1_key := ""
@@ -302,9 +318,20 @@ gCfg.favorites_key := "f"
 gCfg.rating_key := "r"
 gCfg.genre_key := "g"
 gCfg.year_key := "y"
-gCfg.publisher_key := "u"
+gCfg.publisher_key := "p"
 gCfg.developer_key := "d"
 gCfg.players_key := "n"
+
+;[XInput]
+gCfg.use_xinput := 1
+gCfg.invert_page_buttons := 0
+gCfg.start_a := "menu"
+gCfg.start_b := "pause"
+gCfg.start_x := "scorecard"
+
+;[Scorecard]
+gCfg.take_screenshots := 1
+gCfg.use_watermark := 1
 
 ;[Picker_Preferences]
 gCfg.magic_delay := 0
@@ -317,8 +344,8 @@ gCfg.mouse_horiz := "off"
 gCfg.picker_asset :="EIP_Picker"    ;set through asset_name setting
 gCfg.picker_apps := ""              ;set though run_apps setting
 gCfg.whitelist := ""
-gCfg.all_picks_label := "All Picks"
-gCfg.top_picks_label := "Top Picks"
+gCfg.all_picks_label := "Picks"
+gCfg.top_picks_label := "Picks"
 gCfg.lst_max_rows := 100
 gCfg.lst_max_rowsb := 100
 gCfg.lst_font_type := "Tahoma"
@@ -327,7 +354,7 @@ gCfg.lst_list_margin := 0
 gCfg.lst_game_font_size := 40
 gCfg.lst_sys_font_size := 30
 gCfg.lst_game_name_ratio := 0.4
-gCfg.lst_default_list := "picks"
+gCfg.lst_default_list := ""
 gCfg.lst_hide_systems := ""
 gCfg.clean_lists := 0
 
@@ -362,6 +389,11 @@ gCfg.start_screen := 0
 gCfg.exit_screen := 1
 gCfg.show_on_pause := ""
 gCfg.fe_run_apps := ""
+
+;[Integration]
+gCfg.import_favorites := 0
+gCfg.import_user_ratings := 0
+gCfg.import_community_ratings := 0
 
 ;[System]
 gCfg.sys_key := ""
@@ -399,6 +431,7 @@ global mRules := ""
 global oMameData := ""
 global oSelectListControl := ""
 global oDetectInactivity 
+global nLastXInputDevice := -1
 
 ;Miscellaneous inits and declarations
 global current_volume := -1, override_volume := 0
@@ -413,13 +446,13 @@ global cl_start_screen := cl_exit_screen := cl_run_apps := ""
 global default_start_back_color := default_exit_back_color := "Black"
 global default_start_show_time := default_exit_show_time := start_show_time := exit_show_time := "-1"
 
-GroupAdd "DesktopGroup", "ahk_class Progman" ; Adding both classes of desktop to the group "DesktopGroup" 
-GroupAdd "DesktopGroup", "ahk_class WorkerW" ; 
+;GroupAdd "DesktopGroup", "ahk_class Progman" ; Adding both classes of desktop to the group "DesktopGroup" 
+;GroupAdd "DesktopGroup", "ahk_class WorkerW" ; 
 
 ;Base Colors
 global color_black      := "0x000000"
 global color_gray       := "0x808080"
-global color_silver     := "-"
+global color_silver     := "0xAAA9AD"
 global color_white      := "0xFFFFFF"
 global color_maroon     := "0x800000"
 global color_red        := "0xFF0000"
@@ -435,11 +468,22 @@ global color_teal       := "0x008080"
 global color_aqua       := "0x00FFFF"
 
 ;Extended Colors
-global color_dark       := "0a0a0a" ;"171B1B" dark ;"1F2425" light ;0a0a0a darkest
-global color_light_gray := "0xD3D3D3"
-global color_dark_gray  := "0x1F2425"
-global color_dark_green := "0x006400"
-global color_dark_yellow:= "0xFFD800"
+global color_dark          := "0a0a0a" ;"171B1B" dark ;"1F2425" light ;0a0a0a darkest
+global color_light_gray    := "0xD3D3D3"
+global color_dark_gray     := "0x1F2425"
+global color_dark_green    := "0x006400"
+global color_dark_yellow   := "0xFFD800"
+global color_light_blue    := "0xADD8E6"
+global color_electric_blue := "0x7DF9FF"
+global color_bright_green  := "0xAAFF00"
+global color_chartreuse    := "0xDFFF00"
+global color_lemon_yellow  := "0xFAFA33"
+global color_bright_yellow := "0xFFEA00"
+global color_neon_green    := "0x0FFF50"
+global color_orange        := "0xFF6600"
+
+global color_edit_bg       := "0x1F1F1F"
+global color_edit_text     := "0xCCCCCC"
 
 ;Diagnostic and unit test
 global ut_runwait_avg := 0, ut_runwait_cycle := 0, ut_runwait_timer := 0
@@ -447,10 +491,6 @@ global ut_runwait_timer_total := 0, ut_runwait_peak := 0
 
 ;Make a copy of the original commandline arg array
 global oOriginalArgs := A_Args.Clone() 
- 
-;Support DPI scaling
-global nScreenWidth := A_ScreenWidth * 96 // A_ScreenDPI
-global nScreenHeight := A_ScreenHeight * 96 // A_ScreenDPI
 
 OnExit ExitFunction
 
@@ -467,6 +507,7 @@ cBatchFileName := "runlast_native.bat"
 cLaunchFileName := "runlast_eip.bat"
 cDirectSwitchName := "Direct"
 cAttractFolder := "Lists\autoswitch"
+cIconsFolder := A_ScriptDir "\Resources\Icons"
 cListsFolder := "Lists"
 cMapsFolder := "Maps"
 cSoundFolder := "Resources\Sound"
@@ -476,6 +517,8 @@ cFavoriteOffIconFileName := "fav_off.png"
 cRatingFullStarFileName := "rating.png"
 cRatingHalfStarFileName := "rating_half.png"
 cRatingOffIconFileName := "rating_off.png"
+cVoidFileName := "void.png"
+cScorecardDefaultFileName := "scorecard_default.png"
 global favorites_listname := "picks"
 
 ;Define global timer periods
@@ -486,11 +529,13 @@ global cSchedule_Period := 1000
 global cInactivityTest_Period := 1000
 
 ;Define/set global folders
-global favorite_on_icon_file := A_ScriptDir "\Resources\Icons\" cFavoriteOnIconFileName
-global favorite_off_icon_file := A_ScriptDir "\Resources\Icons\" cFavoriteOffIconFileName
-global rating_fullstar_file := A_ScriptDir "\Resources\Icons\" cRatingFullStarFileName
-global rating_halfstar_file := A_ScriptDir "\Resources\Icons\" cRatingHalfStarFileName
-global rating_off_icon_file := A_ScriptDir "\Resources\Icons\" cRatingOffIconFileName
+global favorite_on_icon_file := cIconsFolder "\" cFavoriteOnIconFileName
+global favorite_off_icon_file := cIconsFolder "\"  cFavoriteOffIconFileName
+global rating_fullstar_file := cIconsFolder "\"  cRatingFullStarFileName
+global rating_halfstar_file := cIconsFolder "\"  cRatingHalfStarFileName
+global rating_off_icon_file := cIconsFolder "\"  cRatingOffIconFileName
+global scorecard_default_file := cIconsFolder "\" cScorecardDefaultFileName
+global void_file := A_ScriptDir "\Resources\Icons\" cVoidFileName
 global log_file := A_ScriptDir "\" cLogFileName
 global batch_file := A_ScriptDir "\" cBatchFileName
 global launch_file := A_ScriptDir "\" cLaunchFileName
@@ -608,13 +653,13 @@ if (gCfg.status_beeps)
 
 ;initialize speech
 global oVoice := voice_class()
-;oVoice.Speak("Starting arcade E I P")
+;oVoice.Speak("Starting arcade E I P") ;test
 
 ;check the license (.lic) file
 ValidateLicense()
 
 LogEntry(startupMsg)
-LogEntry(RepeatValue("=", StrLen(startupMsg)-1) . "`n")
+LogEntry(RepeatChar("=", StrLen(startupMsg)-1) . "`n")
 
 TimeString := FormatTime(,"Time")
 DateString := FormatTime(,"LongDate")
@@ -904,10 +949,36 @@ oMarqueeMsg["Path"] := ""
 oMarqueeMsg["Highscore"] := ""
 ObjRegisterActive(oMarqueeMsg, "{cf63540b-c460-489a-9310-62fe83e6e748}") ;guid for the oMarqueeMsg
 
+;Initialize XInput library
+if (gCfg.use_xinput)
+{
+    try {
+        XInput_Init()
+        Loop 4 ;XInput supports up to 4 controllers
+        {
+            Try {
+                capabilities := XInput_GetCapabilities(A_Index-1, 0)
+                subtype := mXInputSubtype[capabilities.SubType]
+                Switch capabilities.Type
+                {
+                    Case XINPUT_DEVTYPE_GAMEPAD:
+                        LogEntry("INFO: Detected XInput device, Index: " A_Index-1 "; Type: Game Controller; Subtype: " subtype ".`n")
+                    Default:
+                        LogEntry("INFO: Detected XInput device, Index: " A_Index-1 " Type: Unknown`n")
+                }
+            }
+        }
+    }
+    catch as e {
+        LogEntry("WARNING: Initializing XInput: " FormatErrorMessage(e) "`n")
+        gCfg.use_xinput := false
+    }
+}
+
 ;Startup the auto-switch (a.k.a. attract mode) inactivity monitor
 fnc := AttractSwitch.Bind()
 oDetectInactivity := DetectInactivity_Class(fnc, gCfg.attract_delay, gCfg.attract_mute)
-oDetectInactivity.Activate()
+oDetectInactivity.Activate() ;This initializes conventional joystick/controller monitoring
 
 ;Startup the schedule class 
 fAction := ScheduleAction.Bind("") ;this callback function is not actually used at this time
@@ -1156,104 +1227,97 @@ Vector:
         LogEntry("INFO: No logo files found.`n")
     
     bScreenContinue := false 
-    start_timer_val := start_show_time <= 0 ? -100 : -1000 * start_show_time
+
+    ;Setting mininimu time below 1000ms may cause issue loading mameinfo
+    start_timer_val := start_show_time <= 0 ? -1000 : -1000 * start_show_time
     
     SetTimer ScreenDelay, start_timer_val
     
-    if (start_show_time > -1 || exit_show_time > -1)
+    ;Use plug-in file if exists.
+    if (!FileExist("CreateBookendScreen.inc"))
     {
-        ;Use plug-in file if exists.
-        if (!FileExist("CreateBookendScreen.inc"))
-        {
-            ;If we are not direct-switching from another game then create 
-            ;screens normally, otherwise do a refresh only (which skips
-            ;re-creating the background).
-            if (!g_directswitch_args)
-                CreateGUI.CreateScreens()
-            else
-                CreateGUI.ScreenRefresh()
-        }
+        ;If we are not direct-switching from another game then create 
+        ;screens normally, otherwise do a refresh only (which skips
+        ;re-creating the background).
+        if (!g_directswitch_args)
+            CreateGUI.CreateScreens()
         else
-        {
-            #include *i CreateBookendScreen.inc	
-        }
+            CreateGUI.ScreenRefresh()
     }
-
-    ;If start/exit screens are disabled, hide their controls
-    if (start_show_time == -1)
-        HideControls("guiStart")
-    if (exit_show_time == -1)
-        HideControls("guiExit")
+    else
+    {
+        #include *i CreateBookendScreen.inc	
+    }
 
     ;clear g_directswitch_args global to avoid re-entry
     g_directswitch_args := ""
 
-    if (start_show_time > -1)
-    {
-        global oFadeAlphaWindow := fade_window_class(guiAlpha.Hwnd)                ;this fades the whole alpha window
-        global oFadeAlphaOverlay := fade_window_class(gGui.guiAlpha_Overlay.Hwnd)  ;this fades the overlay on top of the window
-        global oFadeStart := fade_window_class(guiStart.Hwnd)                      ;this fades in the start screen
+    global oFadeAlphaWindow := fade_window_class(guiAlpha.Hwnd)                ;this fades the whole alpha window
+    global oFadeAlphaOverlay := fade_window_class(gGui.guiAlpha_Overlay.Hwnd)  ;this fades the overlay on top of the window
+    global oFadeStart := fade_window_class(guiStart.Hwnd)                      ;this fades in the start screen
+    ;global oFadeDialog := fade_window_class(guiDialog.Hwnd)
 
-        LogEntry("INFO: Showing start screen (minimum duration: " start_show_time " seconds)`n") 
+    LogEntry("INFO: Showing start screen (minimum duration: " start_show_time " seconds)`n") 
+    
+    ;---------------------------------------------------------------------------------
+    ;If changing any of the following settings, TEST for these things....A LOT
+    ;1. Glitching between games (momentary display of Select screen)
+    ;2. Ensure Select screen is visible when using the Magic key after
+    ;   the first game switch (and then agan after subsequent game switches.) 
+    ;3. Make sure Alpha fading still works THE RIGHT WAY.
+    ;---------------------------------------------------------------------------------
+
+    ;Show the Dialog screen
+    guiDialog.Opt("-AlwaysOnTop")
+    guiDialog.Show("W" nScreenWidth " H" nScreenHeight " X0 Y0")
+    WinSetTransColor "Black", "ahk_id " guiDialog.Hwnd
         
-        ;---------------------------------------------------------------------------------
-        ;If changing any of the following settings, TEST for these things....A LOT
-        ;1. Glitching between games (momentary display of Select screen)
-        ;2. Ensure Select screen is visible when using the Magic key after
-        ;   the first game switch (and then agan after subsequent game switches.) 
-        ;3. Make sure Alpha fading still works THE RIGHT WAY.
-        ;---------------------------------------------------------------------------------
+    ;Show the Alpha screen
+    guiAlpha.Opt("-AlwaysOnTop")
+    guiAlpha.Show("W" nScreenWidth " H" nScreenHeight " X0 Y0")
 
-        ;Show the Dialog screen
-        guiDialog.Opt("-AlwaysOnTop")
-        guiDialog.Show("W" nScreenWidth " H" nScreenHeight " X0 Y0")
-        WinSetTransColor "Black", "ahk_id " guiDialog.Hwnd
-          
-        ;Show the Alpha screen
-        guiAlpha.Opt("-AlwaysOnTop")
-        guiAlpha.Show("W" nScreenWidth " H" nScreenHeight " X0 Y0")
+    ;Set the Alpha screen's transparency
+    ;This is used for the partial transparency effect when the game menu (gGui.guiSelect) is displayed 
+    WinSetTransparent 0, "ahk_id " guiAlpha.Hwnd ;0 is transparent, 255 is opaque
 
-        ;Set the Alpha screen's transparency
-        ;This is used for the partial transparency effect when the game menu (gGui.guiSelect) is displayed 
-        WinSetTransparent 0, "ahk_id " guiAlpha.Hwnd ;0 is transparent, 255 is opaque
+    ;Set transparency of the Alpha screeen's black overlay
+    ;This is used to darken the pause screen when the game menu (gGui.guiSelect) is shown over it
+    WinSetTransparent 255, "ahk_id " gGui.guiAlpha_Overlay.Hwnd ;0 is transparent, 255 is opaque
 
-        ;Set transparency of the Alpha screeen's black overlay
-        ;This is used to darken the pause screen when the game menu (gGui.guiSelect) is shown over it
-        WinSetTransparent 255, "ahk_id " gGui.guiAlpha_Overlay.Hwnd ;0 is transparent, 255 is opaque
+    guiSelect.Show("W" nScreenWidth " H" nScreenHeight " X0 Y0")
+    guiBackground.Show("W" nScreenWidth " H" nScreenHeight " X0 Y0")
 
-        guiSelect.Show("W" nScreenWidth " H" nScreenHeight " X0 Y0")
-        guiBackground.Show("W" nScreenWidth " H" nScreenHeight " X0 Y0")
-
+    if (start_show_time > -1)
         CreateGUI.ShowStartScreenControls()
-        guiStart.Show("W" nScreenWidth " H" nScreenHeight " X0 Y0 NA")           
+    
+    guiStart.Show("W" nScreenWidth " H" nScreenHeight " X0 Y0 NA")           
 
-        ;Alpha fade-in start screen when switching games
-        if (gCfg.alpha_effect)
-        {
-            WinSetTransparent 0, "ahk_id " guiStart.Hwnd
+    ;Alpha fade-in start screen when switching games
+    if (gCfg.alpha_effect)
+    {
+        WinSetTransparent 0, "ahk_id " guiStart.Hwnd
+        
+        oFadeStart.Start(1,255,20,16)  ;fade when switching 
             
-            oFadeStart.Start(1,255,20,16)  ;fade when switching 
-                
-            ;if the SetTimer method below is reached before the fade completes it will 
-            ;glitch, so wait till its done before continuing (should take about 600ms)
-            startTick := A_TickCount
-            Loop 
+        ;if the SetTimer method below is reached before the fade completes it will 
+        ;glitch, so wait till its done before continuing (should take about 600ms)
+        startTick := A_TickCount
+        Loop 
+        {
+            Sleep 10
+            if (!oFadeStart.Active)
+                break
+            if (A_TickCount - startTick > 2000)
             {
-                Sleep 10
-                if (!oFadeStart.Active)
-                    break
-                if (A_TickCount - startTick > 2000)
-                {
-                    LogEntry("WARNING: Fade operation is taking too long (greater than 2 seconds)`n")
-                    break
-                }
+                LogEntry("WARNING: Fade operation is taking too long (greater than 2 seconds)`n")
+                break
             }
-        }  
-        else  
-            WinSetTransparent 255, "ahk_id " guiStart.Hwnd 
+        }
+    }  
+    else  
+        WinSetTransparent 255, "ahk_id " guiStart.Hwnd 
 
-        ControlActivationState.DisableSelectControls()
-    }
+    ControlActivationState.DisableSelectControls()
 
     ;Start a thread to create the image/info screens for pause while we're loading...
     SetTimer CreatePausePage, -100
@@ -1403,14 +1467,15 @@ Vector:
         LogEntry("INFO: Showing exit screen (minimum duration: " exit_show_time " seconds)`n") 
     
     bScreenContinue := false
-    exit_timer_val := exit_show_time <= 0 ? -100 : -1000 * exit_show_time
+
+    ;Setting mininim time below 1000ms may cause errors when switching games
+    exit_timer_val := exit_show_time <= 0 ? -1000 : -1000 * exit_show_time
     SetTimer ScreenDelay, exit_timer_val
 
     if (exit_show_time > -1)
-    {
         CreateGUI.ShowExitScreenControls()
-        guiExit.Show("W" nScreenWidth " H" nScreenHeight " X0 Y0")
-    }
+        
+    guiExit.Show("W" nScreenWidth " H" nScreenHeight " X0 Y0")
     
     ;---------------------------------------------------------------------------------
     ;  Run the front-end's apps

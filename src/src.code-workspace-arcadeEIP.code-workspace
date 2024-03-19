@@ -239,13 +239,24 @@
 				"maxChildren": 10000
 			},
 			{
-				"name": "eip -sound",
+				"name": "eip -fix",
 				"request": "launch",
 				"type": "autohotkey",
 				"runtime_v1": "AutoHotkey.exe",
 				"runtime_v2": "v2/AutoHotkey.exe",
 				"program": "${file}",
-				"args": ["-sound"],
+				"args": ["-fix"],
+				"stopOnEntry": false,
+				"maxChildren": 10000
+			},
+			{
+				"name": "eip -help",
+				"request": "launch",
+				"type": "autohotkey",
+				"runtime_v1": "AutoHotkey.exe",
+				"runtime_v2": "v2/AutoHotkey.exe",
+				"program": "${file}",
+				"args": ["-help"],
 				"stopOnEntry": false,
 				"maxChildren": 10000
 			},

@@ -23,23 +23,45 @@ If you have a marquee monitor...
 4. Run eip.exe with a game. The marquee should appear on the marquee monitor.
 
 
-To add high score support (MAME only)...
+High score support...
+=====================
+You may display high score information on the marquee that comes from arcadeEIP's 
+own built-in Scorecard dialog (accessed using the ';' key), or from MAME's high
+score plug-in feature, or from both.
 
-1. Make sure the hiscore plugin for MAME is active and working (you should be generating
-   *.hi files in your mame \hi or \hiscore folders).  See this web page for instructions.
+A. Showing high scores on the marquee using arcadeEIP's Scorecard dialog is turned on
+   by default. So as long as show_high_scores is set to 1 in the [Marquee] section of
+   arcadeEIP.ini (the default), this should work automatically. Note that high scores
+   recorded this way will override any high scores from the MAME plug-in/hi2txt.
 
-   https://docs.mamedev.org/plugins/hiscore.html
+B. Showing high scores from the MAME plug-in requires the installation of a utility 
+   called hi2txt. To install and use this, follow these instructions:
 
-2. Obtain the C# hi2txt 7z archive from https://greatstoneex.github.io/hi2txt-doc/
-   and unpack it to a subfolder of arcadeEIP called \hi2txt.
+   1. Make sure the hiscore plugin for MAME is active and working (you should be generating
+      *.hi files in your mame \hi or \hiscore folders).  See this web page for instructions.
 
-3. In the [System_mame] section of arcadeEIP, set: use_hi2txt=1
+      https://docs.mamedev.org/plugins/hiscore.html
 
-From this point on, any game having a compatible *.hi file in mame's \hi or \hiscore
-folder will display the high score at the bottom of the marquee. 
+   2. Obtain the C# hi2txt 7z archive from https://greatstoneex.github.io/hi2txt-doc/
+      and unpack it to a subfolder of arcadeEIP called \hi2txt.
 
-Important: Note that hi2txt is hit-or-miss on what games it works with. If you encounter
-problems with certain games it is far more likely that it is an issue with hi2txt than a
-problem with arcadeEIP. For example, it is not unheard of for high score support to corrupt 
-a MAME nvram file. If this happens, just delete the nvram file, and also consider deleting 
-the xml file supporting that game from the hi2txt game library zip file.
+   3. In the [System_mame] section of arcadeEIP, set: use_hi2txt=1
+
+   From this point on, any game having a compatible *.hi file in mame's \hi or \hiscore
+   folder will display the high score at the bottom of the marquee. 
+
+   Important: Note that hi2txt is hit-or-miss on what games it works with. If you encounter
+   problems with certain games it is far more likely that it is an issue with hi2txt than a
+   problem with arcadeEIP. For example, it is not unheard of for high score support to corrupt 
+   a MAME nvram file. If this happens, just delete the nvram file, and also consider deleting 
+   the xml file supporting that game from the hi2txt game library zip file. 
+
+   In general, however, if a game does not support hi2txt, including all non-MAME games, you
+   can always use arcadeEIP's Scorecard dialog instead.
+
+marquee_manager.exe
+===================
+Marquee Manager is a simple .exe utility that can be used to display marquees using a
+command-line. This utility is not used by arcadeEIP, but is available for 3rd party applications 
+to use. For a list of supported parameters, just run the application with no arguments and
+you will be provided with instructions.

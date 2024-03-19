@@ -1,0 +1,856 @@
+/*****************************************************************************
+ * @description arcadeEIP MAME Game List and Filter tool (mame_list_tool.exe)
+ * @file eipMameXMLConverter.ahk2
+ * @author © 2024 David G. Dahlstrom
+ * @date 2024/03/12
+ * @version 0.4.2.0
+ *****************************************************************************/
+
+;Compiler directives
+;***********************************************************************
+global CodeVersion := "0.4.2.0"
+;@Ahk2Exe-Let version = %A_PriorLine~U)^(.+"){1}(.+)".*$~$2%
+;@Ahk2Exe-SetCopyright (c) 2024 David G. Dahlstrom
+;@Ahk2Exe-SetProductName arcadeEIP MAME List Tool
+;@Ahk2Exe-SetDescription arcadeEIP MAME List Tool
+;@Ahk2Exe-SetProductVersion %U_version% beta
+;@Ahk2Exe-SetFileVersion %U_version%
+;***********************************************************************
+
+#include eipFunctions_Utility.ahk2	  
+#include eipFunctions_Attributed.ahk2 
+#include eipClass_MameData.ahk2
+
+;This tool must be placed in the root arcadeEIP folder. 
+
+#Requires AutoHotkey v2.0
+#SingleInstance 
+
+;=====================================================
+; mamexml.xml conversion tool
+;=====================================================
+
+;Windows messages used for tooltips
+OnMessage(WM_MOUSEMOVE  := 0x0200, OnMouseEvent)
+OnMessage(WM_MOUSELEAVE := 0x02A3, OnMouseEvent)
+
+global bCancelFlag := false
+
+;Declarations
+mMain := Map()
+mExitButton := Map()
+mStartButton := Map()
+mCancelButton := Map()
+mEditButton := Map()
+mAuditButton := Map()
+mCheckbox := Map()
+mProgressBar := Map()
+mInstructions := Map()
+mStatus := Map()
+fTempNamesMetaFile := ""
+fTempEipXmlFile := ""
+
+;Support DPI scaling
+global nScreenWidth := A_ScreenWidth * 96 // A_ScreenDPI
+global nScreenHeight := A_ScreenHeight * 96 // A_ScreenDPI
+
+;Initializations
+mMain.Width := 475
+mMain.Height := 410
+
+;the mame info folder
+mameinfo_folder := A_ScriptDir "\Assets\MAME\Meta\Info" 
+
+;init the Conversion class
+ConvertMameXML(mameinfo_folder)
+
+;strings
+sTitle := "MAME Game List Filter Tool"
+sInstructions := "
+(
+This tool converts a mame.xml machine catalog file generated from MAME into a filtered game list file called games.xml that arcadeEIP can use. If you've updated MAME and need to create a new mame.xml file, run the following command line instruction at a command prompt in your MAME root folder:`n`t`t            mame.exe -listxml > mame.xml`n`nOnce done, copy the resulting mame.xml file to the \Assets\MAME\Meta\Info folder along with any updated catlist.ini, catver.ini, and/or nplayers.ini files which you may have obtained, to replace the ones already there.`n`nFinally, if desired you may edit the Game List Filters file below, then run this utility to create a new games.xml. Always run this utility after updating any of these files or filters.
+)"
+
+sStatusBegin := "Press START to begin (mame.xml found!)"
+sStatusNoFile := "Could not find mame.xml in this folder!"
+sStatusComplete := "Conversion complete. games.xml created successfully."
+sCheckboxText := "Also update .meta Names file (recommended)"
+sCancelText := "Canceled"
+
+sTTExitButton := "Exit the Game List Filter Tool"
+sTTBegin := "Begin creation of filtered game list"
+sTTEditButton := "Press this button to edit the MAME list filters file."
+sTTAuditButton := "Press this button to view the current filtered game list."
+
+;Create the main GUI
+guiMain := Gui("-SysMenu", sTitle)
+guiMain.OnEvent("Close", Main_Close)
+guiMain.OnEvent("Escape", Main_Close)
+
+;Add Instructions
+gcInstructions := guiMain.AddText("Wrap", sInstructions)
+gcInstructions.SetFont("s10")
+mInstructions.X := 10
+mInstructions.Y := 10
+mInstructions.Width := mMain.Width - 20
+mInstructions.Height := 250
+gcInstructions.Move(mInstructions.X, mInstructions.Y, mInstructions.Width, mInstructions.Height)
+
+;Add an Exit button
+gcExitButton := guiMain.AddButton("Default W" 75 " H" 30, "Exit")
+gcExitButton.SetFont("s10")
+gcExitButton.GetPos(,,&w, &h)
+mExitButton.X := Round(mMain.Width/2) + 10
+mExitButton.Y := mMain.Height - (h + 20)
+gcExitButton.Move(mExitButton.X, mExitButton.Y)
+fExitButton_Click := ExitButton_Click.Bind()
+gcExitButton.OnEvent("Click", fExitButton_Click)
+gcExitButton.TT := sTTExitButton
+
+;Add a Start button
+gcStartButton := guiMain.AddButton("Default W" 75 " H" 30, "Start")
+gcStartButton.SetFont("s10")
+gcStartButton.GetPos(,,&nStartW, &nStartH)
+mStartButton.X := Round(mMain.Width/2) - (w + 10)
+mStartButton.Y := mMain.Height - (h + 20)
+gcStartButton.Move(mStartButton.X, mStartButton.Y)
+gcStartButton.GetPos(&nStartX,&nStartY,&nStartW, &nStartH)
+fStartButton_Click := StartButton_Click.Bind()
+gcStartButton.OnEvent("Click", fStartButton_Click)
+
+;Add a checkbox
+gcCheckbox := guiMain.AddCheckbox(,sCheckboxText)
+gcCheckbox.Value := 1
+mCheckbox.X := 20
+mCheckbox.Y := 205
+gcCheckbox.Move(mCheckbox.X, mCheckbox.Y)
+gcCheckbox.Visible := false
+
+;Add an Edit Filters button
+gcEditButton := guiMain.AddButton("Default W" 120 " H" 25, "Edit Game List Filters")
+gcEditButton.SetFont("s8")
+gcEditButton.GetPos(,,&w, &h)
+mEditButton.X := Round(mMain.Width/2) - (w + 10)
+mEditButton.Y := nStartY - 112
+gcEditButton.Move(mEditButton.X, mEditButton.Y)
+fEditButton_Click := EditButton_Click.Bind()
+gcEditButton.OnEvent("Click", fEditButton_Click)
+gcEditButton.TT := sTTEditButton
+
+;Add an Audit Filtered games button
+gcAuditButton := guiMain.AddButton("Default W" 120 " H" 25, "View Filtered Games")
+gcAuditButton.SetFont("s8")
+gcAuditButton.GetPos(,,&w, &h)
+mAuditButton.X := Round(mMain.Width/2) + 10
+mAuditButton.Y := nStartY - 112
+gcAuditButton.Move(mAuditButton.X, mAuditButton.Y)
+fAuditButton_Click := AuditButton_Click.Bind()
+gcAuditButton.OnEvent("Click", fAuditButton_Click)
+gcAuditButton.TT := sTTAuditButton
+
+;Update the enable/disabled state of the two above buttons
+UpdateFileButtonState()
+
+;Add an Progress bar
+gcProgressBar := guiMain.AddProgress(,)
+mProgressBar.X := 20
+mProgressBar.Y := nStartY - 70
+mProgressBar.Width := mMain.Width - 40
+mProgressBar.Height := 25
+gcProgressBar.Move(mProgressBar.X, mProgressBar.Y, mProgressBar.Width, mProgressBar.Height)
+
+;Add status text
+gcStatus := guiMain.AddText("Center", "W")
+gcStatus.SetFont("s10 bold")
+mStatus.X := 10
+mStatus.Y := nStartY - 30
+mStatus.Width := mMain.Width - 20
+mStatus.Height := 25
+gcStatus.Move(mStatus.X, mStatus.Y, mStatus.Width, mStatus.Height)
+
+;disable if listxml.xml file doesn't exist
+if (FileExist(ConvertMameXML.ListXMLFile))
+{
+    gcStartButton.TT := sTTBegin
+    gcStatus.Opt("cGreen")
+    gcStatus.Text := sStatusBegin
+}
+else
+{
+    gcStartButton.Enabled := false
+    gcStatus.Opt("cRed")
+    gcStatus.Text := sStatusNoFile
+}
+
+BuildMenu()
+
+;Display the Application
+guiMain.Show("Center W" mMain.Width " H" mMain.Height)
+
+Main_Close(*)
+{
+    guiMain.Destroy()
+    ExitApp
+}
+
+ExitButton_Click(call1, call2)
+{
+    global bCancelFlag
+
+    if gcExitButton.Text == "Cancel"
+    {
+        bCancelFlag := true
+        gcExitButton.Enabled := false
+    }
+    else
+    {
+        Main_Close()
+    }
+}
+
+StartButton_Click(call1, call2)
+{
+    global
+
+    gcStatus.Opt("cGreen")
+    gcExitButton.Text := "Cancel"
+    gcStartButton.Enabled := false
+    gcEditButton.Enabled := false
+    gcAuditButton.Enabled := false
+    oFileMenu.Disable("E&xit")
+
+    bStatus := ConvertMameXML.DoConversion(UpdateProgress, &bCancelFlag, &sMessage)
+
+    if (bStatus == 1) ;conversion was aborted
+    {
+        if (bCancelFlag == 1) ;abort was a cancellation
+            gcStartButton.Enabled := true
+        else
+            gcStartButton.Enabled := false 
+
+        gcStatus.Opt("cRed")
+        gcStatus.Text := sMessage 
+        gcProgressBar.Value := 0
+        global bCancelFlag := false
+    }
+    else ;success
+    {
+        gcStartButton.Enabled := false
+        gcStatus.Opt("cGreen")
+        gcStatus.Text := sMessage
+    }
+
+    gcExitButton.Text := "Exit"
+    gcExitButton.Enabled := true
+    oFileMenu.Enable("E&xit")
+
+    UpdateFileButtonState()
+}
+
+EditButton_Click(call1, call2)
+{
+    Run "Notepad.exe " . ConvertMameXML.GameFiltersFile
+}
+
+AuditButton_Click(call1, call2)
+{
+    Run "Notepad.exe " . ConvertMameXML.GameAuditFile
+}
+
+;Handle tool-tips
+;See https://www.autohotkey.com/boards/viewtopic.php?style=19&f=82&t=116086&p=517471
+OnMouseEvent(wp, lp, msg, hwnd)
+{
+    static TME_LEAVE := 0x2, onButtonHover := false
+    if msg == WM_MOUSEMOVE && !onButtonHover
+    {
+        TRACKMOUSEEVENT := Buffer(8 + A_PtrSize * 2)
+        NumPut('UInt', TRACKMOUSEEVENT.Size,
+               'UInt', TME_LEAVE,
+               'Ptr',  hwnd,
+               'Ptr',  10, TRACKMOUSEEVENT)
+        DllCall('TrackMouseEvent', 'Ptr', TRACKMOUSEEVENT)
+        try
+            ToolTipContents := GuiCtrlFromHwnd(hwnd).TT, ToolTip(ToolTipContents)
+        catch
+            ToolTipContents := ""
+    }
+
+    if msg == WM_MOUSELEAVE
+        ToolTip()  ;outside Gui
+}
+
+BuildMenu()
+{
+    global
+
+    oFileMenu := Menu()
+    oFileMenu.Add("E&xit", MenuFileExit)
+
+    oHelpMenu := Menu()
+    oHelpMenu.Add("&About", MenuHelpAbout)
+
+    oMenuBar := MenuBar()
+    oMenuBar.Add("&File", oFileMenu)
+    oMenuBar.Add("&Help", oHelpMenu)
+
+    guiMain.MenuBar := oMenuBar
+}
+
+MenuFileExit(*)
+{
+    WinClose()
+}
+
+MenuHelpAbout(*)
+{
+    sAboutTitle := "About - MAME Game List Filter Tool"
+
+    mAbout := Map()
+    mAbout.Width := 275
+    mAbout.Height := 120
+    mAbout.X := Round((nScreenWidth / 2) - (mAbout.Width / 2))
+    mAbout.Y := Round((nScreenHeight / 2) - (mAbout.Height / 2))
+
+    guiAbout := Gui("-MaximizeBox -MinimizeBox +owner" guiMain.Hwnd, sAboutTitle)
+    guiMain.Opt("+Disabled")
+    guiAbout.AddText("w" mAbout.Width " Center","`nMAME Game List Filter Tool for arcadeEIP.`n`nCopyright © " FormatTime(,"yyyy") " By David Dahstrom")
+    gcAboutExitButton := guiAbout.AddButton("Default W" 50, "OK")
+    gcAboutExitButton.OnEvent("Click", About_Close)
+
+    guiAbout.OnEvent("Close", About_Close)
+    guiAbout.OnEvent("Escape", About_Close)
+
+    gcAboutExitButton.GetPos(,, &w, &h)
+    gcAboutExitButton.Move(Round(mAbout.Width/2 - w/2), mAbout.Height - h * 1.5)
+
+    guiAbout.Show("W" mAbout.Width " H" mAbout.Height)
+
+    About_Close(*)
+    {
+        guiMain.Opt("-Disabled")
+        guiAbout.Destroy()
+    }
+}
+
+/**
+ * Update whether the edit or audit buttons should be enabled or disabled
+ * based on whether the files they operate on exist.
+ */
+UpdateFileButtonState()
+{
+    if (FileExist(ConvertMameXML.GameFiltersFile))
+        gcEditButton.Enabled := true
+    else
+        gcEditButton.Enabled := false
+
+    if (FileExist(ConvertMameXML.GameAuditFile))
+        gcAuditButton.Enabled := true
+    else
+        gcAuditButton.Enabled := false
+}
+
+UpdateProgress(nValue, sMessage)
+{
+    gcProgressBar.Value := nValue
+    gcStatus.Text := sMessage
+}
+
+/**
+ * The main conversion class
+ * No need for an XML parser here since the format of the listxml.xml file is
+ * simple enough to read and write it back out like a flat file.
+ */
+class ConvertMameXML
+{
+    static _bAborted := false
+    static _sReturnMessage := ""
+    static _sCanceled := "Canceled"
+
+    static _sInfoFolder := ""
+    static _sListXMLFile := ""
+    static _sFiltersFile := ""
+    static _sGamesXMLFile := ""
+    static _sMetaNamesFile := ""
+    static _sCatListFile := ""
+    static _sCatVerFile := ""
+    static _sFilteredGamesFile := ""
+
+    /**
+     * ConvertMameXML Static Class Constructor
+     * @param sInfoFolder - location of the MAME meta Info folder
+     */
+    static Call(sInfoFolder) 
+    {
+        this._sListXMLFile:= sInfoFolder "\mame.xml"
+        this._sGamesXMLFile := sInfoFolder "\games.xml"
+        this._sMetaNamesFile := sInfoFolder "\..\Names\.meta"
+        this._sFiltersFile := sInfoFolder "\filters.ini"
+        this._sCatListFile := sInfoFolder "\catlist.ini"
+        this._sCatVerFile := sInfoFolder "\catver.ini"
+        this._sFilteredGamesFile := sInfoFolder "\audit.txt"
+    }
+
+    /**
+     * Convert mame.xml to games.xml
+     * @param fProgress - callback providing progress updates to the caller (0 to 100)
+     * @param bDoMetaNames - whether to also convert the .meta Names file
+     * @param bCanceled - reference to cancel flag that allows the caller to cancel the conversion
+     * @param sReturnMessage - status message returned by function
+     * @returns {Integer} - 0 indicates successful conversion; 1 indicates an abort or cancellation.
+     */
+    static DoConversion(fProgress, &bCanceled, &sReturnMessage)
+    {
+        bDoFilters := true
+        bDoMetaNames := true
+
+        nLines := 0
+        nProgress := 0
+        sReturnMessage := ""
+
+        try {
+            fListxml := FileRead(this._sListXMLFile)
+        }
+        catch {
+            sReturnMessage := "Could not open mame.xml file"
+            return 1 ;Aborted
+        }
+
+        if (bCanceled)
+        {
+            sReturnMessage := this._sCanceled
+            return 1 ;Aborted
+        }
+
+        fProgress(5, "Loading mame.xml...")
+
+        ;Count lines for the progress bar
+        Loop parse, fListxml, "`r", "`n"
+        {
+            nLines := A_Index
+        }
+        
+        ;Inits for the progress bar
+        nIncrement := Integer(nLines/90)
+        nIncrValue := nIncrement
+
+        nProgress := 10
+        fProgress(nProgress, "Reading and Filtering Records (...)")
+
+        ;These are the only tags we're interested in.
+        aIncludedTags := ["<mame", "<machine", "<description", "<year", "<manufacturer","<driver",
+                          "/mame", "/machine"]		                      
+
+        try {
+            fTempEipXmlFile := FileOpen(this._sGamesXMLFile ".temp", "w")
+        }
+        catch {
+            sReturnMessage := "Could not open games.xml.temp for writing"
+            return 1 ;Aborted
+        }
+
+        if (bDoMetaNames == 1)
+        {
+            try {
+                fTempNamesMetaFile := FileOpen(this._sMetaNamesFile ".temp", "w")
+            }
+            catch {
+                sReturnMessage := "Could not open .meta.temp file for writing"
+                return 1 ;Aborted
+            }
+        }
+
+        fExclusions := ""
+        bIsExcluded := false
+        bFileWriteExclusions := 1
+        bIncludeReasons := 1
+        
+        bArcadeOnly := 1
+        bShowMature := 0
+        bBaseRomsOnly := 1
+        bShowClones := 0
+        aCategoryExclusions := Array()
+        aNameExclusions := Array()
+        aRomExceptions := Array()
+        aRomFilters := Array()
+        aDriverStatusExclusions := Array()
+        aDriverEmulationExclusions := Array()
+        catlist_file := ""
+        catver_file := ""
+
+        ;Read filter settings from game_filters.ini
+        if (bDoFilters)
+        {     
+            sCategoryExclusions := IniRead(this._sFiltersFile, "Category_Filters", "Keywords", 0)
+            if (sCategoryExclusions)
+                aCategoryExclusions := TrimArray(StrSplit(sCategoryExclusions,","))
+            
+            sRomExceptions := IniRead(this._sFiltersFile, "Rom_Exceptions", "Roms", 0)
+            if (sRomExceptions)
+                aRomExceptions := TrimArray(StrSplit(sRomExceptions,","))
+
+            sRomFilters := IniRead(this._sFiltersFile, "Rom_Filters", "Roms", 0)
+            if (sRomFilters)
+                aRomFilters := TrimArray(StrSplit(sRomFilters,","))
+
+            sNameExclusions := IniRead(this._sFiltersFile, "Name_Filters", "Keywords", 0)
+            if (sNameExclusions)
+                aNameExclusions := TrimArray(StrSplit(sNameExclusions,","))
+
+            sDriverStatusExclusions := IniRead(this._sFiltersFile, "Driver_Filters", "Status", 0)
+            if (sDriverStatusExclusions)
+                aDriverStatusExclusions := TrimArray(StrSplit(sDriverStatusExclusions,","))
+
+            sDriverEmulationExclusions := IniRead(this._sFiltersFile, "Driver_Filters", "Emulation", 0)
+            if (sDriverEmulationExclusions)
+                aDriverEmulationExclusions := TrimArray(StrSplit(sDriverEmulationExclusions,","))
+
+            bShowClones := Integer(IniRead(this._sFiltersFile, "General", "ShowClones", 0))
+            bParentRomsOnly := Integer(IniRead(this._sFiltersFile, "General", "ParentRomsOnly", 1))
+            
+            bArcadeOnly := Integer(IniRead(this._sFiltersFile, "General", "ArcadeRomsOnly", 1))
+			bShowMature := Integer(IniRead(this._sFiltersFile, "General", "ShowMature", 0))
+
+            if (bFileWriteExclusions)
+            {
+                fExclusions := FileOpen(this._sFilteredGamesFile ".temp", "w")
+            }
+
+            catlist_file := FileExist(this._sCatListFile) ? this._sCatListFile : ""
+            catver_file := FileExist(this._sCatVerFile) ? this._sCatVerFile : "" 
+        }
+
+        nPhase := 1, sName := "", sDescription := "", bProcessingMachineElement := false
+        sRomof := "", sCloneof := "", sStatus := "", sEmulation := "", sReason := ""
+        aMachineXMLCache := Array()
+        Loop parse, fListxml, "`r", "`n"
+        {
+            if (bCanceled)
+            {
+                ;Delete the temp file
+                fTempEipXmlFile.Close()
+                Sleep(100)
+                FileDelete(this._sGamesXMLFile ".temp")
+
+                ;Delete the .meta Names temp file 
+                if (bDoMetaNames == 1)
+                {
+                    fTempNamesMetaFile.Close()
+                    Sleep(100)
+                    FileDelete(this._sMetaNamesFile ".temp")
+                }
+
+                if (bFileWriteExclusions)
+                {
+                    fExclusions.Close()
+                    Sleep(100)
+                    FileDelete(this._sFilteredGamesFile ".temp")
+                }
+
+                sReturnMessage := "Canceled"
+                return 1
+            }
+
+            ;increment progress
+            if (A_Index == nIncrValue)
+            {
+                nProgress+=1
+                fProgress(nProgress, "Reading and Filtering Records (" ThouSep(Trim(nIncrValue)) ")")
+                nIncrValue+=nIncrement
+            }
+
+            ;in nPhase 1 we copy the file untl we get to the DOCTYPE section.
+            ;which is normally expected to be immediately after the xml header.
+            if (nPhase == 1 && InStr(A_LoopField, "<!DOCTYPE"))
+                nPhase := 2 ;found DOCTYPE Section
+            else if (nPhase == 1)
+                fTempEipXmlFile.write(A_LoopField "`r`n")
+
+            ;in nPhase 2 we skip through until reaching ""]>""
+            ;which marks the end of the DOCTYPE section
+            if (nPhase == 2 && InStr(A_LoopField, "]>"))
+            {
+                nPhase := 3
+                continue
+            }
+
+            ;In nPhase 3 we write the rest of the file out to the new one
+            ;(basically all the <machine> elements)
+            if (nPhase == 3)
+            {
+                if (bDoFilters)
+                {
+                    if (InStr(A_LoopField, "<machine"))
+                    {
+                        bProcessingMachineElement := true
+                        bIsExcluded := false
+
+                        ;get the attributes of this machine
+                        sName := GetAttribute("name", A_LoopField)
+                        sCloneof := GetAttribute("cloneof", A_LoopField)
+                        sRomof := GetAttribute("romof", A_LoopField)
+                        
+                        ;check filters and mark for exclusion as necessary
+                        if (IsExactValueInArray(aRomFilters, sName, &sFoundValue))
+                            MarkForExclusion("Rom exclusion: " sFoundValue)
+
+                        if (sCloneof && !bShowClones)
+                            MarkForExclusion("Clone")   
+                        
+                        if (!bIsExcluded && sRomof && bParentRomsOnly)
+                            MarkForExclusion("Not a parent rom")
+
+                        ;do catlist/catver.ini based exclusions here as well
+                        if (catlist_file) 
+                        {
+                             aListInfo := ReadCatlist.GetListInfo(catlist_file, sName)
+
+                             if (!bIsExcluded && aListInfo["arcade"] == "N" && bArcadeOnly) 
+                                MarkForExclusion("Not an Arcade title")
+                            
+                             if (!bIsExcluded && aListInfo["mature"] == "Y" && !bShowMature) 
+                                MarkForExclusion("Mature title")
+
+                             if (!bIsExcluded && IsValueInArray(aCategoryExclusions, aListInfo["genre"], &sFoundValue))
+                                MarkForExclusion("Category exclusion: " sFoundValue)
+                        }
+                        else if (catver_file)
+                        {
+                            rom_category := ReadCatver.GetCategory(catver_file, sname)
+
+                             if (!bIsExcluded && IsValueInArray(aCategoryExclusions, rom_category, &sFoundValue)) 
+                                MarkForExclusion("Category exclusion: " sFoundValue)
+                        }
+
+                        aMachineXMLCache := Array()
+                        aMachineXMLCache.Push(A_LoopField)
+                        
+                        continue
+                    }
+                    else if (InStr(A_LoopField, "<description>"))
+                    {
+                        sDescription := StrReplace(A_LoopField, "<description>", "")
+                        sDescription := Trim(StrReplace(sDescription, "</description>", ""))   
+                        sDescription := ReplaceEscapedChars(sDescription)   
+
+                        ;check to see if any keywords in this machine's name are in the exclude list
+                        if (!bIsExcluded && IsValueInArray(aNameExclusions, sDescription, &sFoundValue))
+                            MarkForExclusion("Name exclusion: " sFoundValue)
+                        
+                        aMachineXMLCache.Push(A_LoopField)
+                        continue
+                    }
+                    else if (InStr(A_LoopField, "<year>"))
+                    {
+                        aMachineXMLCache.Push(A_LoopField)
+                        continue
+                    }
+                    else if (InStr(A_LoopField, "<manufacturer>"))
+                    {
+                        aMachineXMLCache.Push(A_LoopField)
+                        continue
+                    }
+                    else if (InStr(A_LoopField, "<driver"))
+                    {
+                        sStatus := GetAttribute("status", A_LoopField) 
+                        sEmulation := GetAttribute("emulation", A_LoopField)  
+
+                        ;check for any exclusions based on the driver and/or emulation status
+                        if (!bIsExcluded && IsValueInArray(aDriverStatusExclusions, sStatus, &sFoundValue))
+                            MarkForExclusion("Status exclusion: " sFoundValue)
+
+                        if (!bIsExcluded && IsValueInArray(aDriverEmulationExclusions, sEmulation, &sFoundValue))
+                            MarkForExclusion("Emulation exclusion: " sFoundValue)
+                        
+                        aMachineXMLCache.Push(A_LoopField)
+                        continue
+                    }
+                    else if (InStr(A_LoopField, "</machine>")) ;end of machine record
+                    {
+                        aMachineXMLCache.Push(A_LoopField)
+                        
+                        ;unmark any exclusions that are in the exception list
+                        if (IsExactValueInArray(aRomExceptions, sName, &sFoundValue))
+                            bIsExcluded := false
+
+                        ;if machine has no marked exclusions, write the full
+                        ;element to both the new xml file (games.xml) and meta names file (.meta)
+                        if (!bIsExcluded)
+                        {
+                            ;write the full machine element to games.xml.temp
+                            for i, j in aMachineXMLCache
+                                fTempEipXmlFile.write(j "`r`n")
+
+                            ;also update .meta Names file
+                            if (bDoMetaNames == 1)
+                            {
+                                nSpaces := StrLen(sName) < 20 ? 20 : StrLen(sName) + 1
+                                sSpaces := RepeatChar(A_Space, nSpaces - StrLen(sName))
+                                fTempNamesMetaFile.write(sName . sSpaces . "`"" sDescription "`"`n")
+                            }
+                        }
+                        else if (bFileWriteExclusions) ;otherwise write to the filtered games audit file
+                        {
+                            sSpaces := RepeatChar(A_Space, 20 - StrLen(sName))
+                            fExclusions.write(sName . sSpaces . "`"" sDescription "`" -- [" sReason "]`n")
+                        }
+
+                        ;reinit for the next machine
+                        sName := ""
+                        sDescription := ""
+                        sRomof := ""
+                        sCloneof := ""
+                        sStatus := ""
+                        sEmulation := ""
+                        sReason := ""
+                        bProcessingMachineElement := false
+
+                        continue
+                    }
+                    else if (bProcessingMachineElement)
+                        continue
+                    else
+                        fTempEipXmlFile.write(A_LoopField "`r`n")
+
+                } ;end of processing to filter using the game_filters.ini file rules
+            }
+        }
+
+        ;Closure function (used above)
+        MarkForExclusion(sText) {
+            sReason := sText
+            bIsExcluded := true
+        }
+
+        fProgress(100, "Done!")
+        fTempEipXmlFile.Close()
+
+        if (bDoMetaNames == 1)
+            fTempNamesMetaFile.Close()
+
+        if (bFileWriteExclusions)
+            fExclusions.Close()
+
+        Sleep(100)
+
+        ;remove old games.xml file if it exists
+        try {
+            if (FileExist(this._sGamesXMLFile))
+                FileDelete(this._sGamesXMLFile)
+        }
+        catch {
+            sReturnMessage := "Cannot overwrite games.xml file"
+            return 1
+        }
+
+        Sleep(100)
+
+        ;rename the temp games.xml file to final
+        FileMove this._sGamesXMLFile ".temp", this._sGamesXMLFile
+
+        if (bDoMetaNames == 1)
+        {
+            ;remove old .meta file if it exists
+            try {
+                if (FileExist(this._sMetaNamesFile))
+                    FileDelete(this._sMetaNamesFile)
+            }
+            catch {
+                sReturnMessage := "Cannot overwrite .meta file"
+                return 1
+            }
+
+            Sleep(100)
+
+            ;rename the temp .meta file to final
+            FileMove this._sMetaNamesFile ".temp", this._sMetaNamesFile
+        }
+
+        if (bFileWriteExclusions)
+        {
+            ;remove old filtered_games audit file if it exists
+            try {
+                if (FileExist(this._sFilteredGamesFile))
+                    FileDelete(this._sFilteredGamesFile)
+            }
+            catch {
+                sReturnMessage := "Cannot overwrite filtered_games.txt file"
+                return 1
+            }
+
+            Sleep(100)
+
+            ;rename the temp filtered_games file to final: "filtered_games.txt"
+            FileMove this._sFilteredGamesFile ".temp", this._sFilteredGamesFile
+        }
+
+        sReturnMessage := "Done!"
+        return 0
+    }
+
+    static ListXMLFile 
+    {
+        get => this._sListXMLFile
+    }
+
+    static GameFiltersFile 
+    {
+        get => this._sFiltersFile
+    }
+
+    static GameAuditFile
+    {
+        get => this._sFilteredGamesFile
+    }
+}
+
+/**
+ * Gets the element name found in the line
+ * @param sLine - a line of text
+ * @returns {String} - the element
+ */
+XMLElement(sLine)
+{
+    nStart := InStr(sLine, "<", false, 1, 1) + 1
+    nEnd := InStr(sLine, A_Space, false, nStart, 1)
+
+    sValue := SubStr(sLine, nStart, nEnd-nStart)
+
+    return sValue
+}
+
+/**
+ * Gets the value of an attribute
+ * @param sAttribute - an atrribute in the form attribute=value
+ * @param sLine - The line to search
+ * @returns {String} - the value matching the attribute
+ */
+GetAttribute(sAttribute, sLine)
+{
+    if (!InStr(sLine, sAttribute))
+        return ""
+
+    sSearchValue := sAttribute "=`""
+    nStart := InStr(sLine, sSearchValue)
+
+    nStart := nStart+StrLen(sSearchValue)
+    nEnd := InStr(sLine, "`"", false, nStart, 1)
+
+    sValue := SubStr(sLine, nStart, nEnd - nStart)
+
+    return sValue
+}
+
+/**
+ * Replace XML escaped characters with their values
+ * @param sLine - line to check
+ * @returns {String} - line with replaced values (if any)
+ */
+ReplaceEscapedChars(sLine)
+{
+    sLine := StrReplace(sLine, "&amp;", "&")
+    sLine := StrReplace(sLine, "&quot;", "`"")
+
+    return sLine
+}
+

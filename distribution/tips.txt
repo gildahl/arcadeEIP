@@ -1,0 +1,32 @@
+arcadeEIP Tips
+==========================================================================
+This document provides various tips that may be useful to new users.
+If you have a tip that you'd like added to this file, just let me know.
+==========================================================================
+
+• If a MAME game that you like is missing from the main list, it may have
+  been filtered out. Run mame_list_tool.exe and click on the "View Filtered
+  Games" button. Search for the rom/game in the list, and you should find
+  the reason it was excluded at the end of the line. Next, press the "Edit 
+  Game List Filters" and either change the filter that excluded the game or
+  add the rom to the exception list in the [Rom_Exceptions] section. Finally,
+  save the file and press the "Start" button to re-build the game list.
+
+• If a game fails to run from inside arcadeEIP, exit arcadeEIP and then
+  try double-clicking on runlast_native.bat. This will attempt to run the
+  most recent game that arcadeEIP attempted to run in a command console 
+  window. This will often provide more information about why it failed.
+
+• If arcadeEIP crashes, it could cause the taskbar and/or mouse pointer to
+  remain hidden. If this happens, and you are able, run fix.bat (or eip -fix) 
+  to restore the pointer and taskbar.
+
+• If attempting to run a MAME game in an RDP (remote desktop) session, it
+  may fail. To resolve, try running arcadeEIP using the -video gdi parameter.
+
+   >eip.exe -video gdi 
+
+• If you use port audio in MAME, arcadeEIP may produce no sound when MAME
+  games are running. To you desire to resolve this, see sound.txt.
+
+  

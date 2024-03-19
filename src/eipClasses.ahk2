@@ -29,15 +29,15 @@ class config_creation_class
 
 	Write()
 	{
-		try 
+		try
 		{
 			fCfg := FileOpen(this._filename, "a")
 			for n, line in this._oContent
 			{
 				if (this._option == "normal")
 					if (line == "" || SubStr(line, 1, 8) == ";Comment" || n <= 5)	;skip comments and empty lines
-						continue				
-				
+						continue
+
 				line := line . "`n"	;terminate with line feed
 
 				if (this._lineCount == 0 and this._option == "normal")
@@ -49,8 +49,8 @@ class config_creation_class
 					fCfg.write(";==============================================================================================================`n")
 				}
 
-				if ((SubStr(line, 1, 1) == "[" || SubStr(line, 1, 2) == ";[") && this._option == "normal")	
-				{	
+				if ((SubStr(line, 1, 1) == "[" || SubStr(line, 1, 2) == ";[") && this._option == "normal")
+				{
 					fCfg.write("`n") ;blank line before section headers
 					this._lineCount++
 				}
@@ -58,13 +58,13 @@ class config_creation_class
 					line := "`n"
 
 				this._lineCount++
-				fCfg.write(line)			
+				fCfg.write(line)
 			}
 
 			fCfg.close()
 		}
 		catch as e
-		{		
+		{
 			LogEntry("ERROR: Attempting to write config file, " this._filename ": " FormatErrorMessage(e) "`n")
 			ExitApp
 		}
@@ -81,7 +81,7 @@ class config_file_class
 		this._config_file := config_file
 
 		config_sections := ""
-		try	config_sections := IniRead(config_file)
+		try config_sections := IniRead(config_file)
 
 		this._config_sections := config_sections
 		this._section_map := Map()
@@ -121,7 +121,7 @@ class config_file_class
 		Loop Parse settings, "`n"
 		{
 			oSetting := StrSplit(A_LoopField, "=", " ", 2)
-			key := oSetting[1] 
+			key := oSetting[1]
 			value := oSetting[2]
 
 			gCfg.%key% := value
@@ -151,7 +151,7 @@ class voice_class
 		;the one defined by the sound_device setting (if not already set to zero)
 		if (gCfg.sound_device != "1") ;recall that the .ini value "Default" is converted to "1" when read.
 		{
-			try 
+			try
 			{
 				for i, j in this._voice.GetAudioOutputs()
 				{
@@ -160,8 +160,8 @@ class voice_class
 						deviceIndex := A_Index - 1
 						break
 					}
-				}			
-				
+				}
+
 				this._voice.AudioOutput := this._voice.GetAudioOutputs.Item[deviceIndex]
 				this._enabled := true
 			}
@@ -175,7 +175,7 @@ class voice_class
 		this.Speak("")
 	}
 
-	Speak(phrase, voiceNumber := 1, rate := 0, vol := 100) 
+	Speak(phrase, voiceNumber := 1, rate := 0, vol := 100)
 	{
 		if (this._enabled)
 		{
@@ -183,9 +183,9 @@ class voice_class
 			{
 				this._voice.Volume := vol
 				this._voice.Rate := rate
-				this._voice.Voice:= this._voices.Item(voiceNumber - 1)
+				this._voice.Voice := this._voices.Item(voiceNumber - 1)
 				this._voice.WaitUntilDone(True)
-				
+
 				this._voice.Speak(phrase)
 			}
 			catch
@@ -202,20 +202,20 @@ class rom_class
 	_system := ""
 	_fullPath := ""
 	_matchType := ""
-	
-    __New(system, fullPath, matchType)
-    {
-        this._system := system
+
+	__New(system, fullPath, matchType)
+	{
+		this._system := system
 		this._fullPath := fullPath
 		this._matchType := matchType
-    }
+	}
 
 	system
 	{
 		get => this._system
 		set => this._system := value
 	}
-	
+
 	fullPath
 	{
 		get => this._fullPath
@@ -227,16 +227,16 @@ class rom_class
 		get => this._matchType
 		set => this._matchType := value
 	}
-	
+
 	name
 	{
 		get {
 			fullPath := this._fullPath
-		    SplitPath fullPath,,,,&name
+			SplitPath fullPath, , , , &name
 			return name
 		}
 	}
-	
+
 	fileName
 	{
 		get {
@@ -245,27 +245,27 @@ class rom_class
 			return fName
 		}
 	}
-	
+
 	extension
 	{
 		get {
 			fullPath := this._fullPath
-			SplitPath fullPath,,,&extension
+			SplitPath fullPath, , , &extension
 			return extension
 		}
 	}
-	
+
 	folder
 	{
 		get {
 			fPath := this._fullPath
-			SplitPath fPath,,&fFolder
+			SplitPath fPath, , &fFolder
 			return ffolder
 		}
 	}
 }
 
-;suspend a process. 
+;suspend a process.
 ;used by pause
 class suspend_process_class
 {
@@ -301,14 +301,14 @@ class suspend_process_class
 				break
 		}
 	}
-	
+
 	Active
-	{		
+	{
 		get => this._active
 	}
 
 	Pid
-	{		
+	{
 		get => this._pid
 	}
 }
@@ -319,14 +319,14 @@ class MasterSound
 	static Off()
 	{
 		master_mute := SoundGetMute()
-        if (master_mute == "Off")
+		if (master_mute == "Off")
 			SoundSetMute +1
 	}
 
 	static On()
 	{
 		master_mute := SoundGetMute()
-        if (master_mute == "On")
+		if (master_mute == "On")
 			SoundSetMute +1
 	}
 
@@ -365,14 +365,14 @@ class ControlActivationState
 		Loop Parse gCfg.lock_game_key, "CSV"
 			Hotkey A_LoopField, "Off"
 
-		Loop Parse gCfg.highscore_key, "CSV"
+		Loop Parse gCfg.scorecard_key, "CSV"
 			Hotkey A_LoopField, "Off"
 	}
 
 	static DisablePauseControls()
 	{
 		global
-	
+
 		;Turn off the left/right keys for navigation
 		Loop Parse gCfg.left_key, "CSV"
 			Hotkey A_LoopField, "Off"
@@ -390,14 +390,14 @@ class ControlActivationState
 		Loop Parse gCfg.lock_game_key, "CSV"
 			Hotkey A_LoopField, "On"
 
-		Loop Parse gCfg.highscore_key, "CSV"
+		Loop Parse gCfg.scorecard_key, "CSV"
 			Hotkey A_LoopField, "On"
 	}
 
 	;Disables hotkeys while displaying simple messages
 	static EnableSimpleDialog()
 	{
-		global 
+		global
 
 		exit_key_off := true
 		pause_key_off := true
@@ -415,13 +415,13 @@ class ControlActivationState
 			Hotkey A_LoopField, "Off"
 
 		;Turn off high score screen
-		Loop Parse gCfg.highscore_key, "CSV"
+		Loop Parse gCfg.scorecard_key, "CSV"
 			Hotkey A_LoopField, "Off"
 	}
 
 	static DisableSimpleDialog()
 	{
-		global 
+		global
 
 		exit_key_off := false
 		pause_key_off := false
@@ -442,7 +442,7 @@ class ControlActivationState
 			Hotkey A_LoopField, "On"
 
 		;Turn on high score screen
-		Loop Parse gCfg.highscore_key, "CSV"
+		Loop Parse gCfg.scorecard_key, "CSV"
 			Hotkey A_LoopField, "On"
 	}
 
@@ -473,7 +473,7 @@ class ControlActivationState
 
 		Loop Parse gCfg.down_key, "CSV"
 			Hotkey A_LoopField, "On"
-		
+
 		Loop Parse gCfg.launch_key, "CSV"
 			Hotkey A_LoopField, "On"
 	}
@@ -507,7 +507,7 @@ class ControlActivationState
 			Hotkey A_LoopField, "Off"
 
 		Loop Parse gCfg.launch_key, "CSV"
-			Hotkey A_LoopField, "Off"		
+			Hotkey A_LoopField, "Off"
 	}
 
 	static EnableSelectControls()
@@ -525,31 +525,31 @@ class ControlActivationState
 
 		Loop Parse gCfg.down_key, "CSV"
 			Hotkey A_LoopField, "On"
-		
+
 		Loop Parse gCfg.launch_key, "CSV"
 			Hotkey A_LoopField, "On"
-		
+
 		Loop Parse gCfg.pgdn_key, "CSV"
 			Hotkey A_LoopField, "On"
 
 		Loop Parse gCfg.pgup_key, "CSV"
 			Hotkey A_LoopField, "On"
 
-		Loop Parse gCfg.lcdn_key, "CSV"
+		Loop Parse gCfg.sgdn_key, "CSV"
 			Hotkey A_LoopField, "On"
 
-		Loop Parse gCfg.lcup_key, "CSV"
+		Loop Parse gCfg.sgup_key, "CSV"
 			Hotkey A_LoopField, "On"
 
 		Loop Parse gCfg.home_key, "CSV"
 			Hotkey A_LoopField, "On"
-		
+
 		Loop Parse gCfg.end_key, "CSV"
 			Hotkey A_LoopField, "On"
 
-		Loop Parse gCfg.list_mode_key, "CSV"
+		Loop Parse gCfg.list_view_key, "CSV"
 			Hotkey A_LoopField, "On"
-		
+
 		Loop Parse gCfg.edit_mode_key, "CSV"
 			Hotkey A_LoopField, "On"
 
@@ -577,6 +577,9 @@ class ControlActivationState
 		Loop Parse gCfg.favorite_key, "CSV"
 			Hotkey A_LoopField, "On"
 
+		Loop Parse gCfg.sort_key, "CSV"
+			Hotkey A_LoopField, "On"
+
 		Loop Parse gCfg.star5_key, "CSV"
 			Hotkey A_LoopField, "On"
 
@@ -600,7 +603,7 @@ class ControlActivationState
 
 		Loop Parse gCfg.favorites_key, "CSV"
 			Hotkey A_LoopField, "On"
-		
+
 		Loop Parse gCfg.add_remove_key, "CSV"
 			Hotkey A_LoopField, "On"
 
@@ -614,7 +617,7 @@ class ControlActivationState
 		Loop Parse gCfg.lock_game_key, "CSV"
 			Hotkey A_LoopField, "Off"
 
-		Loop Parse gCfg.highscore_key, "CSV"
+		Loop Parse gCfg.scorecard_key, "CSV"
 			Hotkey A_LoopField, "Off"
 	}
 
@@ -624,7 +627,7 @@ class ControlActivationState
 
 		if (!g_pause_state) ;if pause is off
 		{
-			;pause uses these keys to cycle between images, so we only 
+			;pause uses these keys to cycle between images, so we only
 			;turn them off if pause is off
 			Loop Parse gCfg.left_key, "CSV"
 				Hotkey A_LoopField, "Off"
@@ -644,7 +647,7 @@ class ControlActivationState
 			Loop Parse gCfg.lock_game_key, "CSV"
 				Hotkey A_LoopField, "On"
 
-			Loop Parse gCfg.highscore_key, "CSV"
+			Loop Parse gCfg.scorecard_key, "CSV"
 				Hotkey A_LoopField, "On"
 		}
 
@@ -656,28 +659,28 @@ class ControlActivationState
 
 		Loop Parse gCfg.launch_key, "CSV"
 			Hotkey A_LoopField, "Off"
-	
+
 		Loop Parse gCfg.pgdn_key, "CSV"
 			Hotkey A_LoopField, "Off"
 
 		Loop Parse gCfg.pgup_key, "CSV"
 			Hotkey A_LoopField, "Off"
 
-		Loop Parse gCfg.lcdn_key, "CSV"
+		Loop Parse gCfg.sgdn_key, "CSV"
 			Hotkey A_LoopField, "Off"
 
-		Loop Parse gCfg.lcup_key, "CSV"
+		Loop Parse gCfg.sgup_key, "CSV"
 			Hotkey A_LoopField, "Off"
 
 		Loop Parse gCfg.home_key, "CSV"
 			Hotkey A_LoopField, "Off"
-		
+
 		Loop Parse gCfg.end_key, "CSV"
 			Hotkey A_LoopField, "Off"
 
-		Loop Parse gCfg.list_mode_key, "CSV"
+		Loop Parse gCfg.list_view_key, "CSV"
 			Hotkey A_LoopField, "Off"
-		
+
 		Loop Parse gCfg.edit_mode_key, "CSV"
 			Hotkey A_LoopField, "Off"
 
@@ -705,6 +708,9 @@ class ControlActivationState
 		Loop Parse gCfg.favorite_key, "CSV"
 			Hotkey A_LoopField, "Off"
 
+		Loop Parse gCfg.sort_key, "CSV"
+			Hotkey A_LoopField, "Off"
+
 		Loop Parse gCfg.star5_key, "CSV"
 			Hotkey A_LoopField, "Off"
 
@@ -728,7 +734,7 @@ class ControlActivationState
 
 		Loop Parse gCfg.favorites_key, "CSV"
 			Hotkey A_LoopField, "Off"
-		
+
 		Loop Parse gCfg.add_remove_key, "CSV"
 			Hotkey A_LoopField, "Off"
 	}

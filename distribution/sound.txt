@@ -1,17 +1,7 @@
 Sound
 =====
-arcadeEIP supports sound effects via the bass.dll library.
-
-To enable sound, you must download the third party bass.dll library file and place it in the
-root folder of arcadeEIP.  You may obtain this file from:
-
-https://www.un4seen.com/
-
-To install, download the Win32 version: base24.zip.  For 64-bit versions of Windows, extract
-bass.dll from the \x64 folder of the archive (note that I have not tested the 32-bit version 
-in the root folder and have no idea whether it will work).
-
-Once this file is installed, sound should be enabled automatically.
+arcadeEIP supports sound effects via the bass.dll library from https://www.un4seen.com/
+(Win32 version: base24.zip, extracted from the \x64 folder of the archive)
 
 NOTE REGARDING MAME PORT AUDIO
 ==============================
@@ -52,8 +42,9 @@ use your main, default audio card (i.e. the one your speakers are connected to).
 
     >util.exe -sound
 
-This will list all your audio devices. Identify the number associated with your *secondary* audio card.
-For example, when I ran this, I found that my secondary (Realtek) card was device 6.
+This will list all your audio devices. Identify the text associated with your *secondary* audio card.
+For example, when I ran this, I found that my secondary (Realtek) card was called "Speakers (2- Realtek
+High Definition Audio)"
 
     6: Speakers (2- Realtek High Definition Audio)
 

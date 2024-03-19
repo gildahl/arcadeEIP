@@ -47,11 +47,25 @@ class DetectInactivity_Class
 			if (GetKeyState(A_Index "JoyName"))
 			{	
 				id := A_Index
+
+				;probe joystick's current state. Disqualify it if it is in a deflected state during initialization
+				Sleep(100) ;needed between reads
+				nXState := GetKeyState(id "JoyX")
+				nYState := GetKeyState(id "JoyY")
+				if (nXState < 30 || nYState < 30 || nXState > 70 || nYState > 70)
+				{
+					LogEntry("NOTICE: Skipped Joy: " id ", info: `"" mState["info"] "`", name: `"" mState["name"] "`", X: " nXState ", Y: " nYState "`n")
+					continue
+				}
 				
 				mState := Map()
 				mState["id"] := id
-				mState["X"] := GetKeyState(id "JoyX")
-				mState["Y"] := GetKeyState(id "JoyY")
+				mState["X"] := nXState ;GetKeyState(id "JoyX")
+				mState["Y"] := nYState ;GetKeyState(id "JoyY")
+				mState["info"] := GetKeyState(id "JoyInfo")
+				mState["name"] := GetKeyState(id "JoyName")
+
+				LogEntry("INFO: Detected Joy: " id ", info: `"" mState["info"] "`", name: `"" mState["name"] "`", X: " nXState ", Y: " nYState "`n")
 				
 				mJoylist[id] := mState	
 
@@ -59,10 +73,16 @@ class DetectInactivity_Class
 				if (numButtons > 16) ;ahk can't seem to handle more than 16 buttons
 					numButtons := 16
 
+				;Binding joystick buttons to hotkeys seems to introduce a serious performance
+				;issue if an XInput device is present but turned off.  So this code has been deprecated
+				;in favor of poking the inactivity timer in the XInput handler when buttons are pressed.
+				
+				;make all controller button presses call _joy_button_action
 				Loop numButtons
 				{
-					HotKey "*~" . A_Index . "Joy" . id, ObjBindMethod(this, "_joy_button_action")
+					HotKey "*~" . id . "Joy" . A_Index, ObjBindMethod(this, "_joy_button_action")
 				}
+				
 			}
 		}
 		
@@ -70,9 +90,64 @@ class DetectInactivity_Class
 		
 		this._last_idle_time := A_TimeIdlePhysical 
 		fInactivityTest := this._fInactivityTest
+
+		;call _inactivity_test() once a second
 		SetTimer fInactivityTest, cInactivityTest_Period ;1000 ms	
 		
 		return
+	}
+
+	;Obtain joystick state
+	;Possible states are "r", "l", "u", "d"
+	;Note that this function is used for navigation control, not inactivity detection.
+	GetJoyState()
+	{
+		static sLastReturnedValue := "", nSlowCount := 0, nLastTickCount := A_TickCount
+		static nPauseDelay := 300
+
+    	mJoyX := Map()
+		mJoyY := Map()
+
+		static horiz := gCfg.joy_horiz == "all" ? 1 : 0
+    	static vert := gCfg.joy_vert == "all" ? 1 : 0
+
+		mJoylist := this._joylist
+
+		for n, mState in mJoylist
+		{
+			id := mState["id"]
+
+			mJoyX[id] := GetKeyState(id "JoyX")
+			mJoyY[id] := GetKeyState(id "JoyY")
+
+			;OutputDebug "id: " id " oldX: " Round(mState["X"]) " newX: " Round(mJoyX[id]) " oldY: " Round(mState["Y"]) " newY: " Round(mJoyY[id]) " deltaX: " Round(mJoyX[id] - mState["X"]) " deltaY: " Round(mJoyY[id] - mState["Y"]) "`n"
+
+			Try 
+			{
+				if (mJoyX[id] - mState["X"] > 20 && horiz)
+				{
+					;LogEntry("Joy: r " id ", deflection: " mJoyX[id] "`n")
+					return "r"
+				}
+				if (mJoyX[id] - mState["X"] < -20 && horiz)
+				{
+					;LogEntry("Joy: l " id ", deflection: " mJoyX[id] "`n")
+					return "l"
+				}
+				if (mJoyY[id] - mState["Y"] > 20 && vert)
+				{
+					;LogEntry("Joy: d " id ", deflection: " mJoyY[id] "`n")
+					return "d"
+				}
+				if (mJoyY[id] - mState["Y"] < -20 && vert)
+				{
+					;LogEntry("Joy: u " id ", deflection: " mJoyY[id] "`n")
+					return "u"
+				}
+			}
+		}
+
+		return ""
 	}
 
 	Resume()
@@ -89,10 +164,12 @@ class DetectInactivity_Class
 		return
 	}
 
-	;A method to "poke" the object to simulate an activty
+	;A method to "poke" the object to simulate an interruping activty
+	;and reset the idle timer.
 	;Used by the Schedule class
 	Poke()
 	{
+		;OutputDebug "Poke Internal`n"
 		this._last_idle_time := A_TimeIdlePhysical
 	}
 
@@ -116,43 +193,11 @@ class DetectInactivity_Class
 		return
 	}
 
+	;Calling this has the effect of forcing the "inactivity action",
+	;which is normally switching to the next game in the attract playlist
 	ForceAction()
 	{
 		this._force_action := true
-	}
-
-	;Obtain joystick state
-	;Possible states are "r", "l", "u", "d"
-	GetJoyState()
-	{
-		mJoyX := Map()
-		mJoyY := Map()
-
-		static horiz := gCfg.joy_horiz == "all" ? 1 : 0
-    	static vert := gCfg.joy_vert == "all" ? 1 : 0
-
-		mJoylist := this._joylist
-
-		for n, mState in mJoylist
-		{
-			id := mState["id"]
-
-			mJoyX[id] := GetKeyState(id "JoyX")
-			mJoyY[id] := GetKeyState(id "JoyY")
-
-			;OutputDebug "oldX: " Round(mState["X"]) " newX: " Round(mJoyX[id]) " oldY: " Round(mState["Y"]) " newY: " Round(mJoyY[id]) " deltaX: " Round(mJoyX[id] - mState["X"]) " deltaY: " Round(mJoyY[id] - mState["Y"]) "`n"
-
-			if (mJoyX[id] - mState["X"] > 20 && horiz)
-				return "r"
-			if (mJoyX[id] - mState["X"] < -20 && horiz)
-				return "l"
-			if (mJoyY[id] - mState["Y"] > 20 && vert)
-				return "d"
-			if (mJoyY[id] - mState["Y"] < -20 && vert)
-				return "u"
-		}
-
-		return
 	}
 	
 	_inactivity_test(theHotkey:="")
@@ -170,6 +215,9 @@ class DetectInactivity_Class
 		{
 			this._last_idle_time := A_TimeIdlePhysical
 
+			;oVoice.Speak("action")
+			;OutputDebug "Action`n"
+
 			;used to monitor activity by external frequency monitor
 			this._action_count++ 
 
@@ -185,12 +233,19 @@ class DetectInactivity_Class
 		
 		for n, mState in mJoylist
 		{
-			id := mState["id"]
+			bJoystickMoved := false
 
-			x := mJoyX[id] := GetKeyState(id "JoyX")
-			y := mJoyY[id] := GetKeyState(id "JoyY")
+			;Try statement avoids crash if a joystick gets detached
+			Try {
+				id := mState["id"]
+
+				x := mJoyX[id] := GetKeyState(id "JoyX")
+				y := mJoyY[id] := GetKeyState(id "JoyY")
+
+				bJoystickMoved := ((Abs(mJoyX[id] - mState["X"]) > 20) || Abs(mJoyY[id] - mState["Y"]) > 20)
+			}
 		
-			if ((Abs(mJoyX[id] - mState["X"]) > 20) || Abs(mJoyY[id] - mState["Y"]) > 20)
+			if (bJoystickMoved)
 			{
 				this._action_count++
 				this._last_idle_time := A_TimeIdlePhysical

@@ -19,10 +19,9 @@ ReadConfig()
     gCfg.seed_rom := IniRead(config_file, "General", "seed_rom", "mame galaga.zip")
     gCfg.alpha_effect := Integer(IniRead(config_file, "General", "alpha_effect", 1))
     gCfg.hotstring_prefix := IniRead(config_file, "General", "hotstring_prefix", "@!@")
-    gCfg.sound_device := IniRead(config_file, "General", "sound_device", "1") ;use of "1" is intentional as it is the internal value of "Default"
     gCfg.sync_volume := Integer(IniRead(config_file, "General", "sync_volume", 0))
-    gCfg.highscore_screenshots := Integer(IniRead(config_file, "General", "highscore_screenshots", 1))
 
+    gCfg.sound_device := IniRead(config_file, "General", "sound_device", "1") ;use of "1" is intentional as it is the internal value of "Default"
     if (gCfg.sound_device = "Default") 
         gCfg.sound_device := "1" ;use "1" as the internal value for "Default" since this was its legacy value.
     
@@ -55,6 +54,17 @@ ReadConfig()
     ;[Key_Map]
     ;All [Key_Map] values now get read in bulk immediately after each Vector: since
     ;values can change depending on the system that is running.
+
+    ;[XInput]
+    gCfg.use_xinput := Integer(IniRead(config_file, "XInput", "use_xinput", 1))
+    gCfg.invert_page_buttons := Integer(IniRead(config_file, "XInput", "invert_page_buttons", 0))
+    gCfg.start_a := IniRead(config_file, "XInput", "start_a", "menu")
+    gCfg.start_b := IniRead(config_file, "XInput", "start_b", "pause")
+    gCfg.start_x := IniRead(config_file, "XInput", "start_x", "scorecard")
+
+    ;[Scorecard]
+    gCfg.take_screenshots := Integer(IniRead(config_file, "Scorecard", "take_screenshots", 1))
+    gCfg.use_watermark := Integer(IniRead(config_file, "Scorecard", "use_watermark", 1))
    
     ;[Picker_Preferences]
     gCfg.magic_delay := Integer(IniRead(config_file, "Picker_Preferences", "magic_delay", 2000)) ;can be overridden in [Front_End] section
@@ -99,6 +109,11 @@ ReadConfig()
     gCfg.marquee_folder := IniRead(config_file, "GlobalAssets", "marquee_folder", ".\Assets\[global_asset_name]\Marquee\Rom")
     gCfg.system_marquee := IniRead(config_file, "GlobalAssets", "system_marquee", ".\Assets\[global_asset_name]\Marquee\System\[global_asset_name].png")
    
+    ;[Integration]
+    gCfg.import_favorites := Integer(IniRead(config_file, "Integration", "import_favorites", 0))
+    gCfg.import_user_ratings := Integer(IniRead(config_file, "Integration", "import_user_ratings", 0))
+    gCfg.import_community_ratings := Integer(IniRead(config_file, "Integration", "import_community_ratings", 0))
+
     ;These are read dynamically in emulators_class
     gCfg.controls_folder := IniRead(config_file, "GlobalAssets", "controls_folder", ".\Assets\[global_asset_name]\Controls\Rom")
     gCfg.system_controls := IniRead(config_file, "GlobalAssets", "system_controls", ".\Assets\[global_asset_name]\Controls\System\[global_asset_name].png")
@@ -146,9 +161,7 @@ ProcessIni()
 {
     global ;gCfg, fe_pid, bSearchGlobal
 
-    local emu_sys_key, romValue, debugValid
-    local default_logo_folder, default_system_logo
-    local asset, aLine, key
+    local romValue, debugValid
     local fe_exe_name, fe_sections, config_section
     local romFile, romFolder, romExt, romName
     

@@ -20,11 +20,13 @@ SelectControlTimer()
 
         oDetectInactivity.Suspend()
         ;this must only execute once
-        oSelectListControl := select_list_control_class(gCfg.lst_max_rows, gCfg.lst_max_rowsb, gCfg.lst_font_type, 
+        oSelectListControl := game_select_control_class(gCfg.lst_max_rows, gCfg.lst_max_rowsb, gCfg.lst_font_type, 
                                                         gCfg.lst_font_size, gCfg.lst_game_font_size, gCfg.lst_sys_font_size, 
                                                         gCfg.lst_list_margin) 
         oSelectListControl.AddEmulatorItems()
         g_abort_now := oSelectListControl.AbortThread
+        if (g_abort_now)
+            LogEntry("INFO: Aborting. arcadeEIP disconnected from emulator process likely due to manual closure or interference by another process.`n")
 
         oDetectInactivity.Resume()
     }
@@ -124,24 +126,45 @@ RunWaitTimer()
         bHotkeysOn := false
     }
 
-    ;if user clicks on screen while select screen is shown
-    ;then return focus to the emulator
-    ;Also handle the joystick in here
+    ;Do all polling-based controller handling here. This includes conventional joystick and
+    ;XInput joysticks and buttons (all other button input is handled by hotkey binding methods
+    ;found elsewhere). Note that because we are polling, the speed we can move through menus 
+    ;and/or process XInput buttons is tied directly to the frequency of the RunWaitTimer.
     if (bEmuRunning)
     {
-        if (g_guihighscore)
+        sJoyState := ""
+
+        if (g_guiscorecard) ;handle joystick in the high score dialog
         {
-            HighScoreDialog.HighScoreNavigate(oDetectInactivity.GetJoyState())
+            sJoyState := Process_XInput(true) ;see if an XInput stick has been moved.
+
+            if (sJoyState == "")  ;if no result from XInput, then poll conventional joysticks
+                sJoyState := oDetectInactivity.GetJoyState()
+
+            ScorecardDialog.HighScoreNavigate(sJoyState)
         }
-        else if (g_guiselect_visible)
+        else if (g_guiselect_visible && g_guiselect_loaded) ;handle joystick in the game selection screen
         {
-            ;Move scroll list if any of the joysticks moved
-            ScrollList(oDetectInactivity.GetJoyState())
+            sJoyState := Process_XInput(true) ;see if an XInput stick has been moved.
+            
+            if (sJoyState == "") ;if no result from XInput, then poll conventional joysticks
+                sJoyState := oDetectInactivity.GetJoyState()
+
+            ScrollList(sJoyState)
         }        
-        else if (g_pause_state && !g_guiselect_visible)
+        else if (g_pause_state && !g_guiselect_visible) ;handle joytick in the pause screen
         {
-            PauseScroll(oDetectInactivity.GetJoyState())
+            sJoyState := Process_XInput(true) ;see if an XInput stick has been moved.
+
+            if (sJoyState == "") ;if no result from XInput, then poll conventional joysticks
+                sJoyState := oDetectInactivity.GetJoyState()
+
+            PauseScroll(sJoyState)
         }
+
+        ;Handle non-joystick input (buttons & triggers) from XInput controllers
+        ;(non-XInput button input is handled elsewhere by hotkey bindings)
+        Process_XInput(false)
     }    
 
     ;Do volume sync if feature is turned on and an alternate sound device
@@ -574,37 +597,7 @@ PauseKeyStrobe()
         {
             if (!g_pause_state)
             {
-                ;toggle the game lock state
-                g_lockedState := g_lockedState == 0 ? g_lockedState := 1 : g_lockedState := 0
-
-                guiAlpha.Opt("+AlwaysOnTop")
-
-                if (g_lockedState)
-                {
-                    oDetectInactivity.Suspend() ;turn off the timer
-                    stateText := "Game locked"
-                }
-                else
-                {
-                    oDetectInactivity.Resume() ;turn the timer back on
-                    stateText := "Game Unlocked"
-                }
-
-                ;Display the overlay text
-                gGui.guiAlpha_PauseLabel.Text := stateText
-                gGui.guiAlpha_PauseLabel.Visible := true
-                
-                WinSetTransparent "255", "ahk_id " . guiAlpha.Hwnd 
-                WinSetTransparent 0, "ahk_id " . gGui.guiAlpha_Overlay.Hwnd
-                WinSetTransColor "Black", "ahk_id " . guiAlpha.Hwnd
-
-                Sleep(0) ;without this, the voice will speak before the "Locked" label is displayed            
-
-                oVoice.Speak(stateText, 1, 0)
-
-                Sleep(1000)
-                gGui.guiAlpha_PauseLabel.Visible := false
-                guiAlpha.Opt("-AlwaysOnTop")       
+                LockGame()
             }     
             
             pauseKeyState := 1 ;key is still down, so don't re-enter
@@ -692,4 +685,26 @@ CreatePausePage()
         SoundBeep 1000
 
     return
+}
+
+;A haptic bump effect for the select screen
+SelectBump()
+{
+    if (!g_guiselect_visible || !g_guiselect_loaded)
+        return
+    
+    Try XInput_SetState(nLastXInputDevice, 30000, 500)
+    Sleep(150)
+    Try XInput_SetState(nLastXInputDevice, 0, 0)
+}
+
+;A haptic bump effect for the highscore screen
+HighscoreBump()
+{
+    if (!g_guiscorecard)
+        return
+    
+    Try XInput_SetState(nLastXInputDevice, 30000, 500)
+    Sleep(150)
+    Try XInput_SetState(nLastXInputDevice, 0, 0)
 }

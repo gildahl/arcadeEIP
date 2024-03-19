@@ -2270,6 +2270,7 @@ Gdip_TextToGraphics(pGraphics, Text, Options, Font:="Arial", Width:="", Height:=
 	RegExMatch(Options, pattern_opts "R(\d)", &Rendering:="")
 	RegExMatch(Options, pattern_opts "S(\d+)(p*)", &Size:="")
 
+	PassBrush := ""
 	if Colour && IsInteger(Colour[2]) && !Gdip_DeleteBrush(Gdip_CloneBrush(Colour[2])) {
 		PassBrush := 1, pBrush := Colour[2]
 	}

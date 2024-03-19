@@ -12,6 +12,9 @@ standalone mode or when integrated with another front-end like BigBox or GameEx.
 This guide assumes you know how to program an Elgato Stream Deck profile and just provides 
 guidance on a few things that are specific to arcadeEIP when using it with the Stream Deck. 
 
+Some graphics files are provided in the \Resources\Extra\Stream Deck folder that may be useful
+as examples when creating your own profiles.
+
 Prerequisties
 ==========================================================================================
 * Successfully complete the MAME Quick Start guide (or otherwise already up-and-running).

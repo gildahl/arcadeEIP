@@ -10,7 +10,7 @@
 
 ;Compiler directives
 ;***********************************************************
-global CodeVersion := "0.4.1.0"
+global CodeVersion := "0.4.2.0"
 ;@Ahk2Exe-Let version = %A_PriorLine~U)^(.+"){1}(.+)".*$~$2%
 ;@Ahk2Exe-SetCopyright (c) 2024 David G. Dahlstrom
 ;@Ahk2Exe-SetProductName arcadeEIP Marquee Manager

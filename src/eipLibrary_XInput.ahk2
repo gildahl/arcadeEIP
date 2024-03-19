@@ -1,0 +1,557 @@
+/************************************************************************
+ * @description 
+ * @file eipLibrary_XInput.ahk2
+ * @author arcadeEIP code © 2024 David G. Dahlstrom
+ * @date 2024/03/08
+ * @version 0.4.2.0
+ ***********************************************************************/
+
+/* **************************************************************************************** 
+   arcadeEIP Code 
+***************************************************************************************** */   
+
+/**
+ * Poll all XInput controllers. Does not distingush among controllers. Note that button/trigger/etc.
+ * input is handled in this function, but joystick state is merely passed back to the caller.
+ * @param {boolean} bGetJoyState If true, poll for all input including joystick. If false, ignore joystick state.
+ * @returns {string|void} Returns "" unless the joystick has moved.  If bGetJoyState is true, 
+ * will return 'r', 'l', 'u' or 'd' if the joystick has moved. If bGetJoyState is false, joystick postion
+ * is not checked. 
+ */
+Process_XInput(bGetJoyState:=true)
+{
+    static bGetStateError := false
+    static dwLastPacket := 0, nRepeatSpeed := 50, nTriggerThreshold := 240, nJoyThreshold := 30000
+    static nLastRepeatPacket := 0, nStallDelay := 500, nMinimumPushTime := 200
+    global nLastXInputDevice 
+
+    if (!gCfg.use_xinput)
+        return ""
+
+    Loop 4 
+    {
+        ;https://learn.microsoft.com/en-us/windows/win32/api/xinput/ns-xinput-xinput_gamepad
+        ;Joystick range: -32768 and 32767 (6553 is 20%)
+        ;Trigger range: 0 to 255
+        
+        Try 
+        {
+            xstate := XInput_GetState(A_Index-1)
+        } 
+        Catch as e
+        {
+            if (!bGetStateError)
+            {
+                LogEntry("ERROR: Could not get XInput state for device " A_Index-1 ". Message: " FormatErrorMessage(e) "`n")
+                bGetStateError := true
+            }
+            else
+                return
+        }
+
+        sMappedAction := ""
+        
+        if xstate
+        {
+            dwThisPacket := xstate.dwPacketNumber
+            wThisButtons := xstate.wButtons
+
+            if (dwThisPacket == dwLastPacket)
+                return
+
+            dwLastPacket := dwThisPacket
+
+            nLastXInputDevice := A_Index-1
+
+            ;Pass joystick state back to the joystick poller in the RunWaitTimer
+            ;Only do this if joystick status is needed (i.e. bGetJoyState==true)
+            ;Note that unlike button/trigger/etc. input, joystick state is just passed
+            ;back to the caller and not actually handled.
+            if (bGetJoyState)
+            {
+                ;Handle joysticks
+                if (xstate.sThumbLX < -nJoyThreshold)
+                {
+                    oDetectInactivity.Poke()  ;reset inactivity timer
+                    dwLastPacket := 0 ;allow repeat
+                    Sleep(0)
+                    return "l"
+                }
+                if (xstate.sThumbLX > nJoyThreshold)
+                {
+                    oDetectInactivity.Poke()
+                    dwLastPacket := 0
+                    Sleep(0)
+                    return "r"
+                }
+                if (xstate.sThumbLY < -nJoyThreshold)
+                {
+                    oDetectInactivity.Poke()
+                    dwLastPacket := 0
+                    Sleep(0)
+                    return "d"
+                }
+                if (xstate.sThumbLY > nJoyThreshold)
+                {
+                    oDetectInactivity.Poke()
+                    Sleep(0)
+                    dwLastPacket := 0
+                    return "u"
+                }
+            }
+
+            ;Scroll to END of list when both triggers are held in.
+            if (xstate.bLeftTrigger > 240 && xstate.bRightTrigger > nTriggerThreshold)
+            {
+                oDetectInactivity.Poke() ;reset the inactivty timer
+
+                Sleep(nRepeatSpeed)
+                if(xstate.bLeftTrigger > nTriggerThreshold &&  xstate.bRightTrigger > nTriggerThreshold)
+                    fEnd
+
+                dwLastPacket := 0 ;resetting dwLastPacket enables repeat on button hold
+                break
+            }
+
+            ;Scroll to next/previous sort group
+            if (xstate.bLeftTrigger > nTriggerThreshold)
+            {
+                oDetectInactivity.Poke()  ;reset the inactivty timer
+            
+                ;Sleep(nRepeatSpeed)
+                if (xstate.bLeftTrigger > nTriggerThreshold)
+                    if (gCfg.invert_page_buttons)
+                        fSortGroupDown 
+                    else
+                        fSortGroupUp
+
+                if (dwLastPacket != nLastRepeatPacket)
+                {
+                    nLastRepeatPacket := dwLastPacket
+                    Sleep(nStallDelay)
+                }
+
+                dwLastPacket := 0
+                break
+            }            
+          
+            ;Scroll to next/previous sort group
+            if (xstate.bRightTrigger > nTriggerThreshold)
+            {
+                oDetectInactivity.Poke()
+
+                ;Sleep(nRepeatSpeed)
+                if (xstate.bRightTrigger > nTriggerThreshold)
+                    if (gCfg.invert_page_buttons)
+                        fSortGroupUp
+                    else
+                        fSortGroupDown
+
+                if (dwLastPacket != nLastRepeatPacket)
+                {
+                    nLastRepeatPacket := dwLastPacket
+                    Sleep(nStallDelay)
+                }
+
+                dwLastPacket := 0
+                break
+            }
+
+            ;Handle button presses
+            if (wThisButtons)
+            {
+                ;reset the inactivty timer
+                ;technically, redundant with _joy_button_action which should also reset with
+                ;button presses (even for XInput devices), but will keep here for now.
+                oDetectInactivity.Poke()
+
+                Switch wThisButtons 
+                {
+                    ;Single A or Bbutton presses
+                    Case XINPUT_GAMEPAD_A: ;menu select
+                        Sleep(nMinimumPushTime) ;reduce conflict with button combos
+                        if (xstate.wButtons == XINPUT_GAMEPAD_A)
+                            ;if (g_guiselect_visible && g_guiselect_loaded)
+                                fScrollSelect
+                        break
+                    Case XINPUT_GAMEPAD_B: ;menu toggle picks
+                        Sleep(nMinimumPushTime) ;reduce conflict with button combos
+                        if (xstate.wButtons == XINPUT_GAMEPAD_B)
+                            ;if (g_guiselect_visible && g_guiselect_loaded)
+                                fPicks
+                        break  
+                    
+                    ;Combo START + A, B, or X presses
+                    Case XINPUT_GAMEPAD_START_A: ;Start+A button function
+                        Sleep(nMinimumPushTime) ;reduce conflict with single button press
+                        if (xstate.wButtons == XINPUT_GAMEPAD_START_A)
+                            sMappedAction := gCfg.start_a
+                        break
+                    Case XINPUT_GAMEPAD_START_B: ;Start+B button function
+                        Sleep(nMinimumPushTime) ;reduce conflict with single button press
+                        if (xstate.wButtons == XINPUT_GAMEPAD_START_B)
+                            sMappedAction := gCfg.start_b
+                        break
+                    Case XINPUT_GAMEPAD_START_X: ;Start+X button function
+                        Sleep(nMinimumPushTime) ;reduce conflict with single button press
+                        if (xstate.wButtons == XINPUT_GAMEPAD_START_X)
+                            sMappedAction := gCfg.start_x 
+                        break
+                              
+                    ;Handle DPad input
+                    Case XINPUT_GAMEPAD_DPAD_UP, XINPUT_GAMEPAD_DPAD_DOWN, XINPUT_GAMEPAD_DPAD_LEFT, XINPUT_GAMEPAD_DPAD_RIGHT:
+                        Switch wThisButtons
+                        {
+                            Case XINPUT_GAMEPAD_DPAD_UP: fScrollUp
+                            Case XINPUT_GAMEPAD_DPAD_DOWN: fScrollDown
+                            Case XINPUT_GAMEPAD_DPAD_LEFT: fScrollLeft
+                            Case XINPUT_GAMEPAD_DPAD_RIGHT: fScrollRight
+                        }
+
+                        ;stall on next value before repeating to make discrete selection easier
+                        if (dwLastPacket != nLastRepeatPacket)
+                        {
+                            nLastRepeatPacket := dwLastPacket
+                            Sleep(nStallDelay)
+                        }
+                        
+                        dwLastPacket := 0 ;make button repeat while held
+                        break
+
+                    Case XINPUT_GAMEPAD_LS_RS: ;Scroll to beginning of menu (HOME) with Right+Left shoulder buttons 
+                        Sleep(nMinimumPushTime) ;reduce conflict with single button presses
+                        if (xstate.wButtons == XINPUT_GAMEPAD_LS_RS)
+                            fHome
+                        break
+
+                    ;Page Up/Down
+                    Case XINPUT_GAMEPAD_LEFT_SHOULDER: 
+                        if (gCfg.invert_page_buttons)
+                            fPageDown
+                        else
+                            fPageUp
+
+                        if (dwLastPacket != nLastRepeatPacket)
+                        {
+                            nLastRepeatPacket := dwLastPacket
+                            Sleep(nStallDelay)
+                        }
+                        
+                        dwLastPacket := 0
+                        break
+
+                    ;Page Down/Up
+                    Case XINPUT_GAMEPAD_RIGHT_SHOULDER: 
+                        if (gCfg.invert_page_buttons)
+                            fPageUp
+                        else
+                            fPageDown
+                        
+                        if (dwLastPacket != nLastRepeatPacket)
+                        {
+                            nLastRepeatPacket := dwLastPacket
+                            Sleep(nStallDelay)
+                        }
+                        
+                        dwLastPacket := 0
+                        break
+                }                 
+            }
+        }				
+    }
+
+    ;Do the mapped action
+    Switch sMappedAction 
+    {
+        case "menu":
+            fMenuToggle
+        case "pause":
+            PauseKey("")
+            Sleep 100
+            PauseKey("Up")
+        case "scorecard":
+            if (!g_guiselect_visible && !g_pause_state)
+                ScorecardDialog.Scorecard()
+        Default:
+            if (sMappedAction != "")
+                LogEntry("ERROR: Function `"" sMappedAction "`" is not defined. Check [XInput] section of arcadeEIP.ini to ensure values are valid.`n")
+    }
+
+    Sleep(0)
+    return ""
+}
+
+/*
+case "lock_game":
+    if (!g_guiselect_visible && !g_pause_state && !g_guiscorecard)
+        LockGame()
+
+;To send a keystroke to mame use this form (not used for now)
+Send "{1 down}"
+Sleep 100
+Send "{1 up}"
+*/
+
+/*  XInput Code by Lexikos
+    See: https://www.autohotkey.com/boards/viewtopic.php?f=83&t=106254
+    See: https://docs.microsoft.com/en-us/windows/win32/api/xinput/ns-xinput-xinput_state
+    See: https://docs.microsoft.com/en-au/windows/win32/api/xinput/ns-xinput-xinput_capabilities
+ */
+
+#Requires AutoHotkey v2.0
+
+/*
+    Function: XInput_Init
+    
+    Initializes XInput.ahk with the given XInput DLL.
+    
+    Parameters:
+        dll     -   The path or name of the XInput DLL to load.
+*/
+XInput_Init(dll:="")
+{
+    global
+    if _XInput_hm ?? 0
+        return
+    
+    ;======== CONSTANTS DEFINED IN XINPUT.H ========
+    
+    ; Device types available in XINPUT_CAPABILITIES
+    XINPUT_DEVTYPE_GAMEPAD          := 0x01
+
+    ; Device subtypes available in XINPUT_CAPABILITIES
+    XINPUT_DEVSUBTYPE_UNKNOWN          := 0x00
+    XINPUT_DEVSUBTYPE_GAMEPAD          := 0x01
+    XINPUT_DEVSUBTYPE_WHEEL            := 0x02
+    XINPUT_DEVSUBTYPE_ARCADE_STICK     := 0x03
+    XINPUT_DEVSUBTYPE_FLIGHT_STICK     := 0x04
+    XINPUT_DEVSUBTYPE_DANCE_PAD        := 0x05
+    XINPUT_DEVSUBTYPE_GUITAR           := 0x06
+    XINPUT_DEVSUBTYPE_GUITAR_ALTERNATE := 0x07
+    XINPUT_DEVSUBTYPE_DRUM_KIT         := 0x08
+    XINPUT_DEVSUBTYPE_GUITAR_BASS      := 0x0B
+    XINPUT_DEVSUBTYPE_ARCADE_PAD       := 0x13
+
+   mXInputSubtype := Map(XINPUT_DEVSUBTYPE_UNKNOWN, "Unknown", XINPUT_DEVSUBTYPE_GAMEPAD, "Gamepad",
+                       XINPUT_DEVSUBTYPE_WHEEL, "Wheel", XINPUT_DEVSUBTYPE_ARCADE_STICK, "Arcade Stick",
+                       XINPUT_DEVSUBTYPE_FLIGHT_STICK, "Flight Stick", XINPUT_DEVSUBTYPE_DANCE_PAD, "Dance Pad",
+                       XINPUT_DEVSUBTYPE_GUITAR, "Guitar", XINPUT_DEVSUBTYPE_GUITAR_ALTERNATE, "Guitar Alternate",
+                       XINPUT_DEVSUBTYPE_DRUM_KIT, "Drum Kit", XINPUT_DEVSUBTYPE_GUITAR_BASS, "Guitar Bass",
+                       XINPUT_DEVSUBTYPE_ARCADE_PAD, "Arcade Pad")
+
+    ; Flags for XINPUT_CAPABILITIES
+    XINPUT_CAPS_VOICE_SUPPORTED     := 0x0004
+
+    ; Constants for gamepad buttons
+    XINPUT_GAMEPAD_DPAD_UP          := 0x0001
+    XINPUT_GAMEPAD_DPAD_DOWN        := 0x0002
+    XINPUT_GAMEPAD_DPAD_LEFT        := 0x0004
+    XINPUT_GAMEPAD_DPAD_RIGHT       := 0x0008
+    XINPUT_GAMEPAD_START            := 0x0010
+    XINPUT_GAMEPAD_BACK             := 0x0020
+    XINPUT_GAMEPAD_LEFT_THUMB       := 0x0040
+    XINPUT_GAMEPAD_RIGHT_THUMB      := 0x0080
+    XINPUT_GAMEPAD_LEFT_SHOULDER    := 0x0100
+    XINPUT_GAMEPAD_RIGHT_SHOULDER   := 0x0200
+    XINPUT_GAMEPAD_GUIDE            := 0x0400
+    XINPUT_GAMEPAD_A                := 0x1000
+    XINPUT_GAMEPAD_B                := 0x2000
+    XINPUT_GAMEPAD_X                := 0x4000
+    XINPUT_GAMEPAD_Y                := 0x8000
+
+    XINPUT_GAMEPAD_BACK_START       := 0x0030
+    XINPUT_GAMEPAD_BACK_A           := 0x1020
+    XINPUT_GAMEPAD_BACK_B           := 0x2020
+    XINPUT_GAMEPAD_BACK_X           := 0x4020
+    XINPUT_GAMEPAD_BACK_Y           := 0x8020
+
+    XINPUT_GAMEPAD_START_A          := 0x1010
+    XINPUT_GAMEPAD_START_B          := 0x2010
+    XINPUT_GAMEPAD_START_X          := 0x4010
+    XINPUT_GAMEPAD_START_Y          := 0x8010
+    
+    XINPUT_GAMEPAD_LTHUMB_RTHUMB    := 0x00C0
+    XINPUT_GAMEPAD_LTHUMB_A         := 0x1040
+    XINPUT_GAMEPAD_LTHUMB_B         := 0x2040
+    XINPUT_GAMEPAD_LTHUMB_X         := 0x4040
+    XINPUT_GAMEPAD_LTHUMB_Y         := 0x8040
+
+    XINPUT_GAMEPAD_LS_RS            := 0x0300
+
+
+    ; Gamepad thresholds
+    XINPUT_GAMEPAD_LEFT_THUMB_DEADZONE  := 7849
+    XINPUT_GAMEPAD_RIGHT_THUMB_DEADZONE := 8689
+    XINPUT_GAMEPAD_TRIGGER_THRESHOLD    := 30
+
+    ; Flags to pass to XInputGetCapabilities
+    XINPUT_FLAG_GAMEPAD             := 0x00000001
+    
+    ;=============== END CONSTANTS =================
+    
+    if (dll = "")
+        Loop Files A_WinDir "\System32\XInput1_*.dll"
+            dll := A_LoopFileName
+    if (dll = "")
+        dll := "XInput1_3.dll"
+    
+    _XInput_hm := DllCall("LoadLibrary" ,"str",dll ,"ptr")
+    
+    if !_XInput_hm
+        throw Error("Failed to initialize XInput: " dll " not found.")
+    
+   (_XInput_GetState        := DllCall("GetProcAddress" ,"ptr",_XInput_hm ,"ptr",100 ,"ptr"))
+|| (_XInput_GetState        := DllCall("GetProcAddress" ,"ptr",_XInput_hm ,"astr","XInputGetState" ,"ptr"))
+    _XInput_SetState        := DllCall("GetProcAddress" ,"ptr",_XInput_hm ,"astr","XInputSetState" ,"ptr")
+    _XInput_GetCapabilities := DllCall("GetProcAddress" ,"ptr",_XInput_hm ,"astr","XInputGetCapabilities" ,"ptr")
+    
+    if !(_XInput_GetState && _XInput_SetState && _XInput_GetCapabilities) {
+        XInput_Term()
+        throw Error("Failed to initialize XInput: function not found.")
+    }
+}
+
+/*
+    Function: XInput_GetState
+    
+    Retrieves the current state of the specified controller.
+
+    Parameters:
+        UserIndex   -   [in] Index of the user's controller. Can be a value from 0 to 3.
+    
+    Returns:
+        An object with with properties equivalent to merging XINPUT_STATE and XINPUT_GAMEPAD.
+        https://docs.microsoft.com/en-us/windows/win32/api/xinput/ns-xinput-xinput_state
+    
+    Error handling:
+        Returns false if the controller is disconnected.
+        Throws an OSError for other errors.
+*/
+XInput_GetState(UserIndex)
+{
+    global _XInput_GetState
+    
+    xiState := Buffer(16)
+
+    if err := DllCall(_XInput_GetState ,"uint",UserIndex ,"ptr",xiState) {
+        if err = 1167 ; ERROR_DEVICE_NOT_CONNECTED
+            return 0
+        throw OSError(err, -1)
+    }
+    
+    return {
+        dwPacketNumber: NumGet(xiState,  0, "UInt"),
+        wButtons:       NumGet(xiState,  4, "UShort"),
+        bLeftTrigger:   NumGet(xiState,  6, "UChar"),
+        bRightTrigger:  NumGet(xiState,  7, "UChar"),
+        sThumbLX:       NumGet(xiState,  8, "Short"),
+        sThumbLY:       NumGet(xiState, 10, "Short"),
+        sThumbRX:       NumGet(xiState, 12, "Short"),
+        sThumbRY:       NumGet(xiState, 14, "Short"),
+    }
+}
+
+/*
+    Function: XInput_SetState
+    
+    Sends data to a connected controller. This function is used to activate the vibration
+    function of a controller.
+    
+    Parameters:
+        UserIndex       -   [in] Index of the user's controller. Can be a value from 0 to 3.
+        LeftMotorSpeed  -   [in] Speed of the left motor, between 0 and 65535.
+        RightMotorSpeed -   [in] Speed of the right motor, between 0 and 65535.
+    
+    Error handling:
+        Throws an OSError on failure, such as if the controller is not connected.
+    
+    Remarks:
+        The left motor is the low-frequency rumble motor. The right motor is the
+        high-frequency rumble motor. The two motors are not the same, and they create
+        different vibration effects.
+*/
+XInput_SetState(UserIndex, LeftMotorSpeed, RightMotorSpeed)
+{
+    global _XInput_SetState
+    if err := DllCall(_XInput_SetState ,"uint",UserIndex ,"uint*",LeftMotorSpeed|RightMotorSpeed<<16)
+        throw OSError(err, -1)
+}
+
+/*
+    Function: XInput_GetCapabilities
+    
+    Retrieves the capabilities and features of a connected controller.
+    
+    Parameters:
+        UserIndex   -   [in] Index of the user's controller. Can be a value in the range 03.
+        Flags       -   [in] Input flags that identify the controller type.
+                                0   - All controllers.
+                                1   - XINPUT_FLAG_GAMEPAD: Xbox 360 Controllers only.
+    
+    Returns:
+        An object with properties equivalent to XINPUT_CAPABILITIES.
+        https://docs.microsoft.com/en-au/windows/win32/api/xinput/ns-xinput-xinput_capabilities
+    
+    Error handling:
+        Returns false if the controller is disconnected.
+        Throws an OSError for other errors.
+*/
+XInput_GetCapabilities(UserIndex, Flags)
+{
+    global _XInput_GetCapabilities
+    
+    xiCaps := Buffer(20)
+    
+    if err := DllCall(_XInput_GetCapabilities ,"uint",UserIndex ,"uint",Flags ,"ptr",xiCaps) {
+        if err = 1167 ; ERROR_DEVICE_NOT_CONNECTED
+            return 0
+        throw OSError(err, -1)
+    }
+    
+    return {
+        Type:                   NumGet(xiCaps,  0, "UChar"),
+        SubType:                NumGet(xiCaps,  1, "UChar"),
+        Flags:                  NumGet(xiCaps,  2, "UShort"),
+        Gamepad: {
+            wButtons:           NumGet(xiCaps,  4, "UShort"),
+            bLeftTrigger:       NumGet(xiCaps,  6, "UChar"),
+            bRightTrigger:      NumGet(xiCaps,  7, "UChar"),
+            sThumbLX:           NumGet(xiCaps,  8, "Short"),
+            sThumbLY:           NumGet(xiCaps, 10, "Short"),
+            sThumbRX:           NumGet(xiCaps, 12, "Short"),
+            sThumbRY:           NumGet(xiCaps, 14, "Short")
+        },
+        Vibration: {
+            wLeftMotorSpeed:    NumGet(xiCaps, 16, "UShort"),
+            wRightMotorSpeed:   NumGet(xiCaps, 18, "UShort")
+        }
+    }
+}
+
+/*
+    Function: XInput_Term
+    Unloads the previously loaded XInput DLL.
+*/
+XInput_Term() {
+    global
+    if _XInput_hm
+        DllCall("FreeLibrary","uint",_XInput_hm), _XInput_hm :=_XInput_GetState :=_XInput_SetState :=_XInput_GetCapabilities :=0
+}
+
+; TODO: XInputEnable, 'GetBatteryInformation and 'GetKeystroke.
+
+/*
+; Example: Control the vibration motors using the analog triggers of each controller.
+#Include <XInput>
+XInput_Init()
+Loop {
+    Loop 4 {
+        if State := XInput_GetState(A_Index-1) {
+            LT := State.bLeftTrigger
+            RT := State.bRightTrigger
+            XInput_SetState(A_Index-1, LT*257, RT*257)
+        }
+    }
+    Sleep 100
+}
+*/

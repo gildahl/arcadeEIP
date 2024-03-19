@@ -4,10 +4,11 @@
 
 class HighScore
 {
-    _formatted_high_score := ""
-    _high_score := 0
-    _high_initials := ""
-    _high_stage := ""
+    static _formatted_high_score := ""
+    static _high_score := 0
+    static _high_initials := ""
+    static _high_stage := ""
+    static _high_datetime := ""
 
     static FormattedHighScore
     {
@@ -27,6 +28,11 @@ class HighScore
     static Stage
     {
         get => this._high_stage
+    }
+
+    static DateTime
+    {
+        get => this._high_datetime
     }
 
     static ClearScore()
@@ -56,9 +62,33 @@ class HighScore
         return ""
     }
 
-    static SetHighScore(hi_score, hi_name:="", hi_stage:="")
+    ;Check if there is a valid high score registered in the highscores file.
+    static IsSavedHighScore()
     {
-        sNewScore := hi_score . "|" . hi_name . "|" hi_stage
+        formatted_hi_score := hi_score := hi_name := hi_stage := ""
+
+        sHighscore := oEmulators.Emulators[gCfg.sys_key].GetRomProperty("highscores", gCfg.rom_file)
+        if (sHighscore)
+        {
+            oScores := StrSplit(sHighscore, "|")
+            if (oScores.Has(1))
+            {
+                if (Trim(oScores[1]) && IsNumber(Trim(oScores[1]))) 
+                {
+                    hi_score := Trim(oScores[1])
+
+                    if (IsNumber(hi_score) && Integer(hi_score) > 0)
+                        return true
+                }               
+            }
+        }
+
+        return false
+    }
+
+    static SetHighScore(hi_score, hi_name:="", hi_stage:="", hi_datetime:=A_Now)
+    {
+        sNewScore := hi_score . "|" . hi_name . "|" hi_stage . "|" . hi_datetime
         oEmulators.Emulators[gCfg.sys_key].SetRomProperty("highscores", gCfg.rom_file, sNewScore)
 
         formatted_hi_score := this.FormatHighScore("High Score", hi_score, hi_name, hi_stage)
@@ -70,6 +100,7 @@ class HighScore
         this._high_score := IsNumber(hi_score) ? Number(hi_score) : -1 ;-1 indicates no valid score recorded
         this._high_initials := hi_name
         this._high_stage := hi_stage
+        this._high_datetime := hi_datetime
 
         return
     }
@@ -77,7 +108,7 @@ class HighScore
     ;This should only be caled by GetHi2TxtScores()
     static GetHighScore()
     {
-        formatted_hi_score := hi_score := hi_name := hi_stage := ""
+        formatted_hi_score := hi_score := hi_name := hi_stage := hi_datetime := ""
 
         ;See if there is a high score registered in the highscores file.
         ;This score will override any scores obtained by hi2txt
@@ -100,14 +131,30 @@ class HighScore
                         if (Trim(oScores[3]))
                             hi_stage := Trim(oScores[3])
 
+                    if (oScores.Has(4))
+                        if (Trim(oScores[4]))
+                            hi_datetime := Trim(oScores[4])
+
                     formatted_hi_score := HighScore.FormatHighScore("High Score", hi_score, hi_name, hi_stage)
 
-                    LogEntry("INFO: Successfully read high score from highscores.ini: " formatted_hi_score "`n")
-
-                    this._formatted_high_score := formatted_hi_score
                     this._high_score := IsNumber(hi_score) ? Number(hi_score) : -1 ;-1 indicates no valid score recorded
-                    this._high_initials := hi_name
-                    this._high_stage := hi_stage
+
+                    if (this._high_score <= 0)
+                    {
+                        ;this._formatted_high_score := ""
+                        ;this._high_initials := ""
+                        ;this._high_stage := ""
+                        return false
+                    }
+                    else
+                    {
+                        this._formatted_high_score := formatted_hi_score
+                        this._high_initials := hi_name
+                        this._high_stage := hi_stage
+                        this._high_datetime := hi_datetime
+
+                        LogEntry("INFO: Successfully read high score from highscores.ini: " formatted_hi_score "`n")
+                    }               
 
                     return true
                 }

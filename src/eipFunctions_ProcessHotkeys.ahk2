@@ -20,8 +20,13 @@ MagicKey(option, theHotkey:="")
     ;BEWARE that the sequence of events in this function are
     ;very delicate.  Test throroughly if changing anything here.
    
-    if (magic_key_off || !bEmuWindowActive || g_guihighscore)
+    if (magic_key_off || !bEmuWindowActive || g_guiscorecard)
     {
+        mk := magic_key_off == true ? "true" : "false"
+        ewa := bEmuWindowActive == true ? "true" : "false"
+        gsc := g_guiscorecard == true ? "true" : "false"
+        LogEntry("DEBUG: Could not display game select menu in MagicKey(). magic_key_off: " mk " bEmuWindowActive: " ewa " g_guiscorecard: " gsc)
+
         oBASS.Play("error")
         return
     }
@@ -61,6 +66,8 @@ MagicKey(option, theHotkey:="")
         }
     
         guiAlpha.Opt("+AlwaysOnTop")
+
+        ;Make game selection screen semi-transparent
         WinSetTransColor "Black 240", "ahk_id " . guiSelect.Hwnd
 
         if (g_pause_state)
@@ -208,7 +215,7 @@ PauseKey(keyState, theHotkey:="")
                 
                 oDetectInactivity.Suspend()
 
-                if (!g_guihighscore)
+                if (!g_guiscorecard)
                 {
                     if (!g_guiselect_visible) ;avoid bringing guiAlpha to the top when guiSelect is displayed.
                         guiAlpha.Opt("+AlwaysOnTop") ;we will need it on top if guiSelect is not displayed
@@ -279,7 +286,7 @@ PauseKey(keyState, theHotkey:="")
         g_pause_state := true
         g_mouse_clicks_off := 1
 
-        if (!g_guihighscore) ;don't show pause images if pausing from within the scorecard dialog
+        if (!g_guiscorecard) ;don't show pause images if pausing from within the scorecard dialog
         {
             if (!g_guiselect_visible && oPauseControl.HasContent())
             {
@@ -288,6 +295,8 @@ PauseKey(keyState, theHotkey:="")
                 oFadeAlphaWindow.Start(100,255,20,16)             
                 ShowControls("guiPause") ;shows pause images, if any, and turns hotkeys on
                 g_guipause_visible := true
+
+                oPauseControl.ShowNavTriangles()
             }
             else if (gCfg.map_pause == "{PauseProc}") ;only called if there are no pause images to show
             {
@@ -301,14 +310,21 @@ PauseKey(keyState, theHotkey:="")
     {
         RunApps(gCfg.asset_name, gCfg.rom_name, gCfg.pause_apps, "-")
 
-        if (!g_guihighscore)
+        if (!g_guiscorecard)
         {
             if (!g_guiselect_visible && oPauseControl.HasContent())
             {      
+                oPauseControl.HideNavTriangles()
                 SoundBeep
                 SoundBeep      
                 HideControls("guiPause") ;hides pause images, if any, and turns hotkeys off 
-                oFadeAlphaWindow.Start(255,0,20,16)
+
+                ;Don't fade if we're returning from a "native" (transparent) pause page.
+                if (oPauseControl.CurrentPageType == "native")
+                    oFadeAlphaWindow.Start(255,0,0,1)
+                else
+                    oFadeAlphaWindow.Start(255,0,20,16)
+
                 WinSetTransparent 255, "ahk_id " . gGui.guiAlpha_Overlay.Hwnd ;0 is transparent, 255 is opaque 
                 g_guipause_visible := false
             }
@@ -498,7 +514,6 @@ DoExitFunction(func, exit_cmd)
     }
     else if (func == "Event")
     {
-
         ;These default values work well for mame
         skd_delay := -1
         skd_duration := 110
@@ -522,7 +537,7 @@ DoExitFunction(func, exit_cmd)
         SetKeyDelay skd_delay, skd_duration 
 
         SendEvent exit_cmd  
-        LogEntry("INFO: Sent {Event} Exit Key Sequence: " . exit_cmd . ".`n")   
+            LogEntry("INFO: Sent {Event} Exit Key Sequence: " . exit_cmd . ".`n")   
 
         SetKeyDelay oldKeyDelay, oldKeyDuration ;restore previous values
 
@@ -552,6 +567,7 @@ HideControls(guiName)
     {
         gGui.guiStart_Label.Visible := false
         gGui.guiStart_Rom.Visible := false
+        gGui.guiStart_RomDesc.Visible := false
         gGui.guiStart_Logo.Visible := false
         gGui.guiStart_LicenseBanner.Visible := false
     }
@@ -644,16 +660,16 @@ AddDirectSwitchHotKeys()
 ScrollList(direction, theHotkey:="")
 {
     ;if the high score entry screen is active
-    if (g_guihighscore)
+    if (g_guiscorecard)
     {
-        ;OutputDebug "Direction: " direction "`n"
+        ;OutputDebug "g_guiscorecard: " g_guiscorecard " direction: " direction "`n"
         Switch direction
         {
             Case "r":  
                 Loop Parse gCfg.left_key, "CSV"
                     Hotkey A_LoopField, "Off"
 
-                try HighScoreDialog.HighScoreNavigate(direction)
+                try ScorecardDialog.HighScoreNavigate(direction)
                 
                 Loop Parse gCfg.left_key, "CSV"
                     Hotkey A_LoopField, "On"
@@ -662,12 +678,16 @@ ScrollList(direction, theHotkey:="")
                 Loop Parse gCfg.right_key, "CSV"
                     Hotkey A_LoopField, "Off"
 
-                try HighScoreDialog.HighScoreNavigate(direction)
+                try ScorecardDialog.HighScoreNavigate(direction)
                 
                 Loop Parse gCfg.right_key, "CSV"
                     Hotkey A_LoopField, "On"
-            Case "s":
-                try HighScoreDialog.HighScoreNavigate(direction)
+            Case "u": 
+                try ScorecardDialog.HighScoreNavigate(direction)
+            Case "d":
+                try ScorecardDialog.HighScoreNavigate(direction)
+            Case "s": ;select
+                try ScorecardDialog.HighScoreNavigate(direction)
         }
 
         return
@@ -713,7 +733,7 @@ ScrollList(direction, theHotkey:="")
 
     Switch direction
     {
-        Case "d","u","home","end","pu","pd","lu","ld":  ;navigation
+        Case "d","u","home","end","pu","pd","sgu","sgd":  ;navigation
             Critical "On"
             try oSelectListControl.ScrollVertical(direction)
             Critical "Off"
@@ -737,7 +757,6 @@ ScrollList(direction, theHotkey:="")
                 Hotkey A_LoopField, "Off"
 
             try oSelectListControl.ScrollHorizontal(direction)
-            try HighScoreDialog.HighScoreNavigate(direction)
             
             Loop Parse gCfg.left_key, "CSV"
                 Hotkey A_LoopField, "On"
@@ -747,7 +766,6 @@ ScrollList(direction, theHotkey:="")
                 Hotkey A_LoopField, "Off"
 
             try oSelectListControl.ScrollHorizontal(direction)
-            try HighScoreDialog.HighScoreNavigate(direction)
             
             Loop Parse gCfg.right_key, "CSV"
                 Hotkey A_LoopField, "On"
@@ -762,6 +780,10 @@ ScrollList(direction, theHotkey:="")
             try oSelectListControl.SublistCommand(direction)
         Case "star5", "star4", "star3", "star2", "star1", "star0", "star":
             try oSelectListControl.SublistCommand(direction)
+        Case "sort":
+            ;DisplayMenuBanner("Sort")
+            ;Sleep(5000)
+            ;HideMenuBanner()
     }
 
     return
@@ -835,13 +857,13 @@ ModifyHotkeys(hk_style)
                 Loop Parse gCfg.pgup_key, "CSV"
                     Hotkey "~" . A_LoopField, fPageUp
 
-            if (gCfg.lcdn_key)
-                Loop Parse gCfg.lcdn_key, "CSV"
-                    Hotkey "~" . A_LoopField, fLeadingCharacterDown
+            if (gCfg.sgdn_key)
+                Loop Parse gCfg.sgdn_key, "CSV"
+                    Hotkey "~" . A_LoopField, fSortGroupDown
 
-            if (gCfg.lcup_key)
-                Loop Parse gCfg.lcup_key, "CSV"
-                    Hotkey "~" . A_LoopField, fLeadingCharacterUp
+            if (gCfg.sgup_key)
+                Loop Parse gCfg.sgup_key, "CSV"
+                    Hotkey "~" . A_LoopField, fSortGroupUp
 
             if (gCfg.home_key)
                 Loop Parse gCfg.home_key, "CSV"
@@ -851,8 +873,8 @@ ModifyHotkeys(hk_style)
                 Loop Parse gCfg.end_key, "CSV"
                     Hotkey "~" . A_LoopField, fEnd
 
-            if (gCfg.list_mode_key)
-                Loop Parse gCfg.list_mode_key, "CSV"
+            if (gCfg.list_view_key)
+                Loop Parse gCfg.list_view_key, "CSV"
                     Hotkey "~" . A_LoopField, fPicks
 
             if (gCfg.edit_mode_key)
@@ -890,6 +912,10 @@ ModifyHotkeys(hk_style)
             if (gCfg.favorite_key)
                 Loop Parse gCfg.favorite_key, "CSV"
                     Hotkey "~" . A_LoopField, fMark
+
+            if (gCfg.sort_key)
+                Loop Parse gCfg.sort_key, "CSV"
+                    Hotkey "~" . A_LoopField, fSort
 
             if (gCfg.star5_key)
                 Loop Parse gCfg.star5_key, "CSV"
@@ -931,8 +957,8 @@ ModifyHotkeys(hk_style)
                 Loop Parse gCfg.add_remove_key, "CSV"
                     Hotkey "~" . A_LoopField, fToggle
 
-            if (gCfg.highscore_key)
-                Loop Parse gCfg.highscore_key, "CSV" 
+            if (gCfg.scorecard_key)
+                Loop Parse gCfg.scorecard_key, "CSV" 
                     Hotkey "~" . A_LoopField, fHighScore
         }
         ;This style is used when in the picker gui, and blocks the
@@ -975,13 +1001,13 @@ ModifyHotkeys(hk_style)
                 Loop Parse gCfg.pgup_key, "CSV"
                     Hotkey A_LoopField, fPageUp
 
-            if (gCfg.lcdn_key)
-                Loop Parse gCfg.lcdn_key, "CSV"
-                    Hotkey A_LoopField, fLeadingCharacterDown
+            if (gCfg.sgdn_key)
+                Loop Parse gCfg.sgdn_key, "CSV"
+                    Hotkey A_LoopField, fSortGroupDown
 
-            if (gCfg.lcup_key)
-                Loop Parse gCfg.lcup_key, "CSV"
-                    Hotkey A_LoopField, fLeadingCharacterUp
+            if (gCfg.sgup_key)
+                Loop Parse gCfg.sgup_key, "CSV"
+                    Hotkey A_LoopField, fSortGroupUp
 
             if (gCfg.home_key)
                 Loop Parse gCfg.home_key, "CSV"
@@ -991,8 +1017,8 @@ ModifyHotkeys(hk_style)
                 Loop Parse gCfg.end_key, "CSV"
                     Hotkey A_LoopField, fEnd
 
-            if (gCfg.list_mode_key)
-                Loop Parse gCfg.list_mode_key, "CSV"
+            if (gCfg.list_view_key)
+                Loop Parse gCfg.list_view_key, "CSV"
                     Hotkey A_LoopField, fPicks
 
             if (gCfg.edit_mode_key)
@@ -1031,6 +1057,10 @@ ModifyHotkeys(hk_style)
                 Loop Parse gCfg.favorite_key, "CSV"
                     Hotkey A_LoopField, fMark
 
+            if (gCfg.sort_key)
+                Loop Parse gCfg.sort_key, "CSV"
+                    Hotkey A_LoopField, fSort
+
             if (gCfg.star5_key)
                 Loop Parse gCfg.star5_key, "CSV"
                     Hotkey A_LoopField, fStar5
@@ -1067,8 +1097,8 @@ ModifyHotkeys(hk_style)
                 Loop Parse gCfg.add_remove_key, "CSV"
                     Hotkey A_LoopField, fToggle
 
-            if (gCfg.highscore_key)
-                Loop Parse gCfg.highscore_key, "CSV"
+            if (gCfg.scorecard_key)
+                Loop Parse gCfg.scorecard_key, "CSV"
                     Hotkey A_LoopField, fHighScore
         }
     }
@@ -1170,16 +1200,16 @@ AddHotkeys()
                 Hotkey "~" . A_LoopField, fPageUp, "On"
         }
 
-        if (gCfg.lcdn_key) {
-            fLeadingCharacterDown := ScrollList.Bind("ld")
-            Loop Parse gCfg.lcdn_key, "CSV"
-                Hotkey "~" . A_LoopField, fLeadingCharacterDown, "On"
+        if (gCfg.sgdn_key) {
+            fSortGroupDown := ScrollList.Bind("sgd")
+            Loop Parse gCfg.sgdn_key, "CSV"
+                Hotkey "~" . A_LoopField, fSortGroupDown, "On"
         }
 
-        if (gCfg.lcup_key) {
-            fLeadingCharacterUp := ScrollList.Bind("lu")
-            Loop Parse gCfg.lcup_key, "CSV" 
-                Hotkey "~" . A_LoopField, fLeadingCharacterUp, "On"
+        if (gCfg.sgup_key) {
+            fSortGroupUp := ScrollList.Bind("sgu")
+            Loop Parse gCfg.sgup_key, "CSV" 
+                Hotkey "~" . A_LoopField, fSortGroupUp, "On"
         }
 
         if (gCfg.home_key) {
@@ -1194,9 +1224,9 @@ AddHotkeys()
                 Hotkey "~" . A_LoopField, fEnd, "On"
         }
 
-        if (gCfg.list_mode_key) {
+        if (gCfg.list_view_key) {
             fPicks := ScrollList.Bind("picks")
-            Loop Parse gCfg.list_mode_key, "CSV" 
+            Loop Parse gCfg.list_view_key, "CSV" 
                 Hotkey "~" . A_LoopField, fPicks, "On"
         }
 
@@ -1252,6 +1282,12 @@ AddHotkeys()
             fMark := ScrollList.Bind("mark")
             Loop Parse gCfg.favorite_key, "CSV" 
                 Hotkey "~" . A_LoopField, fMark, "On"
+        }
+
+        if (gCfg.sort_key) {
+            fSort := ScrollList.Bind("sort")
+            Loop Parse gCfg.sort_key, "CSV" 
+                Hotkey "~" . A_LoopField, fSort, "On"
         }
 
         if (gCfg.star5_key) {
@@ -1346,9 +1382,9 @@ AddHotkeys()
                 Hotkey "~" . A_LoopField, fLockGame, "On"
         }
 
-        if (gCfg.highscore_key) {
-            fHighScore := HighScoreDialog.HighScore
-            Loop Parse gCfg.highscore_key, "CSV" 
+        if (gCfg.scorecard_key) {
+            fHighScore := ScorecardDialog.Scorecard
+            Loop Parse gCfg.scorecard_key, "CSV" 
                 Hotkey "~" . A_LoopField, fHighScore, "On"
         }
 
@@ -1595,13 +1631,14 @@ ShowTimedBanner(sMessageText)
 {
     global gGui
 
-    ControlActivationState.EnableSimpleDialog()
+    ControlActivationState.EnableSimpleDialog() ;turns off hotkeys
     DisplayBanner(sMessageText)
     Sleep(5000)            
     HideBanner()
-    ControlActivationState.DisableSimpleDialog()
+    ControlActivationState.DisableSimpleDialog() ;turns on hotkeys
 }
 
+;Display a banner over currently running game
 DisplayBanner(sMessageText:="")
 {
     guiAlpha.Opt("+AlwaysOnTop")
@@ -1615,10 +1652,56 @@ DisplayBanner(sMessageText:="")
     oFadeAlphaWindow.Start(1,150,20,16) ;dim the alpha screen
 }
 
+;Hide benner over currently running game
 HideBanner()
 {
     gGui.guiDialog_Banner.Visible := false
     oFadeAlphaWindow.Start(150,0,20,16) ;undim the alpha screen
     Sleep(750)
     guiAlpha.Opt("-AlwaysOnTop")
+}
+
+;Display a banner over the game select menu screen
+DisplayMenuBanner(sMessageText:="")
+{
+    ControlActivationState.DisableSelectControls
+    guiAlpha.Opt("+AlwaysOnTop")
+    guiDialog.Opt("+AlwaysOnTop")
+
+    ;Display the overlay text
+    gGui.guiDialog_Banner.Text := sMessageText
+    gGui.guiDialog_Banner.Visible := true
+}
+
+;Hide a banner in the game select menu screen
+HideMenuBanner()
+{
+    gGui.guiDialog_Banner.Visible := false
+    guiSelect.Opt("+AlwaysOnTop")
+    ShowControls("guiSelect") ;should always follow a guiSelect +AlwaysOnTop directive
+    ControlActivationState.EnableSelectControls
+}
+
+/**
+ * **Not currently used**
+ * Display a large watermark
+ * 
+ * @param {string} sMessageText - String to show, or null to hide.
+ */
+DisplayHideWatermark(sMessageText:="")
+{
+    if (sMessageText)
+    {
+        guiAlpha.Opt("+AlwaysOnTop")
+        guiDialog.Opt("+AlwaysOnTop")
+
+        ;Display the overlay text
+        gGui.guiDialog_Watermark.Text := sMessageText
+        gGui.guiDialog_Watermark.Visible := true
+    }
+    else
+    {
+        gGui.guiDialog_Watermark.Visible := false
+        guiAlpha.Opt("-AlwaysOnTop")
+    }
 }

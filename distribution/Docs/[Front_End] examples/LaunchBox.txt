@@ -29,9 +29,11 @@ also be able to find the metadata for these games, so that the game list in arca
 will be synchronized with LaunchBox and data such as publisher, developer, year, 
 genre, etc., will be visible in arcadeEIP's menu screen. 
 
-Note that star ratings and favorites from LaunchBox are not synchronized with arcadeEIP
-since arcadeEIP maintains its own independent database to store and manage that 
-information.
+If you would also like Favorites and Star Ratings from LaunchBox to also be imported
+and used by arcadeEIP, you may do so by setting import_favorites=1 and/or 
+import_ratings=1 in the [Integration] section of arcadeEIP.ini. See the [Integration]
+section of the Configuration Reference Guide for more details about these import
+features.
 
 Configuring arcadeEIP as a launcher within LaunchBox
 ====================================================

@@ -11,7 +11,7 @@ ProcessDirectives(&argList)
     
     for n, input_arg in argList
     {		
-        if (InStr(input_arg, "-help"))
+        if (InStr(input_arg, "-help") || InStr(input_arg, "-?"))
         {
             if (console_mode)
             {
@@ -19,7 +19,36 @@ ProcessDirectives(&argList)
                 for n, opt in oConsoleOptions
                     FileAppend opt "`n", "*"
             }
+            else
+            {
+                sLines := ""
 
+                aLines := Array()
+                aLines.Push("Usage Examples:`n`n")
+                aLines.Push("Typical:`n")
+                aLines.Push("  eip.exe`t`t`trun random rom`n")
+                aLines.Push("  eip.exe <sys_key> <rom>`trun specific rom`n")
+                aLines.Push("  eip.exe <sys_key> <name>`trun best match in system`n")
+                aLines.Push("  eip.exe <name>`t`trun best match in any system`n")
+                aLines.Push("`nSpecial:`n")
+                aLines.Push("  eip.exe -help`t`tdisplay this list`n")
+                aLines.Push("  eip.exe -log`t`tdisplay last log file`n")
+                aLines.Push("  eip.exe -fix`t`trestore mouse pointer & taskbar`n")
+                aLines.Push("`nSee Command-Line Reference Guide for more.`n")
+
+                for i, sLine in aLines
+                    sLines := sLines . sLine 
+
+                MsgBox(sLines, "arcadeEIP - Usage Help", 64)
+            }
+
+            ExitApp
+        }
+
+        if (InStr(input_arg, "-fix"))
+        {
+            try SystemCursor("On")
+            try WinShow "ahk_class Shell_TrayWnd"
             ExitApp
         }
         
@@ -254,7 +283,7 @@ ProcessDirectives(&argList)
                         searchPath := romPath . "\" . searchRomName . "." . romExt
                         
                         FileAppend "`n", "*"
-                        sep := RepeatValue("=", StrLen(searchPath))
+                        sep := RepeatChar("=", StrLen(searchPath))
                         FileAppend sep . "`n", "*"
                         FileAppend searchPath . "`n", "*"
                         FileAppend sep . "`n", "*"
@@ -282,6 +311,7 @@ ProcessDirectives(&argList)
         
         if (input_arg = Trim("-find") || input_arg = Trim("-f"))
         { 
+            emu := "", rom := ""
             if (argList[1] = "-find" || argList[1] = "-f")
             {
                 if (!argList.Has(2))
@@ -304,11 +334,13 @@ ProcessDirectives(&argList)
                     rom := argList[2]
             }
             
-            DisplayRomList(emu, rom, "top", "-find")
+            DisplayRomList(emu, rom, "top")
         }
         
         if (input_arg = Trim("-findall") || input_arg = Trim("-fa"))
         {
+            emu := "", rom := ""
+
             ;-findall (or -fa) must be the first parameter
             if (argList[1] = "-findall" || argList[1] = "-fa")
             {
@@ -332,7 +364,7 @@ ProcessDirectives(&argList)
                     rom := argList[2]
             }
             
-            DisplayRomList(emu, rom, "all", "-findall")				
+            DisplayRomList(emu, rom, "all")				
         }
     }
     
@@ -344,7 +376,7 @@ ProcessDirectives(&argList)
 }
 
 ;listType may be "all" or "top"
-DisplayRomList(emu, rom, listType, argName)
+DisplayRomList(emu, rom, listType)
 {
     global bSuppressLogging, bSearchGlobal
 

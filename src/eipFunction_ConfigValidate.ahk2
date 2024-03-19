@@ -80,15 +80,24 @@ ValidateConfig()
         ExitApp
     }
 
-    ;sound_device
-    if (gCfg.sound_device != "1" && IsNumber(gCfg.sound_device)) {
-        LogEntry("ERROR: Exiting. The [General] 'sound_device' setting must be a string value. Current value is: " . gCfg.sound_device . ".`n")
+    ;sound_device (note that the internal (gCfg.sound_device) value of default sound_device is "1",
+    ;while .ini default is "Default". All other values should be text strings
+    if (IsNumber(gCfg.sound_device) && gCfg.sound_device != "1") {
+        sd := IniRead(config_file, "General", "sound_device", "")
+        LogEntry("ERROR: Exiting. The [General] 'sound_device' setting must be a string value. Current value is: " . sd . ".`n")
         ExitApp
     }
 
     ;sync_volume
-    if (!IsInteger(gCfg.sync_volume) || (gCfg.sync_volume > 0 && gCfg.sound_device == "1")) {
-        LogEntry("ERROR: Exiting. The [General] 'sound_device' setting must be an integer and only used when sound_device is greater than 0. Current value is: " . gCfg.sync_volume . ".`n")
+    if (!IsInteger(gCfg.sync_volume)) {
+        LogEntry("ERROR: Exiting. The [General] 'sync_volume' setting must be an integer. Current value is: " . gCfg.sync_volume . ".`n")
+        ExitApp
+    }
+
+    ;sound_device + sync_volume
+    if ((gCfg.sound_device == "1" || gCfg.sound_device == "Default") && gCfg.sync_volume != 0) {
+        sd := IniRead(config_file, "General", "sound_device", "")
+        LogEntry("ERROR: Exiting. When the [General] 'sync_volume' setting is set to 1 (on), sound_device must be set to a non-default device. Current sound_device value is: `"" . sd . "`".`n")
         ExitApp
     }
     
@@ -101,6 +110,24 @@ ValidateConfig()
     ;pause_lock
     if (!IsInteger(gCfg.pause_lock)) {
         LogEntry("ERROR: Exiting. The [General] 'pause_lock' setting must be an integer. Current value is: " . gCfg.pause_lock . ".`n")
+        ExitApp
+    }
+
+    ;[XInput]
+    if !(gCfg.use_xinput == 0 || gCfg.use_xinput == 1) {
+        LogEntry("ERROR: Exiting. The [XInput] 'use_xinput' setting must be 1 or 0. Current value is: " . gCfg.use_xinput . ".`n")
+        ExitApp
+    }
+
+    ;[XInput]
+    if !(gCfg.invert_page_buttons == 0 || gCfg.invert_page_buttons == 1) {
+        LogEntry("ERROR: Exiting. The [XInput] 'invert_page_buttons' setting must be 1 or 0. Current value is: " . gCfg.invert_page_buttons . ".`n")
+        ExitApp
+    }
+
+    ;[Scorecard]
+    if !(gCfg.use_watermark == 0 || gCfg.use_watermark == 1) {
+        LogEntry("ERROR: Exiting. The [Scorecard] 'use_watermark' setting must be 1 or 0. Current value is: " . gCfg.use_watermark . ".`n")
         ExitApp
     }
 

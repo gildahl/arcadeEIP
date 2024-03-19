@@ -40,11 +40,14 @@ class BASS_class
 			}
 		}
 
-		;Exit if sound_device is incorrectly configured
-		if (gCfg.sound_device != "1" && !bfoundDevice) ;recall that sound_device="Default" is changed to "1" internally when read.
+		if (FileExist(this._lib))
 		{
-			LogEntry("ERROR: Exiting. The [General] 'sound_device' setting must be either `"Default`" or a valid sound device name. Current value is: `"" . gCfg.sound_device . "`".`n")
-			ExitApp
+			;Exit if sound_device is incorrectly configured
+			if (gCfg.sound_device != "1" && !bfoundDevice) ;recall that sound_device="Default" is changed to "1" internally when read.
+			{
+				LogEntry("ERROR: Exiting. The [General] 'sound_device' setting must be either `"Default`" or a valid sound device name. Current value is: `"" . gCfg.sound_device . "`".`n")
+				ExitApp
+			}
 		}
 	}
 
@@ -199,7 +202,7 @@ class BASS_class
 				BASS_ChannelPlay := DllCall(this._play, "UInt", this._channel_highscore, "Int", 1)
 		}
 
-		if ((!g_guiselect_loaded || !g_guiselect_visible) && !g_guihighscore)
+		if ((!g_guiselect_loaded || !g_guiselect_visible) && !g_guiscorecard)
 			return
 
 		Switch soundToPlay 
