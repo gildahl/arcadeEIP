@@ -4,7 +4,7 @@ Arcade [E]mulator [I]ntegration [P]layer
 
 Links:
 Distribution: https://github.com/gildahl/arcadeEIP
-Discord:      https://discord.gg/ZqZWRcSa
+Discord:      https://discord.gg/uhbx9y6sdT
 Video:        https://www.youtube.com/watch?v=o8WrWOx_Pmk
 ===================================================================================================
 Readme.txt for version, 0.4.2.0 beta
