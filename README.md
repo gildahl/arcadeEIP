@@ -23,8 +23,8 @@ ONLINE DOCUMENTATION
 SUMMARY
 -------
 arcadeEIP is a custom game emulator launch tool I wrote specifically for my personal arcade machine
-due to there being nothing else quite like it. The initial reason for creating it was to reduce the 
-amount of "friction" that conventional front-ends add to the arcade experience. Thus, rather than
+due to there being nothing else quite like what I wanted. The initial reason for creating it was to reduce 
+the amount of "friction" that conventional front-ends add to the arcade experience. Thus, rather than
 force users to *always* have to first face a menu, go through a selection process, then load a game
 before playing (which is not how traditional arcade machines work), I wanted the option to make my 
 multi-game arcade machine *always* immediately playable to anyone passing by--just like a real one--
