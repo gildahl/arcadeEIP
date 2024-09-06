@@ -5,7 +5,6 @@ Readme.txt for version, 0.4.3.0 beta
 ## Links:
 - [Distribution](https://github.com/gildahl/arcadeEIP)
 - [Discord](https://discord.gg/uhbx9y6sdT)
-- Streamdeck function [Video](https://www.youtube.com/watch?v=o8WrWOx_Pmk) 
 
 QUICK START and TARGETED GUIDES
 -------------------------------
@@ -53,7 +52,7 @@ together in a modeless fashion.
 A short overview of arcadeEIP's fuller list of features includes:
 -----------------------------------------------------------------
 - Immediate gameplay while in standby (game rotation automatically resumes when done);
-- Direct game switching using built-in overlay menu or button devices like Stream Deck;
+- Direct game switching using built-in overlay menu or button devices like Stream Deck [(Video)](https://www.youtube.com/watch?v=o8WrWOx_Pmk);
 - Unique scorecard dialog that will snap a screenshot and record a high score for *any* game;
 - Dynamic marquee monitor support with optional display of a high score card on the marquee;
 - A general-purpose launcher for all your games in most popular emulators;
