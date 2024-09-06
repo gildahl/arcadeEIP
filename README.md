@@ -35,7 +35,7 @@ The answer to doing this was two-fold: First, was to design the software from th
 game-first rather than menu-first. This is achieved in arcadeEIP by defaulting to always have a
 live game running in its native attract mode while in standby, and auto-switching that game 
 periodically in user-determined ways (think of it as a playable screensaver). The key outcome
-being that there is always a game ready for immediate play by just dropping in a token and/or
+being that there is always a fresh game ready for immediate play by just dropping in a token and/or
 pressing the start button.
 
 To achieve the second goal--less friction when selecting and changing games--the answer was to (a)
