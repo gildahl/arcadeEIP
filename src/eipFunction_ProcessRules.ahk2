@@ -5,7 +5,7 @@
 ;Implements the arcadeEIP rules engine
 ProcessRules()
 {
-    global mRules, gCfg, aEmuArgs, bDoVector, proxy_type, proxy_contents, search_tag, oEmulators
+    global mRules, gCfg, aEmuArgs, bDoVector, proxy_type, proxy_contents, gTxt, oEmulators
     
     for n, this_rule in mRules
     {
@@ -53,7 +53,7 @@ ProcessRules()
                     varFile.WriteLine(gCfg.sys_key)
                     varFile.WriteLine(gCfg.asset_name)
                     varFile.WriteLine(gCfg.proper_name)
-                    varFile.WriteLine(gCfg.global_asset_name)
+                    varFile.WriteLine(gCfg.alternate_asset_name)
                     varFile.WriteLine(gCfg.rom_name)
                     varFile.WriteLine(gCfg.rom_folder)
                     varFile.WriteLine(gCfg.rom_file)
@@ -526,7 +526,7 @@ ProcessRules()
                         {
                             gCfg.root_folder := current_folder
                             LogEntry("Changed root to: " gCfg.root_folder "`n", true)
-                            search_tag := SubStr(gCfg.root_folder, InStr(search_pattern, "*"), StrLen(gCfg.root_folder) - StrLen(search_pattern) + 1)
+                            gTxt.search_tag := SubStr(gCfg.root_folder, InStr(search_pattern, "*"), StrLen(gCfg.root_folder) - StrLen(search_pattern) + 1)
                             bChangedRoot := true
                             break 2
                         }
@@ -571,16 +571,14 @@ ProcessRules()
                 gCfg.panic_key := IniRead(partial_config_file, "General", "panic_key", gCfg.panic_key)
                 gCfg.exit_key := IniRead(partial_config_file, "General", "exit_key", gCfg.exit_key)
 
-                ;[Front_End...]
-                partial_config_section := "Front_End_" . gCfg.fe_key
+                ;[FrontEnd...]
+                partial_config_section := "FrontEnd_" . gCfg.fe_key
                 gCfg.start_screen := IniRead(partial_config_file, partial_config_section, "start_screen", gCfg.start_screen)
                 gCfg.exit_screen := IniRead(partial_config_file, partial_config_section, "exit_screen", gCfg.exit_screen)
 
                 ;[Emulator...]
                 partial_config_section := oEmulators.Emulators[gCfg.sys_key].config_section 
                 gCfg.param_list := ReadIniFile(partial_config_file, partial_config_section, "param_list", gCfg.param_list)
-                gCfg.logo_folder := IniRead(partial_config_file, partial_config_section, "logo_folder", gCfg.logo_folder)
-                gCfg.system_logo := IniRead(partial_config_file, partial_config_section, "system_logo", gCfg.system_logo)
                 gCfg.run_apps := IniRead(partial_config_file, partial_config_section, "run_apps", gCfg.run_apps)
                 gCfg.pause_apps := IniRead(partial_config_file, partial_config_section, "pause_apps", gCfg.pause_apps)
                 gCfg.map_exit := IniRead(partial_config_file, partial_config_section, "map_exit", gCfg.map_exit)

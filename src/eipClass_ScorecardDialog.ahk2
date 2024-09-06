@@ -3,7 +3,7 @@
  * @file eipClass_ScorecardDialog.ahk2
  * @author  © 2024 David G. Dahlstrom
  * @date 2024/03/08
- * @version 0.4.2.0
+ * @version 0.4.3.0
  ***********************************************************************/
 
 ;The Scorecard Dialog is one manifestation of the Dialog screen.

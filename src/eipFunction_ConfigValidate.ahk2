@@ -26,14 +26,14 @@ ValidateConfig()
         if (sSectionName == "System_" sKey)
             aKeySections.Push(sKey)
 
-        ;Validate [Front_End...] section names
+        ;Validate [FrontEnd...] section names
         sKey := IniRead(config_file, sSectionName, "fe_key",  A_Space)
-        if (sKey && sSectionName != "Front_End_" sKey)
+        if (sKey && sSectionName != "FrontEnd_" sKey)
         {
-            LogEntry("ERROR: Exiting. Section [" sSectionName "] contains the fe_key `"" sKey "`". Expected section name should be [Front_End_" sKey "].`n")
+            LogEntry("ERROR: Exiting. Section [" sSectionName "] contains the fe_key `"" sKey "`". Expected section name should be [FrontEnd_" sKey "].`n")
             ExitApp
         }
-        if (sSectionName == "Front_End_" sKey)
+        if (sSectionName == "FrontEnd_" sKey)
             aKeySections.Push(sKey)
 
         ;Validate [List...] section names
@@ -131,29 +131,40 @@ ValidateConfig()
         ExitApp
     }
 
-    ;[Picker_Preferences]
-    
+    ;[Menu]
+    ;fast_browse
+    if (!IsInteger(gCfg.fast_browse) || (gCfg.fast_browse > 2 || gCfg.fast_browse < 0)) {
+        LogEntry("ERROR: Exiting. The [Picker_Preference] 'fast_browse' setting must be an integer between 0 and 2. Current value is: " . gCfg.fast_browse . ".`n")
+        ExitApp
+    }
+
     ;joy_vert
     if !(gCfg.joy_vert == "off" || gCfg.joy_vert == "all") {
-        LogEntry("ERROR: Exiting. The [Picker_Preferences] 'joy_vert' setting must be `"off`" or `"all`". Current value is: `"" . gCfg.joy_vert . "`" .`n")
+        LogEntry("ERROR: Exiting. The [Menu] 'joy_vert' setting must be `"off`" or `"all`". Current value is: `"" . gCfg.joy_vert . "`" .`n")
         ExitApp
     }
     
     ;joy_horiz
     if !(gCfg.joy_horiz == "off" || gCfg.joy_horiz == "all") {
-        LogEntry("ERROR: Exiting. The [Picker_Preferences] 'joy_horiz' setting must be `"off`" or `"all`". Current value is: `"" . gCfg.joy_horiz . "`".`n")
+        LogEntry("ERROR: Exiting. The [Menu] 'joy_horiz' setting must be `"off`" or `"all`". Current value is: `"" . gCfg.joy_horiz . "`".`n")
         ExitApp
     }
     
     ;mouse_vert
     if !(gCfg.mouse_vert == "off" || gCfg.mouse_vert == "all") {
-        LogEntry("ERROR: Exiting. The [Picker_Preferences] 'mouse_vert' setting must be `"off`" or `"all`". Current value is: `"" . gCfg.mouse_vert . "`".`n")
+        LogEntry("ERROR: Exiting. The [Menu] 'mouse_vert' setting must be `"off`" or `"all`". Current value is: `"" . gCfg.mouse_vert . "`".`n")
         ExitApp
     }
     
     ;mouse_horiz
     if !(gCfg.mouse_horiz == "off" || gCfg.mouse_horiz == "all") {
-        LogEntry("ERROR: Exiting. The [Picker_Preferences] 'mouse_horiz' setting must be `"off`" or `"all`". Current value is: `"" . gCfg.mouse_horiz . "`".`n")
+        LogEntry("ERROR: Exiting. The [Menu] 'mouse_horiz' setting must be `"off`" or `"all`". Current value is: `"" . gCfg.mouse_horiz . "`".`n")
+        ExitApp
+    }
+
+    ;[ImagePreferences]
+    if (!IsInteger(gCfg.switch_timer)) {
+        LogEntry("ERROR: Exiting. The [ImagePreferences] 'switch_timer' setting must be an integer. Current value is: " . gCfg.switch_timer . ".`n")
         ExitApp
     }
 }

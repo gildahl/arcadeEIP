@@ -103,7 +103,7 @@ RunWaitTimer()
     {
         ;this delay is to help prevent the user from triggering the game selection menu
         ;before the emulator's screen is displayed resulting in the menu being buried.
-        if ((A_TickCount - emu_start_time) > 4000)
+        if ((A_TickCount - emu_start_time) > 4000) ;This is a tuning value
         {
             bEmuWindowActive := true
         }
@@ -318,7 +318,7 @@ KeepActive()
             ;which causes a side effect with Visual Pinball
             Loop 3 ;try for 3 seconds
             {
-                MouseMove(nScreenWidth // 2, nScreenHeight // 2)
+                MouseMove(nScreenWidth // 3, nScreenHeight // 3)
                 Sleep 1000
             }
 
@@ -673,7 +673,7 @@ ScreenClear()
 CreatePausePage()
 {
     ;Retrieve, size, and position the image file to be displayed on pause
-    assetTypes := StrSplit(gCfg.show_on_pause, ",") ;show_on_pause is a [Front_End] global set in the config file
+    assetTypes := StrSplit(gCfg.show_on_pause, ",") ;show_on_pause is a [FrontEnd] global set in the config file
 
     typeCount := assetTypes.Length
     Loop typeCount

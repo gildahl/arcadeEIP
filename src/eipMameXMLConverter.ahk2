@@ -3,12 +3,12 @@
  * @file eipMameXMLConverter.ahk2
  * @author © 2024 David G. Dahlstrom
  * @date 2024/03/12
- * @version 0.4.2.0
+ * @version 0.4.3.0
  *****************************************************************************/
 
 ;Compiler directives
 ;***********************************************************************
-global CodeVersion := "0.4.2.0"
+global CodeVersion := "0.4.3.0"
 ;@Ahk2Exe-Let version = %A_PriorLine~U)^(.+"){1}(.+)".*$~$2%
 ;@Ahk2Exe-SetCopyright (c) 2024 David G. Dahlstrom
 ;@Ahk2Exe-SetProductName arcadeEIP MAME List Tool

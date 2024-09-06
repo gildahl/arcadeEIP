@@ -3,13 +3,13 @@
  * @file eip.ahk2
  * @author © 2024 David G. Dahlstrom
  * @date 2024/03/08
- * @version 0.4.2.0
+ * @version 0.4.3.0
  ***********************************************************************/
 
 /***********************************************************************
 *Compiler directives
 ************************************************************************/
-global CodeVersion := "0.4.2.0"
+global CodeVersion := "0.4.3.0"
 ;@Ahk2Exe-Let version = %A_PriorLine~U)^(.+"){1}(.+)".*$~$2%
 ;@Ahk2Exe-SetCopyright © 2024 David G. Dahlstrom
 ;@Ahk2Exe-SetProductName arcadeEIP
@@ -247,17 +247,18 @@ global g_exit_code := "", g_directswitch_args := "", g_cycle := g_lockedState :=
 
 ;Miscellaneous global state flags and handles
 global bSearchGlobal := false ;true if only the rom (and no emu) is specified on the command line
-global bEmuRunning := bEmuWindowActive := bSuppressLogging := bDoVector := false
+global bEmuRunning := bEmuWindowActive := bSuppressLogging := bDoVector := bUsingStartupState := false
 global exit_key_off := pause_key_off := magic_key_off := false
 global pid_emulator := emu_hwnd := cur_emu := fe_pid := pid_screen := marquee_pid := 0
 ;global original_taskbar_state
 ;---------------------------------------------------------------------------------
 
-;Initialize the global configuration structure
+;Initialize the global config structure
+;@Object
 global gCfg := {}
 
-;[General]
-gCfg.debug_mode := ""  ;Set to "os" or front-end fe_key to be simulated
+;[General] 
+gCfg.debug_mode := ""  ;Set to "default" or front-end fe_key to be simulated
 gCfg.path_delimiter:= "|"
 gCfg.idle_log := 0
 gCfg.use_log := 1
@@ -277,7 +278,7 @@ gCfg.marquee_autostart := 0
 gCfg.marquee_autoexit := 0
 gCfg.marquee_show_high_scores := 1
 
-;[Key_Map]
+;[KeyMap]
 gCfg.panic_key := ">^>!k"
 gCfg.pause_key := ","
 gCfg.menu_toggle_key := "'"
@@ -313,7 +314,7 @@ gCfg.star2_key := ""
 gCfg.star3_key := ""
 gCfg.star4_key := ""
 gCfg.star5_key := ""
-gCfg.all_key := "A"
+gCfg.all_key := "a"
 gCfg.favorites_key := "f"
 gCfg.rating_key := "r"
 gCfg.genre_key := "g"
@@ -333,10 +334,11 @@ gCfg.start_x := "scorecard"
 gCfg.take_screenshots := 1
 gCfg.use_watermark := 1
 
-;[Picker_Preferences]
+;[Menu]
 gCfg.magic_delay := 0
 gCfg.kiosk_mode := 0
 gCfg.mark_picks := 1
+gCfg.fast_browse := 1
 gCfg.joy_vert := "all"
 gCfg.joy_horiz := "all"
 gCfg.mouse_vert := "off"
@@ -358,7 +360,23 @@ gCfg.lst_default_list := ""
 gCfg.lst_hide_systems := ""
 gCfg.clean_lists := 0
 
-;[Auto_Switch]
+;[ImagePreferences]
+gCfg.img_top_left := ""
+gCfg.img_top_right := ""
+gCfg.img_logo_left := ""
+gCfg.img_logo_right := ""
+gCfg.img_center_left := ""
+gCfg.img_center_right := ""
+gCfg.metrics_top_left := "0.9,0.0"
+gCfg.metrics_top_right := "0.9,0.0"
+gCfg.metrics_logo_left := "0.9,0.0"
+gCfg.metrics_logo_right := "0.9,0.0"
+gCfg.metrics_center_left := "0.9,0.0"
+gCfg.metrics_center_right := "0.9,0.0"
+gCfg.switching_regions := ""
+gCfg.switch_timer := 5
+
+;[AutoSwitch]
 gCfg.attract_folder := "Lists\autoswitch"
 gCfg.attract_pattern := ""
 gCfg.attract_auto := 1
@@ -368,17 +386,11 @@ gCfg.attract_timer := "5"
 gCfg.attract_random := 0
 gCfg.pause_lock := 0
 
-;[Global_Assets]
-gCfg.logo_folder := ""
-gCfg.system_logo := ""
-gCfg.marquee_folder := ""
-gCfg.system_marquee := ""
-gCfg.controls_folder := ""
-gCfg.system_controls := ""
+;[AssetPaths]
 gCfg.meta_names := ""
-gCfg.highscore_folder := ""
+;gCfg.highscore_folder := ""
 
-;[Front_End]
+;[FrontEnd]
 gCfg.fe_key := ""
 gCfg.fe_asset_name := ""
 gCfg.fe_proper_name := ""
@@ -398,7 +410,7 @@ gCfg.import_community_ratings := 0
 ;[System]
 gCfg.sys_key := ""
 gCfg.asset_name := ""
-gCfg.global_asset_name := ""
+gCfg.alternate_asset_name := ""
 gCfg.proper_name := ""
 gCfg.rom_name := ""
 gCfg.root_folder := ""
@@ -407,6 +419,7 @@ gCfg.run_options := ""
 gCfg.rom_full_path := ""
 gCfg.rom_file := ""
 gCfg.rom_folder := ""
+gCfg.sta_folder := ""
 gCfg.logo_full_path := ""
 gCfg.param_list := ""
 gCfg.autoswitch := 1
@@ -420,6 +433,11 @@ gCfg.map_pause := ""
 ;init gGui object (will hold all gui controls, but not their
 ;parent windows, which are global by default)
 global gGui := {}
+
+;Global text values
+global gTxt := {}
+gTxt.license_text := ""
+gTxt.search_tag := ""
 
 ;Miscellaneous object inits and declarations
 global aEmuArgs := Array()
@@ -436,8 +454,8 @@ global nLastXInputDevice := -1
 ;Miscellaneous inits and declarations
 global current_volume := -1, override_volume := 0
 global exit_key_off, pause_key_off, orig_run_apps
-global play_next := play_previous := search_tag := ""
-global license_text := proxy_type := ""
+global play_next := play_previous := ""
+global proxy_type := ""
 global bSuppressExitMessage := bHotkeysOn := false
 
 ;Gui inits and declarations
@@ -522,8 +540,8 @@ cScorecardDefaultFileName := "scorecard_default.png"
 global favorites_listname := "picks"
 
 ;Define global timer periods
-global cRunWaitTimer_Period := 100
-global runwait_default_freq := 200 ;frequency of background processing (in ms)
+global runwait_default_freq := 200 ;normal background processing frequency (in ms)
+global runwait_fast_freq := 100    ;fast background processing frequency used to speed-up game browsing
 global cPoker_Period := 1000
 global cSchedule_Period := 1000
 global cInactivityTest_Period := 1000
@@ -545,6 +563,7 @@ global favorites_folder := A_ScriptDir "\" cFavoritesFolder
 gCfg.attract_folder := A_ScriptDir "\" cAttractFolder
 global lists_folder := A_ScriptDir "\" cListsFolder
 global sound_folder := A_ScriptDir "\" cSoundFolder
+global controls_folder := A_ScriptDir "\Controls"
 global config_file := A_ScriptDir "\" cConfigFileName
 global config_example := A_ScriptDir "\" cConfigExampleFileName
 global state_file :=  A_ScriptDir "\.state"
@@ -685,10 +704,10 @@ DeleteAndLog("F", A_ScriptDir "\launchlast.bat")
 CreateDirAndLog(directswitch_folder)
 PopulateDirectSwitchFolder()
 
+CreateDirAndLog(controls_folder)
 CreateDirAndLog(favorites_folder)
 CreateDirAndLog(gCfg.attract_folder "\suppress")
 CreateDirAndLog(lists_folder)
-CreateDirAndLog(A_ScriptDir "\Assets\MAME\Controls\System")
 
 ;If the script is run with just one argument...
 if (A_Args.Length == 1)
@@ -821,13 +840,13 @@ if (gCfg.debug_mode)
     ;command line otherwise there would be ambiguities.
     debug_mode_override := ""
 
-    fe_sections := oConfigFile.GetGroupSections("Front_End")
+    fe_sections := oConfigFile.GetGroupSections("FrontEnd")
 
     i_temp := 0
     config_section_temp := ""
     for i, config_section in fe_sections
     {
-        if (config_section == "Front_End_OS") ;we already processed this one above
+        if (config_section == "FrontEnd_default") ;we already processed this one above
             continue
 
         test_fe_key := IniRead(config_file, config_section, "fe_key", A_Space)
@@ -1046,22 +1065,17 @@ Vector:
     pid_emulator := 0  
     bSearchGlobal := false
     winset_style := ""
-    search_tag := ""
+    gTxt.search_tag := ""
     gCfg.use_hi2txt := 0
+    bUsingStartupState := false
     if (g_cycle > 0)
         oPauseControl.Clear()
-    oConfigFile.ReadSection("Key_Map")
+    oConfigFile.ReadSection("KeyMap")
 
     ;Initialize all asset paths
     ;These will be populated by the ProcessIni() call below
-    gCfg.logo_folder := ""
-    gCfg.system_logo := ""
-    gCfg.marquee_folder := ""
-    gCfg.system_marquee := ""
-    gCfg.controls_folder := ""
-    gCfg.system_controls := ""
     gCfg.meta_names := ""
-    gCfg.highscore_folder := ""
+    ;gCfg.highscore_folder := ""
     gCfg.mameinfo_folder := ""
 
     ;It is possible for users to create custom image types to use as pause
@@ -1114,7 +1128,7 @@ Vector:
     }
 
     ;Marquee support initialization
-    marquee_full_path := SetAssetFullPath("marquee", gCfg.rom_name, gCfg.marquee_folder, gCfg.system_marquee, gCfg.global_asset_name)
+    marquee_full_path := SetAssetFullPath("marquee", gCfg.rom_name, gCfg.marquee_folder, gCfg.system_marquee, gCfg.asset_name)
     LogEntry("INFO: Marquee file set to: " marquee_full_path "`n")
 
     ;If marquee mode is configured and active and marquee.exe is running...
@@ -1144,6 +1158,22 @@ Vector:
         }
     }
 
+    ;copy sta file from startup folder if present
+    if (FileExist(gCfg.sta_folder "\sta_startup") == "D")
+    {
+        sStaStartupFolder := gCfg.sta_folder "\sta_startup"
+        if (FileExist(sStaStartupFolder "\" gCfg.rom_name "\auto.sta"))
+        {
+            try DirDelete(gCfg.sta_folder "\" gCfg.rom_name, true)
+            try DirCreate(gCfg.sta_folder "\" gCfg.rom_name) 
+            try FileCopy(sStaStartupFolder "\" gCfg.rom_name "\auto.sta", gCfg.sta_folder "\" gCfg.rom_name)
+
+            bUsingStartupState := true
+
+            LogEntry("INFO: Found and restored startup auto.sta for rom: " gCfg.rom_file "`n")
+        }
+    }
+
     ;Do any validation specific to this vector
     ValidateVectorConfig()
 
@@ -1156,7 +1186,7 @@ Vector:
         ;Delay starting until it is reasonable to expect the game's screen to be active
         ;Also see the delay on setting bEmuWindowActive:=true in RunWaitTimer which
         ;performs a similar function for subsequent runs.
-        SetTimer KeepActive, 1000   ;start_show_time * 1000 + 4000
+        SetTimer KeepActive, 2000   ;this is a tuning value (1000 caused menu loading progress bar to be occasionally blocked)
 
         ;support for magic_key delay
         if (gCfg.magic_delay > 0)
@@ -1174,8 +1204,8 @@ Vector:
         if (gCfg.pause_lock && gCfg.attract_delay != 0)
             SetTimer PauseKeyStrobe, 50
 
-        ;Run any "+" apps from the "os" front end
-        if (StrLower(gCfg.fe_key) == "os")
+        ;Run any "+" apps from the "default" front end
+        if (StrLower(gCfg.fe_key) == "default")
             RunApps(gCfg.fe_asset_name, gCfg.fe_asset_name, gCfg.fe_run_apps, "+")
     }
 
@@ -1219,7 +1249,7 @@ Vector:
             LogEntry("INFO: hide_taskbar=1; Windows taskbar will be turned off during runtime.`n")
     }
     
-    gCfg.logo_full_path := SetAssetFullPath("logo", gCfg.rom_name, gCfg.logo_folder, gCfg.system_logo, gCfg.global_asset_name)
+    gCfg.logo_full_path := SetAssetFullPath("logo", gCfg.rom_name, gCfg.logo_folder, gCfg.system_logo, gCfg.asset_name)
     
     if (gCfg.logo_full_path)
         LogEntry("INFO: Logo file set to: " gCfg.logo_full_path "`n")
@@ -1327,7 +1357,7 @@ Vector:
     ;---------------------------------------------------------------------------------
     
     BuildParamList()
-    
+
     ;---------------------------------------------------------------------------------
     ;  Run the emulator's apps
     ;---------------------------------------------------------------------------------
@@ -1440,7 +1470,7 @@ Vector:
             FileAppend "pause", batch_file
             ;********************************************
 
-            ;**********************************************************************************************
+            ;******************************** Game is launched here ***************************************
             ;----------------------------------------------------------------------------------------------
             Launch(runStyle, cl, gCfg.param_list, "EMULATOR", runOption, windowStyle,,&pid_emulator)
             ;----------------------------------------------------------------------------------------------

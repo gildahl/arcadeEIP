@@ -33,7 +33,7 @@ class DetectInactivity_Class
 	Activate()
 	{
 		global
-		local id, mJoylist, mState, fInactivityTest, numButtons
+		local id, mJoylist, mState, fInactivityTest, numButtons, nXState, nYState, sInfo, sName
 
 		mJoylist := Map()
 
@@ -52,9 +52,12 @@ class DetectInactivity_Class
 				Sleep(100) ;needed between reads
 				nXState := GetKeyState(id "JoyX")
 				nYState := GetKeyState(id "JoyY")
+				sInfo := GetKeyState(id "JoyInfo")
+				sName := GetKeyState(id "JoyName")
+
 				if (nXState < 30 || nYState < 30 || nXState > 70 || nYState > 70)
 				{
-					LogEntry("NOTICE: Skipped Joy: " id ", info: `"" mState["info"] "`", name: `"" mState["name"] "`", X: " nXState ", Y: " nYState "`n")
+					LogEntry("NOTICE: Skipped Joy: " id ", info: `"" sInfo "`", name: `"" sName "`", X: " nXState ", Y: " nYState "`n")
 					continue
 				}
 				
@@ -73,10 +76,6 @@ class DetectInactivity_Class
 				if (numButtons > 16) ;ahk can't seem to handle more than 16 buttons
 					numButtons := 16
 
-				;Binding joystick buttons to hotkeys seems to introduce a serious performance
-				;issue if an XInput device is present but turned off.  So this code has been deprecated
-				;in favor of poking the inactivity timer in the XInput handler when buttons are pressed.
-				
 				;make all controller button presses call _joy_button_action
 				Loop numButtons
 				{

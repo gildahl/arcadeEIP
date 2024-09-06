@@ -49,12 +49,7 @@ class config_creation_class
 					fCfg.write(";==============================================================================================================`n")
 				}
 
-				if ((SubStr(line, 1, 1) == "[" || SubStr(line, 1, 2) == ";[") && this._option == "normal")
-				{
-					fCfg.write("`n") ;blank line before section headers
-					this._lineCount++
-				}
-				else if (InStr(line, "<force_break>"))
+				if (InStr(line, "<force_break>"))
 					line := "`n"
 
 				this._lineCount++
@@ -109,7 +104,7 @@ class config_file_class
 	}
 
 	;Sets global variables based on the key name for the section
-	;Currently only used on the Key_Map section to set the key map variables.
+	;Currently only used on the KeyMap section to set the key map variables.
 	ReadSection(sec)
 	{
 		global
@@ -739,3 +734,57 @@ class ControlActivationState
 			Hotkey A_LoopField, "Off"
 	}
 }
+
+/*
+class timed_event_class
+{
+	__New(callback:="")
+	{
+		this._fCallback := callback
+		this._bIsActvie := false
+		this._bTimer := false
+		this._nMs := 0
+	}
+
+	Start(nMs)
+	{
+		this._nMs := nMs
+		this.bIsActive := true
+		nMs := this._nMs
+		fTimer := this.Timer.Bind()
+		this._fTimer := fTimer
+		SetTimer fTimer, nMs
+	}
+
+	TurnOff()
+	{
+		this.bIsActive := false
+		fTimer := this._fTimer
+		SetTimer fTimer, 0
+	}
+
+	Timer()
+	{
+		this._bTimer := true
+
+		if (this._fCallback)
+			this._fCallback
+	}
+
+	Reset()
+	{
+		this._bTimer := false
+	}
+
+	IsActive
+	{
+		get => this._bIsActive
+		set => this._bIsActive := value
+	}
+
+	AlarmOn
+	{
+		get => this._bTimer
+	}
+}
+*/

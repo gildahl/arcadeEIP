@@ -22,9 +22,9 @@ class emulators_class
 		;Get global path_delimiter
 		gCfg.path_delimiter := IniRead(config_file, "General", "path_delimiter", "|") 
 		
-		;Read the [Global_Assets] section
+		;Read the [AssetPaths] section
 		aGlobalAssets := Array()
-		try aGlobalAssets := StrSplit(IniRead(configFile, "Global_Assets"), "`n", " ")
+		try aGlobalAssets := StrSplit(IniRead(configFile, "AssetPaths"), "`n", " ")
 
 		mMetaMap := Map()
 		for n, asset in aGlobalAssets
@@ -75,23 +75,23 @@ class emulators_class
 					mSystemMap["exe_name"] := exeName
 				}
 
-				;special case 2 - create global_asset_name out of asset_name
+				;special case 2 - create alternate_asset_name out of asset_name
 				if (systemKey == "asset_name")
 				{
 					asset_names := StrSplit(systemValue, ",", " ")
 					if (asset_names.Length == 2)
 					{
 						mSystemMap["asset_name"] := asset_names[1]
-						mSystemMap["global_asset_name"] := asset_names[2]
+						mSystemMap["alternate_asset_name"] := asset_names[2]
 					}
 					else
 					{
-						mSystemMap["global_asset_name"] := systemValue
+						mSystemMap["alternate_asset_name"] := systemValue
 					}
 				}
 			}
 
-			;Now add any meta items that are in [Global_Assets],
+			;Now add any meta items that are in [AssetPaths],
 			;but not in the emulator section
 			for q, metaItem in mMetaMap
 			{
@@ -292,6 +292,11 @@ class emulators_class
 				DeleteAndLog("F", A_ScriptDir "\Assets\" assetspec "\Settings\" sProperty ".ini")
 
 			return
+		}
+
+		GetSetting(sValue, sDefault:="")
+		{
+			return this._settings.Get(sValue, sDefault)
 		}
 
 		asset_name

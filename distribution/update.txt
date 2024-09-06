@@ -5,6 +5,54 @@ Arcade Emulator Integration Player
 Update Log
 ========================================
 
+0.4.3.0 Added support for additional custom images while browsing. Also added MAME
+start-up state override, and a few general bug fixes.
+
+Note that this version contains major changes to arcadeEIP.ini settings. It is therefore
+essential to do a full reinstall of arcadeEIP (re-run create_config.bat) to fully sync
+with the new and updated feature set. Using a previous arcadeEIP.ini will NOT WORK.
+
+* In addition to existing system and game logo images, up to four additional 
+  game-specific images of any type may now be specified for use in the game select 
+  screen (left/right at the top, and left/right in the center). You may set these to 
+  any type of image you want using the new [ImagePreferences] section in arcadeEIP.ini
+  in combination with the image path settings in [AssetPaths] and [System] 
+  sections. Fallback to an effectively unlimited levels of alternatives for missing
+  images is also supported, along with the ability to sequence images on a timer.
+  You also have the ability resize and re-position the images within the constraints
+  of their windows. All of these settings may be set both globally as a default and/or
+  customized per emulator/system type. See the [ImagePreferences] and other sections
+  mentioned above in the Configuration Reference Guide for more info.
+* Added a new fast_browse setting to the [Menu] section of arcadeEIP.ini that provides
+  some options to choose the most optimal method of image updating with respect to
+  performance.
+* Added a new feature that permits MAME games of your choice to always start in a
+  known, fixed state. To do this, create a new subfolder folder in your \MAME\sta folder
+  called \sta_startup, and copy into it any or all of the game folders that you 
+  like from the \MAME\sta directory. From this point forward, arcadeEIP will auto-
+  matically replace the game's auto.sta state file in \MAME\sta\<game> with the one
+  in \MAME\sta\sta_startup\<game> just before the game starts. When this happens, a
+  reminder at the bottom of the startup screen will read "(using start-up state)"
+  Thanks to aaciii on the LaunchBox forums for suggesting this feature.
+* Deprecated the 'global_asset_name' template name since it was confusing. Now simply
+  use 'asset_name' in all typical cases (which should be more intuitive) or 
+  'alternate_asset_name' only when needed. See the asset_name description in the 
+  [System] section of the Configuration Reference Guide for more information about
+  these template names. 
+* Simplified all local asset folder structures. All rom-specific png/jpg files are now
+  placed directly in the asset type root folder (rather than a \Roms subfolder), and all
+  system png/jpg files are now placed in the asset name root folder and named by type (rather
+  than placed in a \System subfolder and named by asset_name). 
+* Made extensive changes to section names (and some keys) in arcadeEIP.ini to make it
+  more consistent and to improve naming conventions. All section names now use Pascal case
+  consistently with underscores only used in sections with keys that can have multiples
+  such as [System_<key>], [FrontEnd_<key>], [Application_<key>], and [List_<key>]. Also
+  changed the order of some sections and added some additional comments; especially for
+  sections and keys that are allowed to be overridden.
+* Fixed a bug introduced in the last release that could cause a crash on startup when
+  when detecting a deflected joystick.
+* Fixed a regression that could cause state saving to fail.
+
 0.4.2.0 Stability, XInput, Scorecard enhancements, Favorites/Star Ratings import,
 and standalone MAME game list pre-filtering. Note that this version contains
 major changes to default key assignments and other arcadeEIP.ini settings. It

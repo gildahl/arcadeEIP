@@ -9,7 +9,7 @@ If you have a marquee monitor...
 
 1. Copy a set of marquee files (named after your roms) into 
    ..\Assets\MAME\Marquees
-   (or set marquee_folder= in [Global_Assets] to where they are)
+   (or set marquee_folder= in [AssetPaths] to where they are)
    If you use LaunchBox, you may already have this setup if you followed
    step 7b in the MAME Quick Start guide.
 

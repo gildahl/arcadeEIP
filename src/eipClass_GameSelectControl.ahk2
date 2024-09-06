@@ -3,7 +3,7 @@
  * @file eipClass_GameSelectControl.ahk2
  * @author © 2024 David G. Dahlstrom
  * @date 2024/03/17
- * @version 0.4.2.0
+ * @version 0.4.3.0
  ***********************************************************************/
 
 ;Some general notes:
@@ -66,7 +66,7 @@
 
 ;["parent"], ["vector"], ["rom_category"], ["rom_release"], ["rom_players"], ["rom_description"]
 ;["rom_year"], ["rom_publisher"], ["rom_developer"], ["rom_favorite"], ["favorite_icon_file"]
-;["sys_key"], ["rom_spec"], ["proper_name"], ["logo_file"], ["system_logo_file"], ["parent"]
+;["sys_key"], ["rom_spec"], ["proper_name"], ["system_logo_file"], ["parent"]
 ;---------------------------------------------------------------------------------	
 
 ;Class implementing the game select control screen in arcadeEIP.
@@ -86,6 +86,7 @@ class game_select_control_class
 	__New(maxRows, maxRowsB, lstFontType, lstFontSize, lstGameFontSize, lstSysFontSize, lstListMargin)
 	{
 		global fav_idx := 0
+		this.fShowGameGraphics := ""
 
 		;initialize the GDI+ (gdip) library (in gdip.ahk)
 		If !pToken := Gdip_Startup()
@@ -131,7 +132,7 @@ class game_select_control_class
 
 	__Delete()
 	{
-		this._serializeState()
+		;this._serializeState()
 	}
 
 	AbortThread
@@ -142,6 +143,11 @@ class game_select_control_class
 	AddEmulatorItems()
 	{
 		this._AddEmulatorItems()
+	}
+
+	SaveState()
+	{
+		this._serializeState()
 	}
 
 	_deserializeState()
@@ -571,6 +577,11 @@ class game_select_control_class
 		}
 
 		this._exitListEditMode()
+
+		;turn off the image switching timer if active
+		if (this.fShowGameGraphics)
+			SetTimer(this.fShowGameGraphics, 0)
+
 		return  
 	}
 
@@ -800,7 +811,7 @@ class game_select_control_class
 					
 					Loop Files searchPath
 					{
-						SplitPath A_LoopFileFullPath, &romFile
+						SplitPath A_LoopFileFullPath, &romFile,,,&romName
 						vec := emulator.sys_key . " " . romFile
 
 						properName := oEmulators.Emulators[emulator.sys_key].meta_names.GetTitle(romFile) ;GetTitle(romspec, "clean")
@@ -823,7 +834,8 @@ class game_select_control_class
 
 							this._playlists[pl_idx]["playlist"][gm_idx] := Map()
 							this._playlists[pl_idx]["playlist"][gm_idx]["sys_key"] := emulator.sys_key
-							this._playlists[pl_idx]["playlist"][gm_idx]["rom_spec"] := romFile
+							this._playlists[pl_idx]["playlist"][gm_idx]["rom_file"] := romFile
+							this._playlists[pl_idx]["playlist"][gm_idx]["rom_name"] := romName
 							this._playlists[pl_idx]["playlist"][gm_idx]["vector"] := vec
 							
 							SplitPath romFile,,,,&romSpec ;get rid of any extension if romSpec is a filename
@@ -1588,7 +1600,7 @@ class game_select_control_class
 		;  description text
 		;*****************************************************************************************
 		test_y := bottombar_ypos + barHeight + barHeight / 2 + 5
-		guiSelect.SetFont("s11")
+		guiSelect.SetFont("s12")
 		gGui.guiSelect_MetaDesc1 := guiSelect.AddText("Hidden BackgroundTrans x0 y" . y . " w" . nScreenWidth . " cWhite Center +0x200 vMetaDesc1")
 		gGui.guiSelect_MetaDesc1.GetPos(, &nMetaDesc1MsgY, , &nMetaDesc1MsgH)
 		;gGui.guiSelect_MetaDesc2 := guiSelect.AddText("BackgroundTrans x0 y" . test_y+nMetaDesc1MsgH . " w" . nScreenWidth . " cWhite Center +0x200 vMetaDesc2")
@@ -1601,7 +1613,7 @@ class game_select_control_class
     		y := nScreenHeight - label_posH * 3
 
 			gGui.guiSelect_PickerLicenseBanner := guiSelect.AddText("Hidden BackgroundTrans x0 y" . nMetaDesc1MsgY-nMetaDesc1MsgH . " w" . nScreenWidth . " h" . label_posH . " cWhite Center +0x200 vPickerLicenseBanner")
-			gGui.guiSelect_PickerLicenseBanner.Text := license_Text
+			gGui.guiSelect_PickerLicenseBanner.Text := gTxt.license_text
 		}
 		*/
 			
@@ -3255,11 +3267,76 @@ class game_select_control_class
 
 		return selectedText
 	}
-	
-	;Used to refresh initial view of the menu graphic images
+
+	/**
+	 * Controls the display of game-specific graphics while scrolling through a list of games.
+	 * This includes both updating the graphics upon selection of a new game AND sequentially cycling
+	 * the graphics of the currently displayed game if so configured.
+	 * 
+	 * ShowGraphics() also supports 3 different methods/modes of display depending on the gCfg.fast_browse setting.
+	 * gCgf.fast_browse=0 : all graphics for the game are updated every time a new game is scrolled to.
+	 * gCfg.fast_browse=1 : only logos are updated when scrolling while all other images are retained. Once scrolling
+	 *                      stops, the remaining images are updated. This provides improved scrolling performance.
+	 * gCfg.fast_browse=2 : only logos are updated when scrolling while all other images are blanked-out. Once 
+	 *                      scrolling stops, the blanked-out images are updated. Also provides improved performance.
+	 */
 	ShowGraphics()
 	{
+		;ObjBindMethod is used here (rather than standard Bind() method) since it 
+		;is able to bind an object's method (in this case, this.ShowGameGraphics).
+		;i.e., this.ShowGameGraphics.Bind(false) does not work.
+		static fShowGameGraphics    := ObjBindMethod(this, "ShowGameGraphics", false)
+		static fShowAllGameGraphics := ObjBindMethod(this, "ShowGameGraphics", true, false)
+		
+		;set this to a member variable so it can be turned off when exiting.
+		this.fShowGameGraphics := fShowGameGraphics
+
+		;if no game, return
+		sk := ""
+		try sk  := this._current_object["sys_key"]
+		if (!sk)
+			return
+		
+		;fast browse only updates the system and game logos when moving to the next game; this keeps scrolling
+		;highly performant.  Loading of additional images is delayed by 150ms to ensure user has stopped on the
+		;game before displaying it
+		if (gCfg.fast_browse)
+		{
+			SetTimer(this.fShowGameGraphics,0) ;new game selected, so reset the timer		
+			this.ShowGameGraphics(true, gCfg.fast_browse)   ;display the newly selected game's system and game logos only
+			SetTimer(fShowAllGameGraphics,-(runwait_fast_freq + 50))
+		}
+		else ;gCfg.fast_browse == 0 (turned off)
+			this.ShowGameGraphics(true) ;display ALL graphics when moving to a new game. Nice, but can slow-down scrolling. 
+		
+		nMs := oEmulators.Emulators[sk].GetSetting("switch_timer", gCfg.switch_timer)
+		nMs := nMs < 1 ? 0 : nMs * 1000 ;convert seconds to milliseconds
+
+		;set timer that will continually update game images
+		if (nMs > 0)
+			SetTimer(this.fShowGameGraphics, nMs)
+	}
+
+	/**
+	 * Show (or update) game specific graphics. Setting bNewGame to true forces all images to be refreshed and set to
+	 * their initial states. Setting bNewGame to false forces all images for that *same* game to be updated and cycled 
+	 * to their next logical images. nBrowseMode may be set to 0, 1 or 2. 0 refreshes all graphics; 1 only refreshes the
+	 * logos and leaves all other images alone. 2 also refreshes the logos only, but blanks-out all other images. Modes 1 
+	 * and 2 provide a means to improve performance when scrolling quickly through games.
+	 * @param bNewGame - true = new game; false = switch to next image set for selected game
+	 * @param nBrowseMode - 0 = show/refresh all graphics; 1 = update logos only; 2 = update logos and blank others
+	 */
+	ShowGameGraphics(bNewGame, nBrowseMode:=0)
+	{
+		static nLastImage1 := 0, nLastImage2 := 0, nLastImage5 := 0, nLastImage6 := 0, nLastImage7 := 0, nLastImage8 := 0
+
+		img_top_left := img_top_right := img_center_left := img_center_right := fSize7 := fSize8 := fSize5 := fSize6 := fPosition7 := fPosition8 := fPosition5 := fPosition6 := 0
 		pl := p_pl := gm := ""
+
+		;initialize image indexes for a newly selected game
+		if (bNewGame) {
+			nLastImage1 := nLastImage2 := nLastImage5 := nLastImage6 := nLastImage7 := nLastImage8 := 0
+		}
 
 		;images originate from the base playlist item
 		pl := this._current_playlist
@@ -3269,20 +3346,165 @@ class game_select_control_class
 		if (!pl || !gm)
 			return ;nothing to show
 
-		logo_file := this._current_object["logo_file"]
-		logo_file := GetRegionalAsset(logo_file, this._current_object["sys_key"])
-		system_logo_file := this._current_object["system_logo"]
-		favorite_icon_file := this._current_object["favorite_icon"] ;use icon from the parent playlist
+		favorite_icon_file := this._current_object["favorite_icon"] 
 		nRating := this._current_object["rom_rating"] ;get rating (0-5) of this rom
-		;nHighscore := this._current_object["rom_highscore"] ;get highscore of this rom (score|initials|stage|date)
-		
-		if (!FileExist(logo_file))
-			logo_file := system_logo_file
 
-		this._oGraphicsOverlay.ShowGraphic(pl, gm, 1, logo_file)
-		this._oGraphicsOverlay.ShowGraphic(pl, gm, 2, system_logo_file)
-		this._oGraphicsOverlay.ShowGraphic(pl, gm, 3, favorite_icon_file)
-		this._oGraphicsOverlay.ShowGraphic(pl, gm, 4, rating_fullstar_file,,nRating)
+		;get the game vector components
+		sk := this._current_object["sys_key"]
+		fn := this._current_object["rom_name"]
+
+		;get current image paths for each screen region
+		img_logo_left    := GetImageFile("img_logo_left", &fSize2, &fPosition2, &nLastImage2)
+		img_logo_right   := GetImageFile("img_logo_right", &fSize1, &fPosition1, &nLastImage1)
+		if (nBrowseMode == 0)
+		{
+			img_top_left     := GetImageFile("img_top_left", &fSize7, &fPosition7, &nLastImage7)
+			img_top_right    := GetImageFile("img_top_right", &fSize8, &fPosition8, &nLastImage8)
+			img_center_left  := GetImageFile("img_center_left", &fSize5, &fPosition5, &nLastImage5)
+			img_center_right := GetImageFile("img_center_right", &fSize6, &fPosition6, &nLastImage6)
+		}
+
+		;closure function for the above queries
+		GetImageFile(sType, &fSz, &fPos, &nLastImg) 
+		{
+			sImg := sLastImg := sFirstImg := ""
+			nFirstImgIdx := 0
+			sImgTypes := oEmulators.Emulators[sk].GetSetting(sType, gCfg.%sType%)
+			aImgTypes := StrSplit(sImgTypes, ",", A_Space)
+
+			for idx, sImgType in aImgTypes
+			{
+				sImg := ""				
+				if (InStr(sImgType, "system_")) 
+				{
+					try sPath := oEmulators.Emulators[sk].GetSetting(sImgType)
+					try sImg := GetRegionalAsset(sPath, sk)
+					if (!sImg) {
+						sOutDir := sOutExt := sOutNameNoExt := ""
+						try SplitPath(oEmulators.Emulators[sk].GetSetting(sImgType),,&sOutDir, &sOutExt, &sOutNameNoExt)
+						if (sOutDir && sOutNameNoExt && sOutExt) {
+							sNewExt := sOutExt = "png" ? "jpg" : "png"
+							try sImg := GetRegionalAsset(sOutDir "\" sOutNameNoExt "." sNewExt, sk)
+						}
+					}
+				}
+				else 
+				{
+					if (!InStr(sImgType, "_folder"))
+						sImgType := sImgType "_folder" 
+
+					;look for png and jpg images
+					sImgTypePath := oEmulators.Emulators[sk].GetSetting(sImgType)
+					if (sImgTypePath)
+					{
+						try sImg := GetRegionalAsset(oEmulators.Emulators[sk].GetSetting(sImgType) "\" fn ".png", sk)
+						if (!sImg) {
+							try sImg := GetRegionalAsset(oEmulators.Emulators[sk].GetSetting(sImgType) "\" fn ".jpg", sk)
+						}
+					}
+				}
+
+				;skip any images in list already shown
+				if (idx <= nLastImg) 
+				{ 
+					;save first image shown in case we need to wrap
+					if (sImg && !sFirstImg) {
+						sFirstImg := sImg
+						nFirstImgIdx := idx
+					}
+					
+					continue
+				}
+
+				;if image is missing, continue
+				if (!sImg) 
+				{ 
+					;if last image is missing, force it to the first image (i.e. wrap)
+					;also set the nLastImg index to the first image so it doesn't repeat.
+					if (idx == aImgTypes.Length) 
+					{
+						sImg := sFirstImg
+						nLastImg := nFirstImgIdx
+
+						;if there's still no image, search local asset folders for default images
+						if (!sImg)
+						{
+							for image, sImageType in aImgTypes
+							{
+								an := oEmulators.Emulators[sk].GetSetting("asset_name")
+								aan := oEmulators.Emulators[sk].GetSetting("alternate_asset_name")
+
+								;strip off any _folder or _system postfixes
+								if (InStr(an, "_system") || InStr(an, "_folder"))
+									an := SubStr(an, 1, StrLen(an) - 7)
+								if (InStr(aan, "_system")) || InStr(aan, "_folder")
+									aan := SubStr(an, 1, StrLen(an) - 7)
+
+								if (FileExist(A_ScriptDir "\Assets\" an "\" sImageType ".png"))
+									sImg := A_ScriptDir "\Assets\" an "\" sImageType ".png"
+								else if (FileExist(A_ScriptDir "\Assets\" an "\" sImageType ".jpg"))
+									sImg := A_ScriptDir "\Assets\" an "\" sImageType ".jpg"
+								else if (FileExist(A_ScriptDir "\Assets\" aan "\" sImageType ".png"))
+									sImg := A_ScriptDir "\Assets\" aan "\" sImageType ".png"
+								else if (FileExist(A_ScriptDir "\Assets\" aan "\" sImageType ".jpg"))
+									sImg := A_ScriptDir "\Assets\" aan "\" sImageType ".jpg"
+								else if (FileExist(A_ScriptDir "\Assets\Default\" sImageType ".png"))
+									sImg := A_ScriptDir "\Assets\Default\" sImageType ".png"
+								else if (FileExist(A_ScriptDir "\Assets\Default\" sImageType ".jpg"))
+									sImg := A_ScriptDir "\Assets\Default\" sImageType ".jpg"
+							}
+						}
+					}				
+
+					continue		
+				}
+				else 
+				{			
+					;we found a new image to show, so break
+					nLastImg := idx == aImgTypes.Length ? 0 : idx 
+					break
+				}
+			}
+
+			;Get the metrics for this image window
+			fSz := 1.0, fPos := 0.0
+			sMetrics := StrReplace(sType, "img", "metrics") ;use metrics_top_left instead of img_top_left, for example
+			sImgMetrics := oEmulators.Emulators[sk].GetSetting(sMetrics, gCfg.%sMetrics%)
+			aImgMetrics := StrSplit(sImgMetrics, ",", A_Space)
+			
+			try fSz := Float(Trim(aImgMetrics[1]))
+			try fPos := Float(Trim(aImgMetrics[2])) 
+
+			;Validate values to be returned
+			fSz := fSz > 1.0 || fsz < 0.0 ? 0.9 : fSz
+			fPos := fPos > 1.0 || fPos < -1.0 ? 0.0 : fPos
+
+			return sImg
+		}
+
+		sSwitchingRegions := oEmulators.Emulators[sk].GetSetting("switching_regions", gCfg.switching_regions)
+
+		;Show the images
+		if (bNewGame) { ;These two image types don't support switching
+			this._oGraphicsOverlay.ShowImage(pl, gm, 3, favorite_icon_file, 1.0, 0.0)
+			this._oGraphicsOverlay.ShowImage(pl, gm, 4, rating_fullstar_file, 1.0, 0.0,nRating)
+		}
+		if (bNewGame || (!bNewGame && InStr(sSwitchingRegions, "logo_right")))
+			this._oGraphicsOverlay.ShowImage(pl, gm, 1, img_logo_right, fSize1, fPosition1)
+		if (bNewGame || (!bNewGame && InStr(sSwitchingRegions, "logo_left")))
+			this._oGraphicsOverlay.ShowImage(pl, gm, 2, img_logo_left, fSize2, fPosition2)
+
+		if (nBrowseMode != 1) ;don't refresh in mode 1 (i.e fast browsing with retained last image)
+		{
+			if (bNewGame || (!bNewGame && InStr(sSwitchingRegions, "center_left")))
+				this._oGraphicsOverlay.ShowImage(pl, gm, 5, img_center_left, fSize5, fPosition5)
+			if (bNewGame || (!bNewGame && InStr(sSwitchingRegions, "center_right")))
+				this._oGraphicsOverlay.ShowImage(pl, gm, 6, img_center_right, fSize6, fPosition6)
+			if (bNewGame || (!bNewGame && InStr(sSwitchingRegions, "top_left")))
+				this._oGraphicsOverlay.ShowImage(pl, gm, 7, img_top_left, fSize7, fPosition7)
+			if (bNewGame || (!bNewGame && InStr(sSwitchingRegions, "top_right")))
+				this._oGraphicsOverlay.ShowImage(pl, gm, 8, img_top_right, fSize8, fPosition8)
+		}
 
 		;useful diagnostic information to be displayed on screen in test_mode
 		if (test_mode) 
@@ -3298,54 +3520,56 @@ class game_select_control_class
 	{
 		__New()
 		{
-			this._last_image1_window := ""  ;rom logo
-			this._last_image2_window := ""  ;system logo
-			this._last_image3_window := ""  ;favorite icon
-			this._last_image4_window := ""  ;rating icon
+			;useful screen template metrics. Note that these use the native screenheight/screenwidth
+			;values rather than the dpi adjusted values (needed for Gdip).
+			barHeightFactor := 1/10
+			topBarPosFactor := 1/3
+			centerLabelWidthFactor := gCfg.lst_game_name_ratio
+			this._barHeight := Floor(A_ScreenHeight * barHeightFactor)
+			this._topbar_ypos := Floor(A_ScreenHeight * topBarPosFactor - this._barHeight / 2)
+			this._bottombar_ypos := Floor(A_ScreenHeight / 5 * 4 - this._barHeight / 2)
+			this._systemLabelWidth := Floor(A_ScreenWidth / 3)
+			this._centerLabelWidth := Floor(A_ScreenWidth * centerLabelWidthFactor)
+			this._sideLabelWidth := Floor((A_ScreenWidth - this._centerLabelWidth) / 2)
 
-			this._last_image1_file := ""
-			this._last_image2_file := ""
-			this._last_image3_file := ""
-			this._last_image4_file := ""
+			this._nImages := 8 ;number of image overlay windwows to update
+
+			loop this._nImages {
+				this._last_image%A_Index%_window := ""
+				this._last_image%A_Index%_file := ""
+			}
 			
 			this._last_image4_subtype := -1 ;rating
-
 			this._last_image_file := ""
 		}
 
 		HideGraphics()
 		{
 			global gGui
-			
-			last_image1_window := this._last_image1_window
-			last_image2_window := this._last_image2_window
-			last_image3_window := this._last_image3_window
-			last_image4_window := this._last_image4_window
 
-			if (last_image1_window)	{
-				try	gGui.%last_image1_window%.Hide()
-			}
-			if (last_image2_window) {
-				try gGui.%last_image2_window%.Hide()
-			}
-			if (last_image3_window) {
-				try	gGui.%last_image3_window%.Hide()
-			}
-			if (last_image4_window) {
-				try	gGui.%last_image4_window%.Hide()
+			Loop this._nImages {
+				last_image_window := this._last_image%A_Index%_window
+				if (last_image_window)	{
+					try	gGui.%last_image_window%.Hide()
+				}
 			}
 		}
 
-		;Displays an image from a file using GDI+ scaling. Image to display is determined by
-		;by the playlist and selection. Position on screen is determined by image_type and subtype.
-		;playlist:            playlist id 
-		;selection:           game id     
-		;image_type:          1=rom logo; 2=system logo; 3=favorite icon; 4=rating icon
-		;show_now (optional): default true (whether to show the image now or just create it)
-		;subtype: (optional): default 0 (designates sub image, such as number of stars in a rating)
-		ShowGraphic(playlist, selection, image_type, image_file, show_now:=true, subtype:=0)
+		/**
+		 * Displays an image from a file using Gdip (GDI+) library for scaling. Image to display is determined by
+		 * by the playlist and selection.
+		 * @param playlist - playlist id
+		 * @param selection - game id
+		 * @param image_type - 1=rom logo; 2=system logo; 3=favorite icon; 4=rating icon; 5=center left image; 6=center right image; 7=top_left_image; 8=top_right_image
+		 * @param image_file -The path and filename of the graphic
+		 * @param image_size - Relative size as a percent expressed as a float from 0.0 to 1.0 (1.0=full sized)
+		 * @param image_position - Left/right shift in position expressed as a float from -1.0 to 1.0 (0.0=centered)
+		 * @param {Integer} subtype - default 0 (designates sub image, such as number of stars in a rating)
+		 * @returns {String} - gui id
+		 */
+		ShowImage(playlist, selection, image_type, image_file, image_size, image_position, subtype:=0)
 		{
-			Critical  ;without this, images are not always properly deleted leaving orphans
+			Critical  ;forces update to be atomic. Without this, images may not be properly deleted leaving orphans
 
 			if (!playlist || !selection)
 				return
@@ -3354,6 +3578,10 @@ class game_select_control_class
 			last_image2_window := this._last_image2_window
 			last_image3_window := this._last_image3_window
 			last_image4_window := this._last_image4_window
+			last_image5_window := this._last_image5_window
+			last_image6_window := this._last_image6_window
+			last_image7_window := this._last_image7_window
+			last_image8_window := this._last_image8_window
 
 			last_image4_subtype := this._last_image4_subtype
 
@@ -3369,6 +3597,14 @@ class game_select_control_class
 					try gGui.%last_image3_window%.Hide()
 				if (image_type == 4)
 					try gGui.%last_image4_window%.Hide()
+				if (image_type == 5)
+					try gGui.%last_image5_window%.Hide()
+				if (image_type == 6)
+					try gGui.%last_image6_window%.Hide()
+				if (image_type == 7)
+					try gGui.%last_image7_window%.Hide()
+				if (image_type == 8)
+					try gGui.%last_image8_window%.Hide()
 
 				return
 			}
@@ -3395,16 +3631,33 @@ class game_select_control_class
 				try	gGui.%last_image4_window%.Show("NA")
 				return
 			}
+			if (image_type == 5 && image_file == this._last_image5_file)
+			{
+				try	gGui.%last_image5_window%.Show("NA")
+				return
+			}
+			if (image_type == 6 && image_file == this._last_image6_file)
+			{
+				try	gGui.%last_image6_window%.Show("NA")
+				return
+			}
+			if (image_type == 7 && image_file == this._last_image7_file)
+			{
+				try	gGui.%last_image7_window%.Show("NA")
+				return
+			}
+			if (image_type == 8 && image_file == this._last_image8_file)
+			{
+				try	gGui.%last_image8_window%.Show("NA")
+				return
+			}
 
 			;update the last image file with the new image_file
-			if (image_type == 1)
-				this._last_image1_file := image_file
-			if (image_type == 2)
-				this._last_image2_file := image_file
-			if (image_type == 3)
-				this._last_image3_file := image_file	
-			if (image_type == 4)
-				this._last_image4_file := image_file		
+			Loop this._nImages 
+			{
+				if (image_type == A_Index)
+					this._last_image%A_Index%_file := image_file
+			}
 
 			;Hide the current image
 			if (image_type == 1 && last_image1_window)
@@ -3414,7 +3667,15 @@ class game_select_control_class
 			if (image_type == 3 && last_image3_window)
 				try	gGui.%last_image3_window%.Hide()
 			if (image_type == 4 && last_image4_window)
-				try	gGui.%last_image4_window%.Hide()					
+				try	gGui.%last_image4_window%.Hide()	
+			if (image_type == 5 && last_image5_window)
+				try	gGui.%last_image5_window%.Hide()
+			if (image_type == 6 && last_image6_window)
+				try	gGui.%last_image6_window%.Hide()
+			if (image_type == 7 && last_image7_window)
+				try	gGui.%last_image7_window%.Hide()
+			if (image_type == 8 && last_image8_window)
+				try	gGui.%last_image8_window%.Hide()				
 
 			;create a unique gui_id for this image window
 			gui_id := playlist "_" selection "_" image_type 
@@ -3423,9 +3684,7 @@ class game_select_control_class
 			;that is always on top (+AlwaysOnTop), and has no taskbar or caption
 			gGui.%gui_id% := Gui(, "eipGui - " gui_id)
 			gGui.%gui_id%.Opt("-Caption +E0x80000 +LastFound +AlwaysOnTop +ToolWindow +OwnDialogs") ;+OwnerGuiOverlay")
-
-			if (show_now)
-				gGui.%gui_id%.Show("NA") ;show the window	
+			gGui.%gui_id%.Show("NA") ;show the window	
 			
 			;if the subtype is a half-star rating, which occurs on the odd integer
 			;rating intervals, use the half-star image file rather than base full-star file.
@@ -3445,39 +3704,23 @@ class game_select_control_class
 			Width := Gdip_GetImageWidth(pBitmap)
 			Height := Gdip_GetImageHeight(pBitmap)
 
-			;Note that all screen coordinates here are native 
-			;(i.e. not adjusted for screen scaling)
-			barHeightFactor := 1/10
-			centerLabelWidthFactor := gCfg.lst_game_name_ratio
-			topBarPosFactor := 1/3
-
-			t_barHeight := Floor(A_ScreenHeight * barHeightFactor)
-			t_systemLabelWidth := A_ScreenWidth / 3
-			t_centerLabelWidth := A_ScreenWidth * centerLabelWidthFactor
-			t_sideLabelWidth := (A_ScreenWidth - t_centerLabelWidth) / 2
-			t_graphicMargin := 16 ;number of pixels to shrink graphic inside box
+			x_offset := y_offset := 0
 			
 			;calculate image size/scale while keeping correct aspect ratio
 			Switch image_type
 			{
 				Case 1, 2: ;system and rom logos	
-					ar := Width/Height
-					pic_h := t_barHeight - t_graphicMargin
-					pic_w := pic_h * ar - t_graphicMargin
+					nHMax := this._barHeight
+					nWMax := this._sideLabelWidth 
 					
-					if (pic_w > t_sideLabelWidth)
-					{
-						ar := Height/Width
-						pic_w := t_sideLabelWidth - t_graphicMargin
-						pic_h := pic_w * ar - t_graphicMargin
-					}
+					ConstrainRectangle(Width, Height, nWMax, nHMax, image_size, image_position, &pic_w, &pic_h, &x_offset, &y_offset)
 
 					pic_sw := Width
 					pic_sh := Height
 			
 				Case 3:	;favorite and no star (unrated) icons		
 					ar := Width/Height
-					pic_h := t_barHeight // 5
+					pic_h := this._barHeight // 5
 					pic_w := pic_h * ar
 
 					pic_sw := Width
@@ -3485,7 +3728,7 @@ class game_select_control_class
 			
 				Case 4:	 ;5 through 1 star
 					ar := Width/(Height/5)
-					pic_h := t_barHeight // 5
+					pic_h := this._barHeight // 5
 					pic_w := pic_h * ar
 
 					pic_sw := Width
@@ -3493,28 +3736,62 @@ class game_select_control_class
 
 					if (subtype == 0)	
 						pic_sh := 1	
+				Case 5, 6: ;left and right center images	
+					nWMax := this._sideLabelWidth
+					nHMax := this._bottombar_ypos - this._topbar_ypos - this._barHeight
+
+					ConstrainRectangle(Width, Height, nWMax, nHMax, image_size, image_position, &pic_w, &pic_h, &x_offset, &y_offset)
+
+					pic_sw := Width
+					pic_sh := Height
+				Case 7, 8: ;left and right top images	
+					nWMax := this._sideLabelWidth
+					nHMax := this._topbar_ypos
+
+					ConstrainRectangle(Width, Height, nWMax, nHMax, image_size, image_position, &pic_w, &pic_h, &x_offset, &y_offset)
+
+					pic_sw := Width
+					pic_sh := Height
 			}
 
 			;on-screen position
 			pic_sx := pic_sy := 0
-			pic_y := A_ScreenHeight * topBarPosFactor - pic_h/2
+			pic_y := this._topbar_ypos + y_offset
 
 			Switch image_type
 			{
 				Case 1: ;rom logo
-					pic_x := (t_sideLabelWidth + t_centerLabelWidth) + t_sideLabelWidth / 2 - pic_w/2
+					pic_x := (this._sideLabelWidth + this._centerLabelWidth) + x_offset
 			
 				Case 2: ;system logo
-					pic_x := t_sideLabelWidth / 2 - pic_w/2
+					pic_x := x_offset 
 			
 				Case 3:	;favorite icon
-					pic_y := A_ScreenHeight * topBarPosFactor - t_barHeight // 2 + 2
-					pic_x := t_sideLabelWidth + 2
+					pic_y := A_ScreenHeight / 3 - this._barHeight // 2 + 2
+					pic_x := this._sideLabelWidth + 2
 			
 				Case 4:	;5 stars and no stars (unrated) icons
-					pic_y := A_ScreenHeight * topBarPosFactor - t_barHeight // 2 + 2
-					pic_x := t_sideLabelWidth + t_centerLabelWidth - pic_w - 2
-					pic_sy := 1320 - 264 * Ceil(subtype / 2) ;Ceil ensures same offset for each pair of full/half star steps			
+					pic_y := A_ScreenHeight / 3 - this._barHeight // 2 + 2
+					pic_x := this._sideLabelWidth + this._centerLabelWidth - pic_w - 2
+					pic_sy := 1320 - 264 * Ceil(subtype / 2) ;Ceil ensures same offset for each pair of full/half star steps
+					
+				Case 5:
+					nT := this._topbar_ypos + this._barHeight
+					pic_y := nT + y_offset
+					pic_x := x_offset
+
+				Case 6:
+					nT := this._topbar_ypos + this._barHeight
+					pic_y := nT + y_offset
+					pic_x := (this._sideLabelWidth + this._centerLabelWidth) + x_offset
+				Case 7:
+					pic_y := y_offset
+					pic_x := x_offset
+
+				Case 8:
+					nT := this._topbar_ypos + this._barHeight
+					pic_y := y_offset
+					pic_x := (this._sideLabelWidth + this._centerLabelWidth) + x_offset
 			}
 
 			;For context, already did these functions above
@@ -3529,7 +3806,15 @@ class game_select_control_class
 			G := Gdip_GraphicsFromHDC(hdc)
 
 			;Use high quality Bicubic (7) to resize here since it is probably the best quality
-			Gdip_SetInterpolationMode(G, 7)
+			; Default = 0
+			; LowQuality = 1
+			; HighQuality = 2
+			; Bilinear = 3
+			; Bicubic = 4
+			; NearestNeighbor = 5
+			; HighQualityBilinear = 6
+			; HighQualityBicubic = 7
+			Gdip_SetInterpolationMode(G, 6)
 			Gdip_DrawImage(G, pBitmap, 0, 0, pic_w, pic_h, pic_sx, pic_sy, pic_sw, pic_sh)
 			Gdip_DeleteGraphics(G)
 			UpdateLayeredWindow(gGui.%gui_id%.Hwnd, hdc, pic_x, pic_y, pic_w, pic_h)
@@ -3550,6 +3835,14 @@ class game_select_control_class
 				this._last_image4_window := gui_id
 				this._last_image4_subtype := subtype
 			}
+			else if (image_type == 5)
+				this._last_image5_window := gui_id
+			else if (image_type == 6)
+				this._last_image6_window := gui_id
+			else if (image_type == 7)
+				this._last_image7_window := gui_id
+			else if (image_type == 8)
+				this._last_image8_window := gui_id
 
 			return gui_id
 		}

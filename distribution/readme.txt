@@ -7,7 +7,7 @@ Distribution: https://github.com/gildahl/arcadeEIP
 Discord:      https://discord.gg/uhbx9y6sdT
 Video:        https://www.youtube.com/watch?v=o8WrWOx_Pmk
 ===================================================================================================
-Readme.txt for version, 0.4.2.0 beta
+Readme.txt for version, 0.4.3.0 beta
 ===================================================================================================
 
 QUICK START and TARGETED GUIDES
@@ -19,7 +19,7 @@ See \Docs folder for comprehensive documentation and examples.
 ONLINE DOCUMENTATION
 ====================
 Configuration Reference Guide:  
-https://docs.google.com/document/d/1nXil1lCDtOdjOz41ahsBHn4iDQyYxFvASLklnJdvh5U/edit?usp=sharing
+https://docs.google.com/document/d/1qgrhwRJc4mvlUft9mtI_mBD2EnXSNo9x/edit?usp=sharing&ouid=104524226769236382668&rtpof=true&sd=true
 
 Command-Line Reference Guide:
 https://docs.google.com/document/d/1lZmdyrp3ghYUGqzjInXDCzLWVle89KZuhxRJoAcnaDY/edit?usp=sharing
@@ -78,10 +78,11 @@ A short overview of arcadeEIP's fuller list of features includes:
 
 INSTALLATION
 ============
-To install arcadeEIP, create a dedicated folder (e.g. \arcadeEIP or \EIP) and unzip the archive to it. 
-If desired, add eip.exe to your system path to allow running it from anywhere. Make sure that the folder
-has full write access as arcadeEIP will need to create and write both files and directories within that
-folder.
+To install arcadeEIP, create a dedicated folder (e.g. \arcadeEIP or \EIP) and unzip the archive to it.
+Note that prior to unzipping, you should right click on the zip file, choose properties, and chose to
+unblock.  If desired, add eip.exe to your system path to allow running it from anywhere. Make sure 
+that the folder has full write access as arcadeEIP will need to create and write both files and 
+directories within that folder.
 
 Next, double-click on create_cfg.bat to create a fresh arcadeEIP.ini configuration file.  This will
 also create a file called arcadeEIP_example.ini that contains documentation of most settings.
@@ -94,7 +95,7 @@ arcadeEIP should work out of the box, using a control panel with default MAME ke
 a keyboard. If you are using a control panel with different key mappings, you can configure
 arcadeEIP to other mappings via its configuration file, arcadeEIP.ini.
 
-Here is a list of default keys. See [Key_Map] section of arcadeEIP.ini to customize.
+Here is a list of default keys. See [KeyMap] section of arcadeEIP.ini to customize.
 
     Note: The "Magic Key" permits a single button to perform two functions (Exit and Menu 
           toggle) with the ability to swap what happens on hold vs. tap in the configuration.
@@ -203,6 +204,6 @@ Current development environment is Visual Studio Code using the following extens
 • vscode-autohotkey-debug
 
 ========================================
-arcadeEIP 0.4.2.0 beta
+arcadeEIP 0.4.3.0 beta
 Copyright (c) 2024 by David G. Dahlstrom
 ========================================

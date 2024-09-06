@@ -3,7 +3,7 @@
  * @file eipClass_CreateGui.ahk2
  * @author © 2024 David G. Dahlstrom
  * @date 2024/03/09
- * @version 0.4.2.0
+ * @version 0.4.3.0
  ***********************************************************************/
 
 ;static class to create arcadeEIP graphical screens.
@@ -311,7 +311,7 @@ class CreateGUI
         gGui.guiStart_Rom.Visible := false
 
         ;Create and position the description
-        guiStart.SetFont("s11")
+        guiStart.SetFont("s12")
         rom_description := oEmulators.Emulators[gCfg.sys_key].meta_names.GetDescription(gCfg.rom_file)
         gGui.guiStart_RomDesc := guiStart.AddText("cWhite x0 w" . nScreenWidth . " Center vStartRomDesc", rom_description)
         gGui.guiStart_RomDesc.GetPos(,,,&rom_desc_height)
@@ -324,7 +324,7 @@ class CreateGUI
         if (gCfg.show_license == 1)
         {
             banner_ypos := nScreenHeight - rom_posH * 5
-            gGui.guiStart_LicenseBanner := guiStart.AddText("cWhite w" . nScreenWidth . " Center vStartLicenseBanner", license_text)
+            gGui.guiStart_LicenseBanner := guiStart.AddText("cWhite w" . nScreenWidth . " Center vStartLicenseBanner", gTxt.license_text)
             gGui.guiStart_LicenseBanner.Move(0, banner_ypos)
             gGui.guiStart_LicenseBanner.Visible := false
         }

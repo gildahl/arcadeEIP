@@ -20,7 +20,7 @@ class pause_control_class
 	 * Add a pause page. The "info" type is two-column text data; the "native" type is a
 	 * transparent screen that lets one see through to the native emulator in its paused state.
 	 * All other types are images (such as "highscore" screens, control panel "controls", etc.).
-	 * Additional image types of any kind can be added by adding new types to the [Global_Assets]
+	 * Additional image types of any kind can be added by adding new types to the [AssetPaths]
 	 * section of arcadeEIP.ini (for example, adding a new key called titles_folder= would 
 	 * add a new "titles" image type.)
 	 * 
@@ -415,17 +415,19 @@ class pause_control_class
 		else ;assetType not "info", so must be an image type
 		{
 			assetFolder := systemAsset := ""
-			try assetFolder := gCfg.%assetType "_folder"%
-			try systemAsset := gCfg.%"system_" assetType% 
+			if (!InStr(assetType, "_folder") && assetType != "native")
+				assetType := assetType "_folder"
+			try assetFolder := gCfg.%assetType%
+			;try systemAsset := gCfg.%"system_" assetType% 
 
 			if (assetType == "native")
 				asset_full_path := void_file
 			else
-				asset_full_path := SetAssetFullPath(assetType, gCfg.rom_name, assetFolder, systemAsset, gCfg.global_asset_name)
+				asset_full_path := SetAssetFullPath(assetType, gCfg.rom_name, assetFolder, systemAsset, gCfg.asset_name)
 
 			if (!FileExist(asset_full_path))
 			{
-				if (assetType == "highscore")
+				if (assetType == "highscore_folder")
 				{
 					asset_full_path := void_file ;placeholder if no highscore picture at the moment
 					bPageVisible := false

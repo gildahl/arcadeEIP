@@ -37,7 +37,7 @@ MagicKey(option, theHotkey:="")
 
         ;Set speed of RunWaitTimer frequency
         ;Determines scroll performance in the select screen.
-        SetTimer RunWaitTimer, cRunWaitTimer_Period
+        SetTimer RunWaitTimer, runwait_fast_freq
 
         ;if picker screen does not dismiss, check to see if magic_key is mapped to pause_key or exit_key
         ;and then ensure that pause_key or exit_key is mapped the same in the picker cp configuration as in
@@ -236,7 +236,7 @@ PauseKey(keyState, theHotkey:="")
                 try ControlFocus OutputVarControl, "ahk_pid " . pid_emulator
                 
                 ;this line interfered is image switching during pause...seems ok without it, but keep eye on.
-                ;SetTimer RunWaitTimer, cRunWaitTimer_Period
+                ;SetTimer RunWaitTimer, runwait_fast_freq
             }
             paused := paused ? false : true
         }

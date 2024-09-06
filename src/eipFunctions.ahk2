@@ -13,6 +13,8 @@ ExitFunction(ExitReason, ExitCode)
     ;Revoke the oActiveMsg GUID since this instance is about to be closed.
     try ObjRegisterActive(oActiveMsg, "")
 
+    try oSelectListControl.SaveState()
+
     ;Destroy Guis
     ;if (start_show_time > -1 || exit_show_time > -1)
     ;{
@@ -230,7 +232,8 @@ ProcessPassthroughArgs(&oArgs, sParamList)
 ;This function uses the folder information defined in the configuration along with the rom name
 ;to obtain a fully qualified path to a specific asset file.
 ;assetTypes are "logo", "marquee", and "controls" (i.e. control panel layouts)
-SetAssetFullPath(assetType, romName, assetFolder, systemAsset, globalAssetName)
+;(Note, this function is not used for ad hoc types, but only the above "built-in" types)
+SetAssetFullPath(assetType, romName, assetFolder, systemAsset, alternateAssetName)
 {
     ;Look in the asset folder for a png or jpg based on the rom file name.
     if (romName && assetFolder)
@@ -246,8 +249,8 @@ SetAssetFullPath(assetType, romName, assetFolder, systemAsset, globalAssetName)
             return assetFullPath
     }
 
-    ;Fallback 1: If a Marquee, use the rom's Clear Logo
-    if (assetType == "marquee") ;check if a BigBox resource is available
+    ;Fallback 1: If a Marquee, use the rom's Clear Logo as an alternative
+    if (assetType == "marquee") 
     {
         assetFullPath := gCfg.logo_folder "\" romName ".png"
         assetFullPath := GetRegionalAsset(assetFullPath) ;mainly for LaunchBox/BigBox support
@@ -261,13 +264,13 @@ SetAssetFullPath(assetType, romName, assetFolder, systemAsset, globalAssetName)
     }
 
     ;Fallback 2: Look in the asset folder for a png or jpg based on the asset type.
-    if (assetFolder && globalAssetName)
+    if (assetFolder && alternateAssetName)
     {
-        assetFullPath := assetFolder "\" globalAssetName ".png"
+        assetFullPath := assetFolder "\" alternateAssetName ".png"
         if (FileExist(assetFullPath))
             return assetFullPath
         
-        assetFullPath := assetFolder "\" globalAssetName ".jpg"
+        assetFullPath := assetFolder "\" alternateAssetName ".jpg"
         if (FileExist(assetFullPath))
             return assetFullPath
     }
@@ -287,7 +290,7 @@ SetAssetFullPath(assetType, romName, assetFolder, systemAsset, globalAssetName)
     }
 
     ;Fallback 5: Use the arcadeEIP default
-    assetFullPath := ".\Assets\Default\" assetType "\default.png"
+    assetFullPath := ".\Assets\Default\" assetType ".png"
     if (FileExist(assetFullPath))
         return assetFullPath
     
@@ -588,6 +591,12 @@ ProcessParamListTemplates()
     
     ;rom_folder_parent := SubStr(gCfg.rom_folder, 1, InStr(gCfg.rom_folder, "\",,0,1)-1)
     gCfg.rom_folder_parent := SubStr(gCfg.rom_folder, 1, InStr(gCfg.rom_folder, "\",,,-1)-1)
+    
+    if (FileExist(gCfg.rom_folder_parent "\sta") == "D")
+        gCfg.sta_folder := gCfg.rom_folder_parent "\sta"
+    else
+        gCfg.sta_folder := ""
+
     
     ;param_list supports 
     ;[sys_key] [asset_name] [root_folder] [rom] [rom_full_path], [rom_file], [rom_folder], [rom_name], [param_list]
@@ -984,30 +993,30 @@ FrontEndStartup()
 {
     global gCfg, log_file, g_ran_fe
     
-    ;get list of apps to run after front end exits back to the OS
-    ;also get the os asset_name and do some validation
-    config_section := "Front_End_os"
+    ;get list of apps to run after front end exits back to the default
+    ;also get the default asset_name and do some validation
+    config_section := "FrontEnd_default"
     os_fe_key := IniRead(config_file, config_section, "fe_key", A_Space)
     os_exe_full_path := TokenizePath(IniRead(config_file, config_section, "exe_full_path", A_Space))
     os_asset_name := IniRead(config_file, config_section, "asset_name", A_Space)
     os_run_apps := IniRead(config_file, config_section, "run_apps", A_Space)
     
-    if (os_fe_key != "os")
+    if (os_fe_key != "default")
     {	
-        LogEntry("ERROR: CONFIGURATION: fe_key in default [Front_End_os] section must be set to `"os`".`n")
+        LogEntry("ERROR: CONFIGURATION: fe_key in default [FrontEnd_default] section must be set to `"default`".`n")
         ExitApp
     }
     
     else if (os_exe_full_path)
     {
-        LogEntry("ERROR: CONFIGURATION: [Front_End_os] section in " cConfigFileName " does not support the exe_full_path key.`n")
+        LogEntry("ERROR: CONFIGURATION: [FrontEnd_default] section in " cConfigFileName " does not support the exe_full_path key.`n")
         ExitApp
     }
     
-    fe_sections := oConfigFile.GetGroupSections("Front_End")
+    fe_sections := oConfigFile.GetGroupSections("FrontEnd")
     for i, config_section in fe_sections
     {
-        if (config_section = "Front_End_os") ;we already processed this one above
+        if (config_section = "FrontEnd_default") ;we already processed this one above
             continue
 
         this_fe_key := IniRead(config_file, config_section, "fe_key", A_Space)
@@ -1095,9 +1104,12 @@ IsEmulatorActive()
 
 GetSystemRomTag()
 {
-    sys_tag := search_tag ? gCfg.proper_name . "[" . search_tag . "]" : gCfg.proper_name
+    sys_tag := gTxt.search_tag ? gCfg.proper_name . "[" . gTxt.search_tag . "]" : gCfg.proper_name
     rom_tag := gCfg.rom_name ? sys_tag . " : " . gCfg.rom_name : sys_tag
     rom_tag := gCfg.rom_file ? sys_tag . " : " . gCfg.rom_file : rom_tag
+
+    if (bUsingStartupState)
+        rom_tag := rom_tag " (using start-up state)"
 
     return rom_tag
 }
@@ -1235,7 +1247,7 @@ LogEntry(logString, continueLine:=false)
         
         if (!gCfg.debug_mode)
         {
-            if (gCfg.use_log && (gCfg.fe_key = "os" || gCfg.fe_key = ""))
+            if (gCfg.use_log && (gCfg.fe_key = "default" || gCfg.fe_key = ""))
                 ShowLog()
         }
     }

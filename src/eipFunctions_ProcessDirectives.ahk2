@@ -57,7 +57,7 @@ ProcessDirectives(&argList)
         {
             input_arg_decomp := StrSplit(input_arg, ["="], " ")
             if (input_arg_decomp[2] == "")
-                gCfg.debug_mode := "os"
+                gCfg.debug_mode := "default"
             else
                 gCfg.debug_mode := input_arg_decomp[2]
             debug_mode_index := n

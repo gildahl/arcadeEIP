@@ -257,7 +257,7 @@ Rating10to5(rating)
 
 DoBeep()
 {
-    SoundBeep
+    SoundBeep()
 }
 
 FormatErrorMessage(e)
@@ -403,4 +403,48 @@ GetFullPathFromRelativePath(sPath, sFile)
         sFullPath := ""
 
 	return sFullPath
+}
+
+/**
+ * Take an image size rectangle, and return a resized rectangle having the same aspect ratio
+ * but sized to fit within a maximum height and width. Also returns x and y offset values cooresponding
+ * to the amount of image shift due to the resizing.
+ * @param nWidth - orignal image width
+ * @param nHeight - original image height
+ * @param nMaxWidth - maximum new image width 
+ * @param nMaxHeight - maximum new image height
+ * @param nSize - percent of full size. 1.0 is full size
+ * @param nPosition - percent left/right position adjust. -1.0 to 1.0; 0.0 is centered.
+ * @param nNewWidth - (by-ref) returned new image width
+ * @param nNewHeight - (by-ref) returned new image height
+ * @param nXOffset - (by-ref) returned x offset from maximum width
+ * @param nYOffset - (by-ref) returned y offset from maximum height
+ * @param nMargin - (optional) additional margin to reduce rectangle by (not currently used)
+ */
+ConstrainRectangle(nWidth, nHeight, nMaxWidth, nMaxHeight, nSize, nPosition, &nNewWidth, &nNewHeight, &nXOffset, &nYOffset, nMargin:=0)
+{
+	nOGMaxWidth  := nMaxWidth
+	nOGMaxHeight := nMaxHeight
+
+	nMaxWidth  -= nMargin
+	nMaxHeight -= nMargin
+
+	nNewWidth := nMaxWidth
+	nNewHeight := Round(nNewWidth * nHeight/nWidth)
+
+	if (nNewHeight > nMaxHeight)
+	{
+		nNewHeight := nMaxHeight
+		nNewWidth := Round(nNewHeight * nWidth/nHeight)
+	}
+
+	nNewHeight *= nSize
+	nNewWidth *= nSize 
+
+	nXOffset := Round((nOGMaxWidth-nNewWidth)/2)
+	nXOffset := nXOffset + nXOffset * nPosition
+
+	nYOffset := Round((nOGMaxHeight-nNewHeight)/2)
+
+	return
 }

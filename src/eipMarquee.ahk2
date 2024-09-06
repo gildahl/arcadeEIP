@@ -3,7 +3,7 @@
  * @file eipMarquee.ahk2
  * @author © 2024 David G. Dahlstrom
  * @date 2024/03/11
- * @version 0.4.2.0
+ * @version 0.4.3.0
  ***********************************************************************/
 
 ;This file implements the arcadeEIP dynamic marquee (marquee.exe).
@@ -15,7 +15,7 @@
 
 ;Compiler directives
 ;***********************************************************
-global CodeVersion := "0.4.2.0"
+global CodeVersion := "0.4.3.0"
 ;@Ahk2Exe-Let version = %A_PriorLine~U)^(.+"){1}(.+)".*$~$2%
 ;@Ahk2Exe-SetCopyright (c) 2024 David G. Dahlstrom
 ;@Ahk2Exe-SetProductName arcadeEIP Marquee Player
@@ -363,14 +363,13 @@ CheckSwitchTimer()
     }
     else if (!connect_status && !standby_status && !autoexit)
     {
-        image_file := A_ScriptDir ".\Assets\Default\Marquee\default.png"
-        if (FileExist(image_file))
-        {
-            HideMarquee()
-            ShowMarquee(image_file, "default", "NULL")
-        }
-        else
-            HideMarquee()
+        image_file := A_ScriptDir ".\Assets\Default\marquee.png"
+        
+        if (!FileExist(image_file))
+            image_file := A_ScriptDir "\Resources\Icons\void.png"
+
+        HideMarquee()
+        ShowMarquee(image_file, "default", "NULL")
 
         standby_status := true
     }
