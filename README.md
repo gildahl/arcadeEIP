@@ -5,7 +5,7 @@ Readme.txt for version, 0.4.3.0 beta
 ## Links:
 - [Distribution](https://github.com/gildahl/arcadeEIP)
 - [Discord](https://discord.gg/uhbx9y6sdT)
-- [Video](https://www.youtube.com/watch?v=o8WrWOx_Pmk)
+- [Video of just the Streamdeck function](https://www.youtube.com/watch?v=o8WrWOx_Pmk) 
 
 QUICK START and TARGETED GUIDES
 -------------------------------
