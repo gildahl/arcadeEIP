@@ -5,6 +5,8 @@ Readme.txt for version, 0.4.3.0 beta
 ## Links:
 - [Distribution](https://github.com/gildahl/arcadeEIP)
 - [Discord](https://discord.gg/uhbx9y6sdT)
+- [Discussion thread on LaunchBox forums](https://forums.launchbox-app.com/topic/64771-arcadeeip/)
+- [Discussion thread on BYOAC forums](https://forum.arcadecontrols.com/index.php/topic,165138.msg1741421.html#msg1741421)
 
 QUICK START and TARGETED GUIDES
 -------------------------------
